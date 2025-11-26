@@ -1,36 +1,170 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# TSH Clients Console
+
+A production-grade Next.js 15 web application for TSH wholesale and retail clients, integrated with Zoho Books & Zoho Inventory.
+
+**Live URL**: https://www.tsh.sale
+
+## Features
+
+- **Authentication**: Passwordless Magic Link login via email
+- **Bilingual**: Arabic & English with RTL support
+- **Products**: Browse products with stock levels and prices from Zoho
+- **Orders**: View past orders and order status
+- **Invoices**: Access and download invoices
+- **Payments**: View payment history
+- **Credit Notes**: Track available credits
+- **Account Statement**: Full account transaction history
+- **Support**: Submit and track support tickets
+- **Dark/Light Mode**: Theme switching
+- **PWA Ready**: Installable as mobile app
+
+## Tech Stack
+
+- **Framework**: Next.js 15 (App Router)
+- **Language**: TypeScript
+- **Styling**: TailwindCSS + shadcn/ui
+- **Authentication**: NextAuth.js with Magic Link
+- **Email**: Resend
+- **Internationalization**: next-intl
+- **State Management**: React Server Components + SWR
+- **Deployment**: Vercel
 
 ## Getting Started
 
-First, run the development server:
+### Prerequisites
+
+- Node.js 18+
+- npm or yarn
+- Zoho Books & Inventory API credentials
+- Resend API key
+
+### Installation
 
 ```bash
+# Clone the repository
+git clone https://github.com/your-org/tsh-clients-console.git
+cd tsh-clients-console
+
+# Install dependencies
+npm install
+
+# Copy environment variables
+cp .env.example .env.local
+
+# Fill in your environment variables in .env.local
+
+# Run development server
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### Environment Variables
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+See `.env.example` for all required environment variables:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- `NEXTAUTH_URL` - Your app URL
+- `NEXTAUTH_SECRET` - NextAuth secret key
+- `ZOHO_CLIENT_ID` - Zoho API client ID
+- `ZOHO_CLIENT_SECRET` - Zoho API client secret
+- `ZOHO_REFRESH_TOKEN` - Zoho refresh token
+- `ZOHO_ORGANIZATION_ID` - Zoho organization ID
+- `RESEND_API_KEY` - Resend email API key
 
-## Learn More
+## Project Structure
 
-To learn more about Next.js, take a look at the following resources:
+```
+src/
+├── app/
+│   ├── [locale]/
+│   │   ├── (auth)/           # Auth pages (login)
+│   │   └── (main)/           # Main app pages
+│   │       ├── dashboard/
+│   │       ├── products/
+│   │       ├── orders/
+│   │       ├── invoices/
+│   │       ├── payments/
+│   │       ├── credit-notes/
+│   │       ├── account-statement/
+│   │       ├── support/
+│   │       └── profile/
+│   └── api/
+│       ├── auth/             # NextAuth API routes
+│       └── webhooks/         # Zoho webhook handlers
+├── components/
+│   ├── ui/                   # shadcn/ui components
+│   ├── layout/               # Layout components
+│   ├── dashboard/            # Dashboard components
+│   ├── products/             # Products components
+│   └── orders/               # Orders components
+├── lib/
+│   ├── auth/                 # Authentication config
+│   ├── zoho/                 # Zoho API services
+│   └── utils/                # Utility functions
+├── i18n/                     # Internationalization config
+├── messages/                 # Translation files (en.json, ar.json)
+└── types/                    # TypeScript type definitions
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Deployment
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### Vercel (Recommended)
 
-## Deploy on Vercel
+1. Push your code to GitHub
+2. Import the repository in Vercel
+3. Add environment variables in Vercel Project Settings
+4. Deploy
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### Domain Configuration
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+1. Add `www.tsh.sale` in Vercel domain settings
+2. Configure DNS:
+   - CNAME: `www` -> `cname.vercel-dns.com`
+   - Or use Vercel nameservers for automatic HTTPS
+
+## API Integration
+
+### Zoho Books & Inventory
+
+The app integrates with both Zoho Books and Zoho Inventory APIs:
+
+- **Zoho Books**: Invoices, Payments, Credit Notes, Customers
+- **Zoho Inventory**: Items, Stock, Categories, Price Lists
+
+All API calls are made server-side for security.
+
+### Webhooks
+
+Configure Zoho webhooks to hit `/api/webhooks/zoho` for real-time cache invalidation:
+
+- Item updates
+- Order status changes
+- Invoice/Payment events
+- Price list changes
+
+## Caching Strategy
+
+- **Products**: 5 minute cache with tag-based revalidation
+- **Customer Data**: 5 minute cache per customer
+- **Price Lists**: 1 hour cache
+- **Categories**: 1 hour cache
+
+Webhooks trigger on-demand revalidation for immediate updates.
+
+## Development
+
+```bash
+# Run development server
+npm run dev
+
+# Build for production
+npm run build
+
+# Start production server
+npm start
+
+# Run linting
+npm run lint
+```
+
+## License
+
+Private - TSH Internal Use Only
