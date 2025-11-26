@@ -1,17 +1,17 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { useTranslations, useLocale } from "next-intl";
-import Link from "next/link";
+import { useTranslations } from "next-intl";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { ProductFilters } from "./product-filters";
 import { ProductImage } from "./product-image";
-import { Search, Filter, Grid, List } from "lucide-react";
+import { Search, Filter, Grid, List, ShoppingCart } from "lucide-react";
 
-// Product type from server
-interface PublicProduct {
+// Product type from server (with customer pricing)
+interface AuthenticatedProduct {
   item_id: string;
   name: string;
   sku: string;
@@ -23,30 +23,33 @@ interface PublicProduct {
   category_name?: string;
   brand?: string;
   unit: string;
-  inPriceList?: boolean; // Whether item has a price in the Consumer price list
+  inPriceList?: boolean;
 }
 
 // Category type from server
-interface PublicCategory {
+interface Category {
   category_id: string;
   name: string;
   description?: string;
   is_active: boolean;
 }
 
-interface PublicProductsContentProps {
-  products: PublicProduct[];
-  categories: PublicCategory[];
+interface AuthenticatedProductsContentProps {
+  products: AuthenticatedProduct[];
+  categories: Category[];
   currencyCode: string;
+  priceListName: string;
+  error?: string | null;
 }
 
-export function PublicProductsContent({
+export function AuthenticatedProductsContent({
   products,
   categories,
   currencyCode,
-}: PublicProductsContentProps) {
+  priceListName,
+  error,
+}: AuthenticatedProductsContentProps) {
   const t = useTranslations("products");
-  const locale = useLocale();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [showFilters, setShowFilters] = useState(false);
@@ -103,7 +106,7 @@ export function PublicProductsContent({
 
   // Products grouped by category
   const productsByCategory = useMemo(() => {
-    const grouped: Record<string, PublicProduct[]> = {};
+    const grouped: Record<string, AuthenticatedProduct[]> = {};
     filteredProducts.forEach((product) => {
       const category = product.category_name || "Other";
       if (!grouped[category]) {
@@ -130,15 +133,39 @@ export function PublicProductsContent({
     return new Intl.NumberFormat("en-IQ", {
       style: "decimal",
       minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
+      maximumFractionDigits: currencyCode === "USD" ? 2 : 0,
     }).format(price);
   };
 
+  // Handle add to cart (placeholder for future implementation)
+  const handleAddToCart = (product: AuthenticatedProduct) => {
+    console.log("Add to cart:", product);
+    // TODO: Implement cart functionality
+  };
+
+  if (error && products.length === 0) {
+    return (
+      <div className="rounded-lg border border-yellow-500/50 bg-yellow-500/10 p-6 text-center">
+        <p className="text-yellow-600 dark:text-yellow-400">{error}</p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
-      {/* Header */}
+      {/* Header with Price List Info */}
       <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold">{t("title")}</h2>
+        <div>
+          <h1 className="text-2xl font-bold">{t("title")}</h1>
+          <div className="flex items-center gap-2 mt-1">
+            <Badge variant="outline" className="text-xs">
+              {priceListName}
+            </Badge>
+            <span className="text-xs text-muted-foreground">
+              {currencyCode}
+            </span>
+          </div>
+        </div>
         <div className="flex items-center gap-2">
           <Button
             variant="outline"
@@ -234,7 +261,7 @@ export function PublicProductsContent({
                   key={product.item_id}
                   className="group rounded-lg border bg-card p-4 transition-shadow hover:shadow-lg"
                 >
-                  {/* Product Image - Optimized with Next.js Image */}
+                  {/* Product Image */}
                   <ProductImage
                     src={product.image_url}
                     alt={product.name}
@@ -277,6 +304,20 @@ export function PublicProductsContent({
                         {product.category_name}
                       </p>
                     )}
+
+                    {/* Add to Cart Button - Only show if product has price and is in stock */}
+                    {product.inPriceList !== false &&
+                      product.rate > 0 &&
+                      product.available_stock > 0 && (
+                        <Button
+                          size="sm"
+                          className="w-full mt-2"
+                          onClick={() => handleAddToCart(product)}
+                        >
+                          <ShoppingCart className="h-4 w-4 mr-2" />
+                          {t("addToCart")}
+                        </Button>
+                      )}
                   </div>
                 </div>
               ))}
@@ -330,6 +371,19 @@ export function PublicProductsContent({
                             {product.available_stock > 0 ? t("inStock") : t("outOfStock")}
                           </span>
                         </div>
+                        {/* Add to Cart Button */}
+                        {product.inPriceList !== false &&
+                          product.rate > 0 &&
+                          product.available_stock > 0 && (
+                            <Button
+                              size="sm"
+                              className="w-full mt-2"
+                              onClick={() => handleAddToCart(product)}
+                            >
+                              <ShoppingCart className="h-4 w-4 mr-2" />
+                              {t("addToCart")}
+                            </Button>
+                          )}
                       </div>
                     </div>
                   ))}
@@ -339,17 +393,6 @@ export function PublicProductsContent({
           </div>
         </TabsContent>
       </Tabs>
-
-      {/* Login CTA */}
-      <div className="mt-8 rounded-lg border bg-muted/50 p-6 text-center">
-        <h3 className="text-lg font-semibold">{t("wholesaleCta")}</h3>
-        <p className="mt-2 text-muted-foreground">
-          {t("wholesaleCtaDescription")}
-        </p>
-        <Button className="mt-4" asChild>
-          <Link href={`/${locale}/login`}>{t("loginToAccount")}</Link>
-        </Button>
-      </div>
     </div>
   );
 }

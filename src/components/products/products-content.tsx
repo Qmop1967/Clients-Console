@@ -21,7 +21,7 @@ const mockProducts = [
     name: "Hikvision DS-2CD2143G2-I 4MP Camera",
     sku: "HIK-DS2CD2143G2I",
     rate: 185000,
-    stock_on_hand: 45,
+    available_stock: 45,
     image_url: null,
     category_name: "Surveillance Systems",
   },
@@ -30,7 +30,7 @@ const mockProducts = [
     name: "TP-Link Archer AX73 WiFi 6 Router",
     sku: "TPL-ARCHERAX73",
     rate: 125000,
-    stock_on_hand: 32,
+    available_stock: 32,
     image_url: null,
     category_name: "Networking",
   },
@@ -39,7 +39,7 @@ const mockProducts = [
     name: "HP LaserJet Pro M404dn Printer",
     sku: "HP-LJM404DN",
     rate: 320000,
-    stock_on_hand: 12,
+    available_stock: 12,
     image_url: null,
     category_name: "Printing Devices",
   },
@@ -48,7 +48,7 @@ const mockProducts = [
     name: "Dell Latitude 5530 Laptop",
     sku: "DELL-LAT5530",
     rate: 1250000,
-    stock_on_hand: 8,
+    available_stock: 8,
     image_url: null,
     category_name: "Computers",
   },
@@ -57,7 +57,7 @@ const mockProducts = [
     name: "APC Smart-UPS 1500VA",
     sku: "APC-SMT1500",
     rate: 450000,
-    stock_on_hand: 15,
+    available_stock: 15,
     image_url: null,
     category_name: "Power Solutions",
   },
@@ -66,7 +66,7 @@ const mockProducts = [
     name: "Dahua DH-IPC-HDW2431T-AS 4MP Camera",
     sku: "DH-IPCHDW2431T",
     rate: 145000,
-    stock_on_hand: 67,
+    available_stock: 67,
     image_url: null,
     category_name: "Surveillance Systems",
   },
@@ -75,7 +75,7 @@ const mockProducts = [
     name: "Ubiquiti UniFi AP-AC-Pro",
     sku: "UBQ-UAPACPRO",
     rate: 195000,
-    stock_on_hand: 23,
+    available_stock: 23,
     image_url: null,
     category_name: "Networking",
   },
@@ -84,7 +84,7 @@ const mockProducts = [
     name: "Canon PIXMA G3420 Printer",
     sku: "CAN-PIXG3420",
     rate: 185000,
-    stock_on_hand: 0,
+    available_stock: 0,
     image_url: null,
     category_name: "Printing Devices",
   },
@@ -133,7 +133,7 @@ export function ProductsContent({
 
     // Stock filter
     if (inStockOnly) {
-      products = products.filter((p) => p.stock_on_hand > 0);
+      products = products.filter((p) => p.available_stock > 0);
     }
 
     // Sort
@@ -148,7 +148,7 @@ export function ProductsContent({
         case "price-desc":
           return b.rate - a.rate;
         case "stock-desc":
-          return b.stock_on_hand - a.stock_on_hand;
+          return b.available_stock - a.available_stock;
         default:
           return 0;
       }
@@ -158,7 +158,7 @@ export function ProductsContent({
   }, [searchQuery, selectedCategory, inStockOnly, sortBy]);
 
   // Products in stock only
-  const productsInStock = filteredProducts.filter((p) => p.stock_on_hand > 0);
+  const productsInStock = filteredProducts.filter((p) => p.available_stock > 0);
 
   // Products grouped by category
   const productsByCategory = useMemo(() => {

@@ -3,7 +3,7 @@ import { getTranslations } from "next-intl/server";
 import { PublicProductsContent } from "@/components/products/public-products-content";
 import { ProductsSkeleton } from "@/components/products/products-skeleton";
 import { getAllProductsComplete, getCategories, getProductImageUrl } from "@/lib/zoho/products";
-import { getConsumerPriceList, getItemPriceFromList } from "@/lib/zoho/price-lists";
+import { getCustomerPriceList, getItemPriceFromList, PRICE_LIST_IDS } from "@/lib/zoho/price-lists";
 
 export async function generateMetadata() {
   const t = await getTranslations("products");
@@ -13,21 +13,47 @@ export async function generateMetadata() {
   };
 }
 
+/**
+ * Fetch public shop data with Consumer pricing
+ * IMPORTANT: Uses Zoho Books API /items/pricebookrate to fetch item prices
+ * because Zoho Inventory /pricebooks endpoint doesn't reliably return items
+ */
 async function fetchPublicShopData() {
   try {
-    // Fetch ALL products (with full pagination), categories, and consumer price list in parallel
-    const [allProducts, categories, consumerPriceList] = await Promise.all([
-      getAllProductsComplete(), // Now fetches ALL products with pagination
+    console.log('🚀 fetchPublicShopData: Starting...');
+
+    // First fetch ALL products and categories in parallel
+    const [allProducts, categories] = await Promise.all([
+      getAllProductsComplete(), // Fetches ALL products with pagination
       getCategories(),
-      getConsumerPriceList(),
     ]);
 
-    // Map products with consumer prices
+    console.log(`📦 fetchPublicShopData: Got ${allProducts.length} products and ${categories.length} categories`);
+
+    // Extract all item IDs for price lookup
+    const itemIds = allProducts.map((p) => p.item_id);
+    console.log(`🔑 fetchPublicShopData: Extracted ${itemIds.length} item IDs for price lookup`);
+    console.log(`🔑 Sample item IDs:`, itemIds.slice(0, 3));
+
+    // Fetch Consumer price list WITH item prices (uses Books API endpoint)
+    console.log(`💵 fetchPublicShopData: Fetching Consumer price list (${PRICE_LIST_IDS.CONSUMER}) with ${itemIds.length} items...`);
+    const consumerPriceList = await getCustomerPriceList(PRICE_LIST_IDS.CONSUMER, itemIds);
+
+    console.log(`📋 Consumer price list result:`, {
+      name: consumerPriceList?.name,
+      currency: consumerPriceList?.currency_code,
+      pricebook_items_count: consumerPriceList?.pricebook_items?.length || 0,
+      item_prices_count: consumerPriceList?.item_prices?.length || 0,
+    });
+
+    console.log(`🛒 Processing ${allProducts.length} products with Consumer price list`);
+
+    // Map products with consumer prices from price list
+    // IMPORTANT: Uses prices from Consumer pricebook, NOT item.rate (sell price)
     const productsWithPrices = allProducts.map((product) => {
       const priceInfo = getItemPriceFromList(
         product.item_id,
-        consumerPriceList,
-        product.rate
+        consumerPriceList
       );
 
       return {
@@ -35,16 +61,20 @@ async function fetchPublicShopData() {
         name: product.name,
         sku: product.sku,
         description: product.description,
-        rate: priceInfo.rate,
-        stock_on_hand: product.stock_on_hand,
-        available_stock: product.available_stock,
+        rate: priceInfo.rate, // Price from Consumer price list (NOT item.rate)
+        available_stock: product.available_stock ?? product.stock_on_hand ?? 0,
         image_url: getProductImageUrl(product), // Construct image URL from Zoho data
         category_id: product.category_id,
         category_name: product.category_name,
         brand: product.brand,
         unit: product.unit,
+        inPriceList: priceInfo.inPriceList, // Whether item has a price in the list
       };
     });
+
+    // Count items with prices vs without
+    const itemsWithPrices = productsWithPrices.filter(p => p.inPriceList).length;
+    console.log(`💰 ${itemsWithPrices}/${productsWithPrices.length} products have Consumer prices`);
 
     return {
       products: productsWithPrices,

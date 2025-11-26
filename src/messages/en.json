@@ -103,7 +103,8 @@
     "wholesaleCta": "Want wholesale prices?",
     "wholesaleCtaDescription": "Login to your wholesale account to see special pricing and place orders.",
     "loginToAccount": "Login to Your Account",
-    "productsAvailable": "{count} products available"
+    "productsAvailable": "{count} products available",
+    "contactForPrice": "Contact for price"
   },
   "orders": {
     "title": "Orders",

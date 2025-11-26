@@ -1,27 +1,235 @@
 // ============================================
 // Zoho API Client - Server Only
 // ============================================
-
-import { unstable_cache } from 'next/cache';
+// Token caching strategy (in order of preference):
+// 1. Upstash Redis REST API (if UPSTASH_REDIS_REST_URL configured)
+// 2. Vercel KV (if KV_REST_API_URL configured)
+// 3. In-memory cache (fallback, per-invocation only)
+// ============================================
 
 const ZOHO_ACCOUNTS_URL = 'https://accounts.zoho.com';
 const ZOHO_BOOKS_URL = 'https://www.zohoapis.com/books/v3';
 const ZOHO_INVENTORY_URL = 'https://www.zohoapis.com/inventory/v1';
 
-// Token storage (in production, use Vercel KV or Redis)
-let cachedToken: { access_token: string; expires_at: number } | null = null;
+// Key for storing the Zoho token
+const ZOHO_TOKEN_KEY = 'zoho:access_token';
+
+// Token type
+interface CachedToken {
+  access_token: string;
+  expires_at: number;
+}
+
+// In-memory fallback (for local dev or when external cache fails)
+let memoryCache: CachedToken | null = null;
+
+// Track last refresh attempt to prevent spam
+let lastRefreshAttempt = 0;
+const MIN_REFRESH_INTERVAL = 10000; // 10 seconds minimum between refresh attempts
+
+// ============================================
+// CACHE STRATEGY 1: Upstash Redis REST API
+// ============================================
+// Simple REST API, no SDK needed, works in serverless
+// Get a free account at https://upstash.com
+// ============================================
+
+function isUpstashConfigured(): boolean {
+  return !!(process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN);
+}
+
+async function getTokenFromUpstash(): Promise<CachedToken | null> {
+  if (!isUpstashConfigured()) return null;
+
+  try {
+    const response = await fetch(
+      `${process.env.UPSTASH_REDIS_REST_URL}/get/${ZOHO_TOKEN_KEY}`,
+      {
+        headers: {
+          Authorization: `Bearer ${process.env.UPSTASH_REDIS_REST_TOKEN}`,
+        },
+        cache: 'no-store',
+      }
+    );
+
+    if (!response.ok) return null;
+
+    const data = await response.json();
+    if (data.result) {
+      const token = JSON.parse(data.result) as CachedToken;
+      console.log('🔑 Using token from Upstash Redis');
+      return token;
+    }
+    return null;
+  } catch (error) {
+    console.warn('⚠️ Failed to get token from Upstash:', error);
+    return null;
+  }
+}
+
+async function saveTokenToUpstash(token: CachedToken): Promise<void> {
+  if (!isUpstashConfigured()) return;
+
+  try {
+    // Store with TTL of 50 minutes (3000 seconds)
+    const response = await fetch(
+      `${process.env.UPSTASH_REDIS_REST_URL}/setex/${ZOHO_TOKEN_KEY}/3000/${encodeURIComponent(JSON.stringify(token))}`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${process.env.UPSTASH_REDIS_REST_TOKEN}`,
+        },
+      }
+    );
+
+    if (response.ok) {
+      console.log('💾 Token saved to Upstash Redis');
+    }
+  } catch (error) {
+    console.warn('⚠️ Failed to save token to Upstash:', error);
+  }
+}
+
+// ============================================
+// CACHE STRATEGY 2: Vercel KV
+// ============================================
+// Requires KV setup in Vercel dashboard
+// ============================================
+
+function isVercelKvConfigured(): boolean {
+  return !!(process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN);
+}
+
+async function getTokenFromVercelKv(): Promise<CachedToken | null> {
+  if (!isVercelKvConfigured()) return null;
+
+  try {
+    // Use REST API directly instead of SDK to avoid import issues
+    const response = await fetch(
+      `${process.env.KV_REST_API_URL}/get/${ZOHO_TOKEN_KEY}`,
+      {
+        headers: {
+          Authorization: `Bearer ${process.env.KV_REST_API_TOKEN}`,
+        },
+        cache: 'no-store',
+      }
+    );
+
+    if (!response.ok) return null;
+
+    const data = await response.json();
+    if (data.result) {
+      const token = typeof data.result === 'string'
+        ? JSON.parse(data.result)
+        : data.result;
+      console.log('🔑 Using token from Vercel KV');
+      return token as CachedToken;
+    }
+    return null;
+  } catch (error) {
+    console.warn('⚠️ Failed to get token from Vercel KV:', error);
+    return null;
+  }
+}
+
+async function saveTokenToVercelKv(token: CachedToken): Promise<void> {
+  if (!isVercelKvConfigured()) return;
+
+  try {
+    // Store with TTL of 50 minutes (3000 seconds)
+    const response = await fetch(
+      `${process.env.KV_REST_API_URL}`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${process.env.KV_REST_API_TOKEN}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(['SETEX', ZOHO_TOKEN_KEY, 3000, JSON.stringify(token)]),
+      }
+    );
+
+    if (response.ok) {
+      console.log('💾 Token saved to Vercel KV');
+    }
+  } catch (error) {
+    console.warn('⚠️ Failed to save token to Vercel KV:', error);
+  }
+}
+
+// ============================================
+// UNIFIED CACHE OPERATIONS
+// ============================================
+
+async function getTokenFromCache(): Promise<CachedToken | null> {
+  // Try Upstash first (preferred)
+  const upstashToken = await getTokenFromUpstash();
+  if (upstashToken) return upstashToken;
+
+  // Try Vercel KV
+  const kvToken = await getTokenFromVercelKv();
+  if (kvToken) return kvToken;
+
+  return null;
+}
+
+async function saveTokenToCache(token: CachedToken): Promise<void> {
+  // Save to all configured caches in parallel
+  await Promise.all([
+    saveTokenToUpstash(token),
+    saveTokenToVercelKv(token),
+  ]);
+}
 
 export async function getAccessToken(): Promise<string> {
-  // Check if we have a valid cached token
+  // Step 1: Check in-memory cache first (fastest)
+  if (memoryCache && memoryCache.expires_at > Date.now()) {
+    return memoryCache.access_token;
+  }
+
+  // Step 2: Check external cache (Upstash or Vercel KV)
+  const cachedToken = await getTokenFromCache();
   if (cachedToken && cachedToken.expires_at > Date.now()) {
+    memoryCache = cachedToken; // Cache in memory for this invocation
     return cachedToken.access_token;
+  }
+
+  // Step 3: Rate limit guard - prevent token refresh spam
+  const now = Date.now();
+  if (now - lastRefreshAttempt < MIN_REFRESH_INTERVAL) {
+    const waitTime = MIN_REFRESH_INTERVAL - (now - lastRefreshAttempt);
+    console.log(`⏳ Rate limit guard: waiting ${waitTime}ms before token refresh...`);
+    await new Promise((resolve) => setTimeout(resolve, waitTime));
+  }
+  lastRefreshAttempt = Date.now();
+
+  // Step 4: Refresh the token from Zoho
+  console.log('🔄 Refreshing Zoho access token...');
+
+  // Log cache status for debugging
+  const cacheStatus = {
+    upstash: isUpstashConfigured(),
+    vercelKv: isVercelKvConfigured(),
+    memoryCache: !!memoryCache,
+  };
+  console.log('📊 Cache status:', cacheStatus);
+
+  // Check if environment variables are set
+  if (!process.env.ZOHO_REFRESH_TOKEN) {
+    throw new Error('ZOHO_REFRESH_TOKEN environment variable is missing');
+  }
+  if (!process.env.ZOHO_CLIENT_ID) {
+    throw new Error('ZOHO_CLIENT_ID environment variable is missing');
+  }
+  if (!process.env.ZOHO_CLIENT_SECRET) {
+    throw new Error('ZOHO_CLIENT_SECRET environment variable is missing');
   }
 
   // Refresh the token
   const params = new URLSearchParams({
-    refresh_token: process.env.ZOHO_REFRESH_TOKEN!,
-    client_id: process.env.ZOHO_CLIENT_ID!,
-    client_secret: process.env.ZOHO_CLIENT_SECRET!,
+    refresh_token: process.env.ZOHO_REFRESH_TOKEN,
+    client_id: process.env.ZOHO_CLIENT_ID,
+    client_secret: process.env.ZOHO_CLIENT_SECRET,
     grant_type: 'refresh_token',
   });
 
@@ -32,20 +240,65 @@ export async function getAccessToken(): Promise<string> {
     },
   });
 
+  const responseText = await response.text();
+
   if (!response.ok) {
-    console.error('Token refresh failed:', await response.text());
-    throw new Error('Failed to refresh Zoho access token');
+    console.error('❌ Token refresh failed:', response.status, responseText);
+
+    // If rate limited, wait longer and retry once
+    if (response.status === 400 && responseText.includes('too many requests')) {
+      console.log('⏳ Rate limited by Zoho, waiting 10 seconds before retry...');
+      await new Promise((resolve) => setTimeout(resolve, 10000));
+
+      const retryResponse = await fetch(`${ZOHO_ACCOUNTS_URL}/oauth/v2/token?${params}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      });
+
+      if (!retryResponse.ok) {
+        const retryText = await retryResponse.text();
+        throw new Error(`Token refresh failed after retry: ${retryResponse.status} - ${retryText}`);
+      }
+
+      const retryData = await retryResponse.json();
+      if (retryData.access_token) {
+        const token: CachedToken = {
+          access_token: retryData.access_token,
+          expires_at: Date.now() + (retryData.expires_in - 300) * 1000,
+        };
+        memoryCache = token;
+        await saveTokenToCache(token);
+        console.log('✅ Token refreshed after retry and cached');
+        return token.access_token;
+      }
+    }
+
+    throw new Error(`Failed to refresh Zoho access token: ${response.status} - ${responseText}`);
   }
 
-  const data = await response.json();
+  let data;
+  try {
+    data = JSON.parse(responseText);
+  } catch {
+    throw new Error('Invalid token response from Zoho');
+  }
+
+  if (!data.access_token) {
+    throw new Error('No access_token in Zoho response');
+  }
 
   // Cache the token (expires in 1 hour, we refresh 5 min early)
-  cachedToken = {
+  const token: CachedToken = {
     access_token: data.access_token,
     expires_at: Date.now() + (data.expires_in - 300) * 1000,
   };
 
-  return cachedToken.access_token;
+  // Save to memory and external caches
+  memoryCache = token;
+  await saveTokenToCache(token);
+
+  console.log('✅ Zoho access token refreshed and cached');
+  return token.access_token;
 }
 
 // Generic fetch wrapper for Zoho API calls

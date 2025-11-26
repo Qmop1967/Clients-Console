@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ShoppingCart, Check, Package } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
+import { useCart } from "@/components/providers/cart-provider";
 
 interface ProductCardProps {
   product: {
@@ -15,9 +16,10 @@ interface ProductCardProps {
     name: string;
     sku: string;
     rate: number;
-    stock_on_hand: number;
+    available_stock: number;
     image_url: string | null;
     category_name?: string;
+    unit?: string;
   };
   currencyCode: string;
 }
@@ -25,8 +27,9 @@ interface ProductCardProps {
 export function ProductCard({ product, currencyCode }: ProductCardProps) {
   const t = useTranslations("products");
   const [added, setAdded] = useState(false);
+  const { addItem, isInCart } = useCart();
 
-  const isInStock = product.stock_on_hand > 0;
+  const isInStock = product.available_stock > 0;
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat("en-IQ", {
@@ -37,9 +40,17 @@ export function ProductCard({ product, currencyCode }: ProductCardProps) {
   };
 
   const handleAddToCart = () => {
+    addItem({
+      item_id: product.item_id,
+      name: product.name,
+      sku: product.sku,
+      rate: product.rate,
+      image_url: product.image_url,
+      available_stock: product.available_stock,
+      unit: product.unit || "unit",
+    });
     setAdded(true);
-    // TODO: Add to cart logic
-    setTimeout(() => setAdded(false), 2000);
+    setTimeout(() => setAdded(false), 1500);
   };
 
   return (
@@ -66,7 +77,7 @@ export function ProductCard({ product, currencyCode }: ProductCardProps) {
           className="absolute right-2 top-2"
         >
           {isInStock
-            ? `${t("stock")}: ${product.stock_on_hand}`
+            ? `${t("stock")}: ${product.available_stock}`
             : t("outOfStock")}
         </Badge>
       </div>

@@ -9,7 +9,7 @@ const intlMiddleware = createIntlMiddleware({
 });
 
 // Public paths that don't require authentication
-const publicPaths = ['/login', '/shop', '/register', '/api'];
+const publicPaths = ['/login', '/shop', '/cart', '/register', '/api'];
 
 function isPublicPath(pathname: string): boolean {
   // Check if the path includes any public path segment

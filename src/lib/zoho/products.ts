@@ -6,6 +6,24 @@ import { unstable_cache } from 'next/cache';
 import { zohoFetch, CACHE_TAGS, rateLimitedFetch } from './client';
 import type { ZohoItem, ZohoCategory, PaginatedResponse } from '@/types';
 
+// ============================================
+// WAREHOUSE CONFIGURATION
+// Stock should ONLY come from WholeSale WareHouse
+// Using Accounting Stock > Available for Sale
+// ============================================
+const WHOLESALE_WAREHOUSE_NAME = 'WholeSale WareHouse (Warehouse)';
+
+interface ZohoWarehouse {
+  warehouse_id: string;
+  warehouse_name: string;
+  status: string;
+  is_primary: boolean;
+}
+
+interface ZohoWarehousesResponse {
+  warehouses: ZohoWarehouse[];
+}
+
 interface ZohoItemsResponse {
   items: ZohoItem[];
   page_context: {
@@ -21,16 +39,113 @@ interface ZohoItemResponse {
   item: ZohoItem;
 }
 
+// Warehouse stock info included in item response
+interface ZohoItemWarehouseStock {
+  warehouse_id: string;
+  warehouse_name: string;
+  warehouse_stock_on_hand: number;
+  warehouse_available_stock: number;
+  warehouse_actual_available_stock: number;
+  warehouse_committed_stock: number;
+}
+
+// Extended item type with warehouse breakdown
+interface ZohoItemWithWarehouses extends ZohoItem {
+  warehouses?: ZohoItemWarehouseStock[];
+}
+
+// Get all warehouses (cached)
+export const getWarehouses = unstable_cache(
+  async (): Promise<ZohoWarehouse[]> => {
+    try {
+      const data = await rateLimitedFetch(() =>
+        zohoFetch<ZohoWarehousesResponse>('/warehouses', {
+          api: 'inventory',
+        })
+      );
+      return data.warehouses || [];
+    } catch (error) {
+      console.error('Error fetching warehouses:', error);
+      return [];
+    }
+  },
+  ['warehouses'],
+  {
+    revalidate: 86400, // 24 hours - warehouses don't change often
+    tags: ['warehouses'],
+  }
+);
+
+// Get WholeSale WareHouse ID
+export const getWholesaleWarehouseId = unstable_cache(
+  async (): Promise<string | null> => {
+    try {
+      const warehouses = await getWarehouses();
+      const wholesaleWarehouse = warehouses.find(
+        (w) => w.warehouse_name === WHOLESALE_WAREHOUSE_NAME
+      );
+      if (wholesaleWarehouse) {
+        console.log(`✅ Found WholeSale WareHouse ID: ${wholesaleWarehouse.warehouse_id}`);
+        return wholesaleWarehouse.warehouse_id;
+      }
+      console.warn(`⚠️ WholeSale WareHouse not found, available warehouses:`,
+        warehouses.map(w => w.warehouse_name));
+      return null;
+    } catch (error) {
+      console.error('Error getting wholesale warehouse ID:', error);
+      return null;
+    }
+  },
+  ['wholesale-warehouse-id'],
+  {
+    revalidate: 86400,
+    tags: ['warehouses'],
+  }
+);
+
+// Extract available stock for WholeSale WareHouse from item
+function getWholesaleAvailableStock(item: ZohoItemWithWarehouses): number {
+  if (!item.warehouses || item.warehouses.length === 0) {
+    // Fallback to item-level available_stock if no warehouse breakdown
+    return item.available_stock || 0;
+  }
+
+  const wholesaleWarehouse = item.warehouses.find(
+    (w) => w.warehouse_name === WHOLESALE_WAREHOUSE_NAME
+  );
+
+  if (wholesaleWarehouse) {
+    // Use warehouse_available_stock (Available for Sale in Accounting Stock)
+    return wholesaleWarehouse.warehouse_available_stock || 0;
+  }
+
+  // If WholeSale WareHouse not found in item, return 0
+  return 0;
+}
+
 interface ZohoCategoriesResponse {
   categories: ZohoCategory[];
 }
 
+// Extended response type that may include warehouse data
+interface ZohoItemsWithWarehousesResponse {
+  items: ZohoItemWithWarehouses[];
+  page_context: {
+    page: number;
+    per_page: number;
+    has_more_page: boolean;
+    total: number;
+    total_pages: number;
+  };
+}
+
 // Get all items with stock > 0 (cached)
+// Stock is filtered to WholeSale WareHouse only
 export const getProductsInStock = unstable_cache(
   async (page = 1, perPage = 50): Promise<PaginatedResponse<ZohoItem>> => {
     try {
       const data = await rateLimitedFetch(() =>
-        zohoFetch<ZohoItemsResponse>('/items', {
+        zohoFetch<ZohoItemsWithWarehousesResponse>('/items', {
           api: 'inventory',
           params: {
             page,
@@ -42,9 +157,15 @@ export const getProductsInStock = unstable_cache(
         })
       );
 
-      // Filter items with stock > 0
-      const itemsInStock = data.items.filter(
-        (item) => item.stock_on_hand > 0 || item.available_stock > 0
+      // Apply warehouse-specific stock and filter items with stock > 0
+      const itemsWithWarehouseStock = data.items.map((item) => ({
+        ...item,
+        available_stock: getWholesaleAvailableStock(item),
+      }));
+
+      // Filter items with WholeSale WareHouse stock > 0
+      const itemsInStock = itemsWithWarehouseStock.filter(
+        (item) => item.available_stock > 0
       );
 
       return {
@@ -67,17 +188,18 @@ export const getProductsInStock = unstable_cache(
   },
   ['products-in-stock'],
   {
-    revalidate: 300, // 5 minutes
+    revalidate: 86400, // 24 hours - webhook-triggered revalidation handles updates
     tags: [CACHE_TAGS.PRODUCTS],
   }
 );
 
 // Get all items (including out of stock) - for catalog view
+// Stock is filtered to WholeSale WareHouse only
 export const getAllProducts = unstable_cache(
   async (page = 1, perPage = 50): Promise<PaginatedResponse<ZohoItem>> => {
     try {
       const data = await rateLimitedFetch(() =>
-        zohoFetch<ZohoItemsResponse>('/items', {
+        zohoFetch<ZohoItemsWithWarehousesResponse>('/items', {
           api: 'inventory',
           params: {
             page,
@@ -89,8 +211,14 @@ export const getAllProducts = unstable_cache(
         })
       );
 
+      // Apply warehouse-specific stock filtering
+      const itemsWithWarehouseStock = data.items.map((item) => ({
+        ...item,
+        available_stock: getWholesaleAvailableStock(item),
+      }));
+
       return {
-        data: data.items,
+        data: itemsWithWarehouseStock,
         page_context: data.page_context,
       };
     } catch (error) {
@@ -109,22 +237,35 @@ export const getAllProducts = unstable_cache(
   },
   ['all-products'],
   {
-    revalidate: 300,
+    revalidate: 86400, // 24 hours - webhook-triggered revalidation handles updates
     tags: [CACHE_TAGS.PRODUCTS],
   }
 );
 
+// Extended item response that may include warehouse data
+interface ZohoItemWithWarehouseResponse {
+  item: ZohoItemWithWarehouses;
+}
+
 // Get single product by ID
+// Returns warehouse-specific available stock from WholeSale WareHouse
 export const getProduct = unstable_cache(
   async (itemId: string): Promise<ZohoItem | null> => {
     try {
       const data = await rateLimitedFetch(() =>
-        zohoFetch<ZohoItemResponse>(`/items/${itemId}`, {
+        zohoFetch<ZohoItemWithWarehouseResponse>(`/items/${itemId}`, {
           api: 'inventory',
         })
       );
 
-      return data.item || null;
+      if (!data.item) return null;
+
+      // Apply warehouse-specific stock filtering
+      // Stock should ONLY come from WholeSale WareHouse's Available for Sale
+      return {
+        ...data.item,
+        available_stock: getWholesaleAvailableStock(data.item),
+      };
     } catch (error) {
       console.error('Error fetching product:', error);
       return null;
@@ -132,7 +273,7 @@ export const getProduct = unstable_cache(
   },
   ['product'],
   {
-    revalidate: 300,
+    revalidate: 86400, // 24 hours - webhook-triggered revalidation handles updates
     tags: [CACHE_TAGS.PRODUCTS],
   }
 );
@@ -155,12 +296,13 @@ export const getCategories = unstable_cache(
   },
   ['categories'],
   {
-    revalidate: 3600, // 1 hour
+    revalidate: 86400, // 24 hours - webhook-triggered revalidation handles updates
     tags: [CACHE_TAGS.CATEGORIES],
   }
 );
 
 // Get products by category
+// Stock is filtered to WholeSale WareHouse only
 export const getProductsByCategory = unstable_cache(
   async (
     categoryId: string,
@@ -169,7 +311,7 @@ export const getProductsByCategory = unstable_cache(
   ): Promise<PaginatedResponse<ZohoItem>> => {
     try {
       const data = await rateLimitedFetch(() =>
-        zohoFetch<ZohoItemsResponse>('/items', {
+        zohoFetch<ZohoItemsWithWarehousesResponse>('/items', {
           api: 'inventory',
           params: {
             page,
@@ -180,8 +322,14 @@ export const getProductsByCategory = unstable_cache(
         })
       );
 
+      // Apply warehouse-specific stock filtering
+      const itemsWithWarehouseStock = data.items.map((item) => ({
+        ...item,
+        available_stock: getWholesaleAvailableStock(item),
+      }));
+
       return {
-        data: data.items,
+        data: itemsWithWarehouseStock,
         page_context: data.page_context,
       };
     } catch (error) {
@@ -200,12 +348,13 @@ export const getProductsByCategory = unstable_cache(
   },
   ['products-by-category'],
   {
-    revalidate: 300,
+    revalidate: 86400, // 24 hours - webhook-triggered revalidation handles updates
     tags: [CACHE_TAGS.PRODUCTS, CACHE_TAGS.CATEGORIES],
   }
 );
 
 // Search products
+// Stock is filtered to WholeSale WareHouse only
 export async function searchProducts(
   query: string,
   page = 1,
@@ -213,7 +362,7 @@ export async function searchProducts(
 ): Promise<PaginatedResponse<ZohoItem>> {
   try {
     const data = await rateLimitedFetch(() =>
-      zohoFetch<ZohoItemsResponse>('/items', {
+      zohoFetch<ZohoItemsWithWarehousesResponse>('/items', {
         api: 'inventory',
         params: {
           page,
@@ -224,8 +373,14 @@ export async function searchProducts(
       })
     );
 
+    // Apply warehouse-specific stock filtering
+    const itemsWithWarehouseStock = data.items.map((item) => ({
+      ...item,
+      available_stock: getWholesaleAvailableStock(item),
+    }));
+
     return {
-      data: data.items,
+      data: itemsWithWarehouseStock,
       page_context: data.page_context,
     };
   } catch (error) {
@@ -259,10 +414,11 @@ export function getProductImageUrl(item: ZohoItem): string | null {
 // ============================================
 // FETCH ALL PRODUCTS (with full pagination)
 // Guarantees ALL products from Zoho are fetched
+// Returns warehouse-specific available stock from WholeSale WareHouse
 // ============================================
 export const getAllProductsComplete = unstable_cache(
   async (): Promise<ZohoItem[]> => {
-    const allProducts: ZohoItem[] = [];
+    const allProducts: ZohoItemWithWarehouses[] = [];
     let currentPage = 1;
     const perPage = 200; // Max per page for efficiency
     let hasMorePages = true;
@@ -270,7 +426,7 @@ export const getAllProductsComplete = unstable_cache(
     try {
       while (hasMorePages) {
         const data = await rateLimitedFetch(() =>
-          zohoFetch<ZohoItemsResponse>('/items', {
+          zohoFetch<ZohoItemsWithWarehousesResponse>('/items', {
             api: 'inventory',
             params: {
               page: currentPage,
@@ -298,7 +454,16 @@ export const getAllProductsComplete = unstable_cache(
       }
 
       console.log(`✅ Fetched ${allProducts.length} total products from Zoho`);
-      return allProducts;
+
+      // Apply warehouse-specific stock filtering
+      // Stock should ONLY come from WholeSale WareHouse's Available for Sale
+      const productsWithWarehouseStock = allProducts.map((item) => ({
+        ...item,
+        // Override available_stock with WholeSale WareHouse specific stock
+        available_stock: getWholesaleAvailableStock(item),
+      }));
+
+      return productsWithWarehouseStock;
     } catch (error) {
       console.error('Error fetching all products:', error);
       return [];
@@ -306,7 +471,7 @@ export const getAllProductsComplete = unstable_cache(
   },
   ['all-products-complete'],
   {
-    revalidate: 300, // 5 minutes
+    revalidate: 86400, // 24 hours - webhook-triggered revalidation handles updates
     tags: [CACHE_TAGS.PRODUCTS],
   }
 );
@@ -334,7 +499,7 @@ export const getProductCount = unstable_cache(
   },
   ['product-count'],
   {
-    revalidate: 60, // 1 minute
+    revalidate: 86400, // 24 hours - webhook-triggered revalidation handles updates
     tags: [CACHE_TAGS.PRODUCTS],
   }
 );

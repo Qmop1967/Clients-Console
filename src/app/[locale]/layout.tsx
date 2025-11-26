@@ -5,6 +5,7 @@ import { NextIntlClientProvider } from "next-intl";
 import { getMessages } from "next-intl/server";
 import { ThemeProvider } from "@/components/providers/theme-provider";
 import { SessionProvider } from "@/components/providers/session-provider";
+import { CartProvider } from "@/components/providers/cart-provider";
 import { locales, localeDirection, type Locale } from "@/i18n/config";
 import "../globals.css";
 
@@ -79,7 +80,9 @@ export default async function RootLayout({
             disableTransitionOnChange
           >
             <NextIntlClientProvider messages={messages}>
-              {children}
+              <CartProvider currencyCode="IQD">
+                {children}
+              </CartProvider>
             </NextIntlClientProvider>
           </ThemeProvider>
         </SessionProvider>

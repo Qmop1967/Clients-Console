@@ -103,7 +103,8 @@
     "wholesaleCta": "هل تريد أسعار الجملة؟",
     "wholesaleCtaDescription": "سجل دخولك إلى حساب الجملة لمشاهدة الأسعار الخاصة وتقديم الطلبات.",
     "loginToAccount": "تسجيل الدخول إلى حسابك",
-    "productsAvailable": "{count} منتج متوفر"
+    "productsAvailable": "{count} منتج متوفر",
+    "contactForPrice": "اتصل للسعر"
   },
   "orders": {
     "title": "الطلبات",

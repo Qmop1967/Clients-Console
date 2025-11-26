@@ -274,8 +274,8 @@ export interface CartItem {
   sku: string;
   quantity: number;
   rate: number;
-  image_url?: string;
-  stock_on_hand: number;
+  image_url?: string | null;
+  available_stock: number;
   unit: string;
 }
 
