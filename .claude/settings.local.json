@@ -51,7 +51,10 @@
       "Bash(gh repo set-default:*)",
       "Bash(git commit -m \"$(cat <<''EOF''\nfeat: enhance Arabic RTL experience with larger stat numbers\n\n- Add .stat-number and .stat-currency CSS classes for large readable numbers\n- Enhanced Arabic RTL support with Cairo font (2.75rem for stats)\n- Improved Arabic body text with IBM Plex Sans Arabic and line-height 1.7\n- Updated dashboard, orders, and invoices pages with new stat classes\n- Updated CLAUDE.md with new GitHub-based deployment workflow:\n  - Push to GitHub triggers staging.tsh.sale deployment\n  - User manually deploys to production after verification\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")",
       "Bash(gh run list:*)",
-      "Bash(git commit -m \"$(cat <<''EOF''\nfeat: set Arabic as default language\n\n- Changed defaultLocale from ''en'' to ''ar'' in i18n config\n- Updated root URL redirect from /en/shop to /ar/shop\n- Visitors now see Arabic interface first (RTL layout)\n- English still available via language toggle\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")"
+      "Bash(git commit -m \"$(cat <<''EOF''\nfeat: set Arabic as default language\n\n- Changed defaultLocale from ''en'' to ''ar'' in i18n config\n- Updated root URL redirect from /en/shop to /ar/shop\n- Visitors now see Arabic interface first (RTL layout)\n- English still available via language toggle\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")",
+      "Bash(gh secret set:*)",
+      "Bash(gh secret:*)",
+      "Bash(git commit:*)"
     ],
     "deny": [],
     "ask": []

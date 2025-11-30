@@ -51,29 +51,38 @@ All pages now fetch data primarily from **Zoho Books API** (higher rate limits):
 
 ## Deployment Rules
 
-### GitHub-Based Deployment Workflow (MANDATORY)
+### CRITICAL: NEVER Deploy to Production
 
 ```yaml
-DEPLOYMENT WORKFLOW:
-  1. Push changes to GitHub (main branch)
-  2. GitHub Actions automatically deploys to STAGING (staging.tsh.sale)
-  3. Verify changes on staging environment
-  4. User manually deploys to PRODUCTION via Vercel dashboard
+⛔ PRODUCTION DEPLOYMENT IS FORBIDDEN FOR CLAUDE CODE ⛔
 
-IMPORTANT:
-  - Claude Code should NEVER deploy directly to production
-  - Always push to GitHub and let CI/CD handle staging deployment
-  - User will manually trigger production deployment after verification
+Claude Code must NEVER:
+  - Run `vercel --prod` or `vercel --prod --yes`
+  - Deploy directly to production
+  - Promote preview deployments to production
+  - Use any command that deploys to www.tsh.sale
 
-Commands:
-  Push to GitHub:     git push origin main
-  Manual Staging:     vercel --yes (only if GitHub Actions fails)
-  Manual Production:  User deploys via Vercel Dashboard (NOT Claude Code)
+ONLY the user can deploy to production manually via Vercel Dashboard.
+```
 
-URLs:
-  Staging:    https://staging.tsh.sale (automatic after GitHub push)
-  Production: https://www.tsh.sale (manual deploy by user)
-              https://tsh-clients-console.vercel.app
+### GitHub Actions Workflow (Preview Only)
+
+```yaml
+WORKFLOW:
+  1. Claude Code pushes to GitHub (main branch)
+  2. GitHub Actions automatically deploys to PREVIEW (NOT production)
+  3. Preview URL generated (staging.tsh.sale)
+  4. User verifies changes on preview
+  5. User MANUALLY deploys to production via Vercel Dashboard
+
+GitHub Actions File: .github/workflows/preview.yml
+Trigger: Push to main branch
+Target: Preview environment ONLY
+
+GitHub Secrets (configured):
+  - VERCEL_TOKEN: Vercel API token
+  - VERCEL_ORG_ID: team_rgs5sBv5aI1FH5pFAAfflSTd
+  - VERCEL_PROJECT_ID: prj_WayTPxtTtlwrZCZZEy8xD4kyAxds
 ```
 
 ### Deployment Steps for Claude Code
@@ -85,17 +94,26 @@ git add -A
 # 2. Commit with descriptive message
 git commit -m "feat: description of changes"
 
-# 3. Push to GitHub (triggers staging deployment)
+# 3. Push to GitHub (triggers PREVIEW deployment via GitHub Actions)
 git push origin main
 
-# 4. Notify user to check staging.tsh.sale
-# 5. User will manually deploy to production after verification
+# 4. Tell user: "Changes pushed. GitHub Actions will deploy to preview."
+# 5. Tell user: "Check staging.tsh.sale, then deploy to production via Vercel Dashboard."
 ```
 
-### DO NOT
-- Run `vercel --prod --yes` directly
-- Deploy to production without user approval
-- Skip the staging verification step
+### URLs
+
+| Environment | URL | Deployed By |
+|-------------|-----|-------------|
+| Preview/Staging | staging.tsh.sale | GitHub Actions (automatic) |
+| Production | www.tsh.sale | User (manual via Vercel Dashboard) |
+
+### DO NOT (CRITICAL)
+- ❌ Run `vercel --prod` or `vercel --prod --yes`
+- ❌ Deploy to production in any way
+- ❌ Promote preview to production
+- ❌ Skip pushing to GitHub
+- ❌ Use `vercel` CLI for deployment (use GitHub Actions instead)
 
 ---
 
