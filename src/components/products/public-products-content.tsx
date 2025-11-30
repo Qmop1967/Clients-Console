@@ -9,7 +9,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ProductImage } from "./product-image";
 import { useCart } from "@/components/providers/cart-provider";
-import { Search, ShoppingCart, Plus, Minus, Check, Eye, ChevronLeft, ChevronRight } from "lucide-react";
+import { Search, ShoppingCart, Plus, Minus, Check, Eye, ChevronRight } from "lucide-react";
+import { NumberedPagination } from "@/components/ui/pagination";
 import { cn } from "@/lib/utils/cn";
 import { formatCurrency } from "@/lib/utils/format";
 
@@ -393,13 +394,22 @@ export function PublicProductsContent({
         </div>
       ) : (
         <>
-          {/* Showing X-Y of Z */}
-          <div className="text-sm text-muted-foreground">
-            {t("showing", {
-              from: startIndex + 1,
-              to: Math.min(endIndex, filteredProducts.length),
-              total: filteredProducts.length,
-            })}
+          {/* Results Count & Pagination ABOVE products */}
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="text-sm text-muted-foreground">
+              {t("showing", {
+                from: startIndex + 1,
+                to: Math.min(endIndex, filteredProducts.length),
+                total: filteredProducts.length,
+              })}
+            </div>
+
+            {/* Pagination Above Products */}
+            <NumberedPagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              onPageChange={goToPage}
+            />
           </div>
 
           {/* Product Grid */}
@@ -414,74 +424,13 @@ export function PublicProductsContent({
             ))}
           </div>
 
-          {/* Pagination Controls */}
-          {totalPages > 1 && (
-            <div className="mt-8 space-y-4">
-              {/* Page numbers - scrollable on mobile */}
-              <div className="flex items-center justify-center gap-2">
-                <Button
-                  variant="outline"
-                  size="icon"
-                  className="h-9 w-9 shrink-0"
-                  onClick={() => goToPage(currentPage - 1)}
-                  disabled={currentPage === 1}
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
-
-                <div className="flex items-center gap-1 overflow-x-auto max-w-[70vw] sm:max-w-[500px] px-2 py-1 scrollbar-hide">
-                  {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-                    <Button
-                      key={page}
-                      variant={currentPage === page ? "default" : "outline"}
-                      size="sm"
-                      className={cn(
-                        "min-w-[36px] h-9 px-2 shrink-0",
-                        currentPage === page && "pointer-events-none"
-                      )}
-                      onClick={() => goToPage(page)}
-                    >
-                      {page}
-                    </Button>
-                  ))}
-                </div>
-
-                <Button
-                  variant="outline"
-                  size="icon"
-                  className="h-9 w-9 shrink-0"
-                  onClick={() => goToPage(currentPage + 1)}
-                  disabled={currentPage === totalPages}
-                >
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
-              </div>
-
-              {/* Quick jump - shows on larger page counts */}
-              {totalPages > 10 && (
-                <div className="flex items-center justify-center gap-2 text-sm">
-                  <span className="text-muted-foreground">{t("goToPage") || "Go to page"}:</span>
-                  <Input
-                    type="number"
-                    min={1}
-                    max={totalPages}
-                    placeholder={String(currentPage)}
-                    className="w-20 h-8 text-center"
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        const value = parseInt((e.target as HTMLInputElement).value);
-                        if (value >= 1 && value <= totalPages) {
-                          goToPage(value);
-                          (e.target as HTMLInputElement).value = "";
-                        }
-                      }
-                    }}
-                  />
-                  <span className="text-muted-foreground">/ {totalPages}</span>
-                </div>
-              )}
-            </div>
-          )}
+          {/* Pagination BELOW products */}
+          <NumberedPagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            onPageChange={goToPage}
+            className="mt-8"
+          />
         </>
       )}
 
