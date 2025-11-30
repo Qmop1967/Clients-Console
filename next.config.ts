@@ -70,7 +70,7 @@ const nextConfig: NextConfig = {
     return [
       {
         source: "/",
-        destination: "/en/shop",
+        destination: "/ar/shop",
         permanent: false,
       },
       {
