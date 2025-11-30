@@ -1,11 +1,11 @@
 {
-  "name": "TSH Clients Console",
-  "short_name": "TSH Console",
+  "name": "TSH",
+  "short_name": "TSH",
   "description": "TSH Wholesale & Retail Clients Portal",
-  "start_url": "/en/dashboard",
+  "start_url": "/ar/shop",
   "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#2563eb",
+  "background_color": "#1C1930",
+  "theme_color": "#1C1930",
   "orientation": "portrait-primary",
   "icons": [
     {

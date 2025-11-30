@@ -31,8 +31,8 @@ export const metadata: Metadata = {
   },
   appleWebApp: {
     capable: true,
-    statusBarStyle: "default",
-    title: "TSH Console",
+    statusBarStyle: "black-translucent",
+    title: "TSH",
   },
   formatDetection: {
     telephone: false,
@@ -42,9 +42,10 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
+  viewportFit: "cover",
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
-    { media: "(prefers-color-scheme: dark)", color: "#0a0a0a" },
+    { media: "(prefers-color-scheme: light)", color: "#1C1930" },
+    { media: "(prefers-color-scheme: dark)", color: "#1C1930" },
   ],
 };
 

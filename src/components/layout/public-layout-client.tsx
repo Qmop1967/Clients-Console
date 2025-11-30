@@ -33,8 +33,8 @@ export function PublicLayoutClient({ children, locale }: PublicLayoutClientProps
 
   return (
     <>
-      {/* Main Content with padding for bottom nav */}
-      <main className="container mx-auto px-4 py-6 pb-24">{children}</main>
+      {/* Main Content with padding for bottom nav and safe areas */}
+      <main className="container mx-auto px-4 py-4 pb-24 momentum-scroll">{children}</main>
 
       {/* Bottom Navigation */}
       <PublicBottomNav onMenuClick={() => setMenuOpen(true)} />

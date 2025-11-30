@@ -25,8 +25,8 @@ export function PublicHeader({ locale }: PublicHeaderProps) {
   const logoHref = isAuthenticated ? `/${locale}/products` : `/${locale}/shop`;
 
   return (
-    <header className="sticky top-0 z-50 border-b border-border/50 bg-background/80 backdrop-blur-lg supports-[backdrop-filter]:bg-background/60">
-      <div className="container mx-auto flex h-16 items-center justify-between px-4">
+    <header className="sticky top-0 z-50 border-b border-border/50 bg-background/95 backdrop-blur-xl supports-[backdrop-filter]:bg-background/80 safe-area-inset-top">
+      <div className="container mx-auto flex h-14 items-center justify-between px-4">
         {/* Logo - Luxury styling with serif font */}
         <Link
           href={logoHref}
@@ -51,7 +51,7 @@ export function PublicHeader({ locale }: PublicHeaderProps) {
           {/* Cart - Gold badge accent */}
           <Link
             href={`/${locale}/cart`}
-            className="relative flex h-10 w-10 items-center justify-center rounded-lg border border-border/50 bg-background/50 transition-all hover:border-amber-500/30 hover:bg-secondary"
+            className="native-press relative flex h-10 w-10 items-center justify-center rounded-xl border border-border/50 bg-background/50 transition-all hover:border-amber-500/30 hover:bg-secondary"
             aria-label="Shopping cart"
           >
             <ShoppingCart className="h-5 w-5 text-foreground/80" strokeWidth={1.5} />
@@ -68,7 +68,7 @@ export function PublicHeader({ locale }: PublicHeaderProps) {
           {/* Language Switcher */}
           <Link
             href={isAuthenticated ? `/${otherLocale}/products` : `/${otherLocale}/shop`}
-            className="flex h-10 w-10 items-center justify-center rounded-lg border border-border/50 bg-background/50 transition-all hover:border-primary/30 hover:bg-secondary"
+            className="native-press flex h-10 w-10 items-center justify-center rounded-xl border border-border/50 bg-background/50 transition-all hover:border-primary/30 hover:bg-secondary"
             aria-label={`Switch to ${otherLocale === "ar" ? "Arabic" : "English"}`}
           >
             <Globe className="h-5 w-5 text-foreground/80" strokeWidth={1.5} />

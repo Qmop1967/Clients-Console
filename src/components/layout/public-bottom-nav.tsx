@@ -69,8 +69,8 @@ export function PublicBottomNav({ onMenuClick }: PublicBottomNavProps) {
   ];
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 safe-area-bottom">
-      <div className="flex h-16 items-center justify-around px-4">
+    <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-border/30 bg-background/98 backdrop-blur-xl supports-[backdrop-filter]:bg-background/90 safe-area-bottom">
+      <div className="flex h-[60px] items-center justify-around px-2">
         {navItems.map((item) => {
           const isActive =
             item.key !== "menu" && pathname.includes(item.href);
@@ -81,10 +81,10 @@ export function PublicBottomNav({ onMenuClick }: PublicBottomNavProps) {
               <button
                 key={item.key}
                 onClick={onMenuClick}
-                className="flex flex-col items-center justify-center gap-1 px-3 py-2 text-muted-foreground transition-colors hover:text-foreground"
+                className="native-press flex min-w-[64px] flex-col items-center justify-center gap-0.5 rounded-xl px-3 py-2 text-muted-foreground transition-colors hover:text-foreground"
               >
-                <Icon className="h-5 w-5" />
-                <span className="text-xs">{item.label}</span>
+                <Icon className="h-6 w-6" strokeWidth={1.5} />
+                <span className="text-[11px] font-medium">{item.label}</span>
               </button>
             );
           }
@@ -94,7 +94,7 @@ export function PublicBottomNav({ onMenuClick }: PublicBottomNavProps) {
               key={item.key}
               href={item.href}
               className={cn(
-                "relative flex flex-col items-center justify-center gap-1 px-3 py-2 transition-colors",
+                "native-press relative flex min-w-[64px] flex-col items-center justify-center gap-0.5 rounded-xl px-3 py-2 transition-all",
                 isActive
                   ? "text-primary"
                   : "text-muted-foreground hover:text-foreground"
@@ -102,18 +102,22 @@ export function PublicBottomNav({ onMenuClick }: PublicBottomNavProps) {
             >
               <div className="relative">
                 <Icon
-                  className={cn("h-5 w-5", isActive && "fill-primary/20")}
+                  className={cn("h-6 w-6", isActive && "fill-primary/20")}
+                  strokeWidth={1.5}
                 />
                 {item.badge !== undefined && item.badge > 0 && (
                   <Badge
-                    variant="destructive"
-                    className="absolute -right-2 -top-2 h-4 min-w-4 rounded-full px-1 text-[10px]"
+                    variant="gold"
+                    className="absolute -right-2.5 -top-2 h-[18px] min-w-[18px] rounded-full px-1 text-[10px] font-semibold"
                   >
                     {item.badge > 99 ? "99+" : item.badge}
                   </Badge>
                 )}
               </div>
-              <span className="text-xs font-medium">{item.label}</span>
+              <span className="text-[11px] font-medium">{item.label}</span>
+              {isActive && (
+                <div className="absolute -bottom-1 h-1 w-6 rounded-full bg-primary" />
+              )}
             </Link>
           );
         })}
