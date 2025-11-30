@@ -120,7 +120,7 @@ export function DashboardContent({
         </p>
       </div>
 
-      {/* Stats Grid - Premium cards */}
+      {/* Stats Grid - Premium cards with large readable numbers */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         {/* Outstanding Balance Card */}
         <Card variant="elevated" className="relative overflow-hidden">
@@ -129,12 +129,12 @@ export function DashboardContent({
             <CardTitle className="text-sm font-medium text-muted-foreground">
               {t("outstandingBalance")}
             </CardTitle>
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-red-100 dark:bg-red-900/30">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-red-100 dark:bg-red-900/30">
               <DollarSign className="h-5 w-5 text-red-600 dark:text-red-400" strokeWidth={1.5} />
             </div>
           </CardHeader>
-          <CardContent>
-            <div className="price-display text-red-600 dark:text-red-400">
+          <CardContent className="pt-2">
+            <div className="stat-currency text-red-600 dark:text-red-400">
               {formatCurrency(balance?.outstanding || 0, displayCurrency)}
             </div>
           </CardContent>
@@ -147,12 +147,12 @@ export function DashboardContent({
             <CardTitle className="text-sm font-medium text-muted-foreground">
               {t("unusedCredits")}
             </CardTitle>
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-100 dark:bg-emerald-900/30">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-100 dark:bg-emerald-900/30">
               <CreditCard className="h-5 w-5 text-emerald-600 dark:text-emerald-400" strokeWidth={1.5} />
             </div>
           </CardHeader>
-          <CardContent>
-            <div className="price-display text-emerald-600 dark:text-emerald-400">
+          <CardContent className="pt-2">
+            <div className="stat-currency text-emerald-600 dark:text-emerald-400">
               {formatCurrency(balance?.unused_credits || 0, displayCurrency)}
             </div>
           </CardContent>
@@ -165,12 +165,12 @@ export function DashboardContent({
             <CardTitle className="text-sm font-medium text-muted-foreground">
               {t("totalOrders")}
             </CardTitle>
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
               <ShoppingBag className="h-5 w-5 text-primary" strokeWidth={1.5} />
             </div>
           </CardHeader>
-          <CardContent>
-            <div className="font-display text-3xl font-semibold">{orderStats.total ?? 0}</div>
+          <CardContent className="pt-2">
+            <div className="stat-number">{orderStats.total ?? 0}</div>
           </CardContent>
         </Card>
 
@@ -181,12 +181,12 @@ export function DashboardContent({
             <CardTitle className="text-sm font-medium text-muted-foreground">
               {t("pendingOrders")}
             </CardTitle>
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-amber-100 dark:bg-amber-900/30">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-100 dark:bg-amber-900/30">
               <Clock className="h-5 w-5 text-amber-600 dark:text-amber-400" strokeWidth={1.5} />
             </div>
           </CardHeader>
-          <CardContent>
-            <div className="font-display text-3xl font-semibold text-amber-600 dark:text-amber-400">
+          <CardContent className="pt-2">
+            <div className="stat-number text-amber-600 dark:text-amber-400">
               {orderStats.pending ?? 0}
             </div>
           </CardContent>

@@ -51,27 +51,51 @@ All pages now fetch data primarily from **Zoho Books API** (higher rate limits):
 
 ## Deployment Rules
 
-### Direct Production Deployment Mode
+### GitHub-Based Deployment Workflow (MANDATORY)
 
 ```yaml
 DEPLOYMENT WORKFLOW:
-  Deploy directly to PRODUCTION for rapid iteration
+  1. Push changes to GitHub (main branch)
+  2. GitHub Actions automatically deploys to STAGING (staging.tsh.sale)
+  3. Verify changes on staging environment
+  4. User manually deploys to PRODUCTION via Vercel dashboard
+
+IMPORTANT:
+  - Claude Code should NEVER deploy directly to production
+  - Always push to GitHub and let CI/CD handle staging deployment
+  - User will manually trigger production deployment after verification
 
 Commands:
-  Production: vercel --prod --yes
+  Push to GitHub:     git push origin main
+  Manual Staging:     vercel --yes (only if GitHub Actions fails)
+  Manual Production:  User deploys via Vercel Dashboard (NOT Claude Code)
 
 URLs:
-  Production: https://www.tsh.sale
+  Staging:    https://staging.tsh.sale (automatic after GitHub push)
+  Production: https://www.tsh.sale (manual deploy by user)
               https://tsh-clients-console.vercel.app
-  Staging:    https://staging.tsh.sale (available if needed)
 ```
 
-### Quick Deploy Command
+### Deployment Steps for Claude Code
 
 ```bash
-cd "/Users/khaleelal-mulla/General/ Projects/tsh-clients-console"
-vercel --prod --yes
+# 1. Stage all changes
+git add -A
+
+# 2. Commit with descriptive message
+git commit -m "feat: description of changes"
+
+# 3. Push to GitHub (triggers staging deployment)
+git push origin main
+
+# 4. Notify user to check staging.tsh.sale
+# 5. User will manually deploy to production after verification
 ```
+
+### DO NOT
+- Run `vercel --prod --yes` directly
+- Deploy to production without user approval
+- Skip the staging verification step
 
 ---
 
@@ -165,11 +189,14 @@ npm run build
 # Lint
 npm run lint
 
-# Deploy directly to PRODUCTION
-vercel --prod --yes
+# Push to GitHub (triggers staging deployment)
+git add -A && git commit -m "feat: description" && git push origin main
 
-# Deploy to staging (if needed)
+# Manual staging (only if GitHub Actions fails)
 vercel --yes
+
+# Production deployment
+# User manually deploys via Vercel Dashboard after staging verification
 ```
 
 ---
@@ -189,8 +216,9 @@ vercel --yes
 - ALWAYS handle loading and error states
 
 ### Deployment
-- Deploy directly to production: `vercel --prod --yes`
-- Staging available if needed: `vercel --yes`
+- ALWAYS push to GitHub to trigger staging deployment
+- NEVER deploy directly to production - user does this manually
+- Verify on staging.tsh.sale before user deploys to production
 
 ### Internationalization
 - ALWAYS add both English and Arabic translations
@@ -576,7 +604,11 @@ At the start of EVERY session:
 - [ ] Check current git branch
 - [ ] Review recent changes: `git log --oneline -5`
 - [ ] Understand the task before coding
-- [ ] Deploy directly to production: `vercel --prod --yes`
+
+At the end of changes:
+- [ ] Commit and push to GitHub (triggers staging deployment)
+- [ ] Notify user to verify staging.tsh.sale
+- [ ] User manually deploys to production after verification
 
 ---
 
@@ -636,9 +668,20 @@ At the start of EVERY session:
 ---
 
 **Last Updated:** 2025-11-30
-**Version:** 1.6.0
+**Version:** 1.7.0
 
-## Recent Changes (v1.6.0)
+## Recent Changes (v1.7.0)
+- **Enhanced Arabic RTL Experience**: Improved readability and typography for Arabic users
+  - Larger stat numbers: `.stat-number` (2.5rem) and `.stat-currency` (2rem) classes
+  - Even larger for Arabic: 2.75rem and 2.25rem respectively using Cairo font
+  - Enhanced Arabic typography with better line-height (1.7) and heading sizes
+  - Fixed RTL font family to use IBM Plex Sans Arabic for body text
+- **Deployment Workflow Change**: GitHub-based CI/CD pipeline
+  - Push to GitHub triggers automatic staging deployment (staging.tsh.sale)
+  - User manually deploys to production after staging verification
+  - Claude Code no longer deploys directly to production
+
+## Previous Changes (v1.6.0)
 - **Luxury Frontend Redesign**: Complete UI/UX overhaul with premium B2B aesthetics
   - Typography: Cormorant Garamond (serif display) + Plus Jakarta Sans (body)
   - Arabic Support: Cairo (display) + IBM Plex Sans Arabic (body)

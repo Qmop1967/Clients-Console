@@ -284,14 +284,14 @@ export function OrdersContent({
             <div className={`absolute end-0 top-0 h-20 w-20 translate-x-6 -translate-y-6 rounded-full ${card.bgColor} opacity-50`} />
             <CardContent className="p-4 relative">
               <div className="flex items-start justify-between">
-                <div className="space-y-1">
+                <div className="space-y-1.5">
                   <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
                     {card.title}
                   </p>
-                  <p className="font-display text-2xl font-semibold">{card.value}</p>
-                  <p className="text-xs text-muted-foreground">{card.amount}</p>
+                  <p className="stat-number text-3xl">{card.value}</p>
+                  <p className="text-sm text-muted-foreground font-medium">{card.amount}</p>
                 </div>
-                <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${card.bgColor}`}>
+                <div className={`flex h-11 w-11 items-center justify-center rounded-xl ${card.bgColor}`}>
                   <span className={card.color}>{card.icon}</span>
                 </div>
               </div>

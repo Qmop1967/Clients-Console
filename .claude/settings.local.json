@@ -41,7 +41,15 @@
       "mcp__zoho__ZohoInventory_get_item",
       "Bash(source:*)",
       "Bash(BLOB_READ_WRITE_TOKEN=\"vercel_blob_rw_LAnsoqc5n02d04nJ_MkH5pordfqgmYPDRSgtL9qgXhqeCBT\" vercel blob list:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$(cat <<''EOF''\nfeat: luxury frontend redesign with premium B2B aesthetics\n\nComplete UI/UX overhaul implementing a refined luxury design system:\n\nTypography:\n- Cormorant Garamond (serif) for display headings\n- Plus Jakarta Sans for body text\n- Cairo & IBM Plex Sans Arabic for RTL support\n\nDesign System:\n- Gold accent color system with HSL variables\n- Premium shadow system (--shadow-gold, --shadow-glow)\n- New utility classes (.font-display, .price-tag, .price-display)\n\nComponent Library Upgrade:\n- Button: gold, luxury, premium-outline, success variants\n- Card: elevated, premium, interactive, glass variants with CVA\n- Badge: gold, gold-subtle, status variants (pending, confirmed, shipped)\n- Input: premium variant with gold focus ring\n- Skeleton: shimmer patterns (SkeletonCard, SkeletonText, SkeletonAvatar)\n- EmptyState: pre-built empty states for common scenarios\n\nLayout Enhancements:\n- Headers with gold gradient logo and refined backdrop blur\n- Menu drawer with premium avatar styling and wholesale client badge\n- Product cards with serif fonts, image hover zoom, low stock warnings\n\nPage Styling:\n- Dashboard: elevated stat cards with decorative circles\n- Orders: premium summary cards, gold status tabs\n- Invoices: elevated cards with status indicators\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")",
+      "Bash(git push:*)",
+      "Bash(git remote add:*)",
+      "Bash(gh auth status:*)",
+      "Bash(gh repo list:*)",
+      "Bash(git remote:*)",
+      "Bash(gh repo set-default:*)",
+      "Bash(git commit -m \"$(cat <<''EOF''\nfeat: enhance Arabic RTL experience with larger stat numbers\n\n- Add .stat-number and .stat-currency CSS classes for large readable numbers\n- Enhanced Arabic RTL support with Cairo font (2.75rem for stats)\n- Improved Arabic body text with IBM Plex Sans Arabic and line-height 1.7\n- Updated dashboard, orders, and invoices pages with new stat classes\n- Updated CLAUDE.md with new GitHub-based deployment workflow:\n  - Push to GitHub triggers staging.tsh.sale deployment\n  - User manually deploys to production after verification\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")"
     ],
     "deny": [],
     "ask": []

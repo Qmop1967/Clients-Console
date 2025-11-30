@@ -277,12 +277,12 @@ export function InvoicesContent({
             <div className="absolute end-0 top-0 h-20 w-20 translate-x-6 -translate-y-6 rounded-full bg-slate-500/10" />
             <CardContent className="p-4 relative">
               <div className="flex items-center gap-3">
-                <div className="rounded-xl bg-slate-500/10 p-2.5">
-                  <FileText className="h-5 w-5 text-slate-600 dark:text-slate-400" strokeWidth={1.5} />
+                <div className="rounded-xl bg-slate-500/10 p-3">
+                  <FileText className="h-6 w-6 text-slate-600 dark:text-slate-400" strokeWidth={1.5} />
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">{t("total")}</p>
-                  <p className="font-display text-xl font-semibold truncate">{formatCurrency(totalAmount)}</p>
+                  <p className="stat-currency text-2xl truncate">{formatCurrency(totalAmount)}</p>
                 </div>
               </div>
             </CardContent>
@@ -295,8 +295,8 @@ export function InvoicesContent({
             <div className="absolute end-0 top-0 h-20 w-20 translate-x-6 -translate-y-6 rounded-full bg-green-500/10" />
             <CardContent className="p-4 relative">
               <div className="flex items-center gap-3">
-                <div className="rounded-xl bg-green-500/10 p-2.5">
-                  <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400" strokeWidth={1.5} />
+                <div className="rounded-xl bg-green-500/10 p-3">
+                  <CheckCircle2 className="h-6 w-6 text-green-600 dark:text-green-400" strokeWidth={1.5} />
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
@@ -305,7 +305,7 @@ export function InvoicesContent({
                       {filterCounts.paid}
                     </Badge>
                   </div>
-                  <p className="font-display text-xl font-semibold text-green-600 dark:text-green-400 truncate">{formatCurrency(paidAmount)}</p>
+                  <p className="stat-currency text-2xl text-green-600 dark:text-green-400 truncate">{formatCurrency(paidAmount)}</p>
                 </div>
               </div>
             </CardContent>
@@ -318,8 +318,8 @@ export function InvoicesContent({
             <div className="absolute end-0 top-0 h-20 w-20 translate-x-6 -translate-y-6 rounded-full bg-amber-500/10" />
             <CardContent className="p-4 relative">
               <div className="flex items-center gap-3">
-                <div className="rounded-xl bg-amber-500/10 p-2.5">
-                  <Clock className="h-5 w-5 text-amber-600 dark:text-amber-400" strokeWidth={1.5} />
+                <div className="rounded-xl bg-amber-500/10 p-3">
+                  <Clock className="h-6 w-6 text-amber-600 dark:text-amber-400" strokeWidth={1.5} />
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
@@ -328,7 +328,7 @@ export function InvoicesContent({
                       {filterCounts.pending}
                     </Badge>
                   </div>
-                  <p className="font-display text-xl font-semibold text-amber-600 dark:text-amber-400 truncate">{formatCurrency(pendingAmount)}</p>
+                  <p className="stat-currency text-2xl text-amber-600 dark:text-amber-400 truncate">{formatCurrency(pendingAmount)}</p>
                 </div>
               </div>
             </CardContent>
@@ -341,8 +341,8 @@ export function InvoicesContent({
             <div className="absolute end-0 top-0 h-20 w-20 translate-x-6 -translate-y-6 rounded-full bg-red-500/10" />
             <CardContent className="p-4 relative">
               <div className="flex items-center gap-3">
-                <div className="rounded-xl bg-red-500/10 p-2.5">
-                  <AlertCircle className="h-5 w-5 text-red-600 dark:text-red-400" strokeWidth={1.5} />
+                <div className="rounded-xl bg-red-500/10 p-3">
+                  <AlertCircle className="h-6 w-6 text-red-600 dark:text-red-400" strokeWidth={1.5} />
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
@@ -351,7 +351,7 @@ export function InvoicesContent({
                       {filterCounts.overdue}
                     </Badge>
                   </div>
-                  <p className="font-display text-xl font-semibold text-red-600 dark:text-red-400 truncate">{formatCurrency(overdueAmount)}</p>
+                  <p className="stat-currency text-2xl text-red-600 dark:text-red-400 truncate">{formatCurrency(overdueAmount)}</p>
                 </div>
               </div>
             </CardContent>
