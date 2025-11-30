@@ -290,6 +290,8 @@ export function NumberedPagination({
             <button
               key={page}
               onClick={() => onPageChange(page)}
+              aria-label={`${t("page")} ${page}`}
+              aria-current={currentPage === page ? "page" : undefined}
               className={cn(
                 "flex h-10 min-w-10 px-3 items-center justify-center rounded-xl font-medium transition-all",
                 currentPage === page
@@ -332,6 +334,7 @@ export function NumberedPagination({
           onKeyDown={handleKeyDown}
           className="w-16 h-10 text-center rounded-xl"
           placeholder="..."
+          aria-label={t("goToPage")}
         />
         <span className="text-sm text-muted-foreground">/ {totalPages}</span>
       </div>
