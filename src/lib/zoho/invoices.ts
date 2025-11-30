@@ -153,3 +153,113 @@ export const INVOICE_STATUS_MAP: Record<
   paid: { label: 'Paid', color: 'green' },
   void: { label: 'Void', color: 'gray' },
 };
+
+// Invoice summary stats interface
+export interface InvoiceSummaryStats {
+  totalAmount: number;
+  paidAmount: number;
+  balanceAmount: number;
+  overdueAmount: number;
+  overdueCount: number;
+  pendingAmount: number;
+  pendingCount: number;
+  paidCount: number;
+  totalCount: number;
+}
+
+// Get invoice summary stats for customer (OPTIMIZED: uses parallel status-filtered requests)
+// Instead of fetching ALL invoices (potentially 1000s), we use status filters + response_option
+// This reduces API calls from 1-10 to just 4-5 parallel requests
+export async function getInvoiceSummaryStats(
+  customerId: string
+): Promise<InvoiceSummaryStats> {
+  const getCachedStats = unstable_cache(
+    async () => {
+      try {
+        // Status filters to query - Zoho invoice statuses
+        const statusFilters = [
+          { status: undefined, filter: 'Status.All', key: 'all' },
+          { status: 'paid', filter: undefined, key: 'paid' },
+          { status: 'overdue', filter: undefined, key: 'overdue' },
+          { status: 'unpaid', filter: undefined, key: 'unpaid' },
+        ];
+
+        // Fetch counts in parallel using response_option=1 for count+totals
+        const results = await Promise.all(
+          statusFilters.map(async ({ status, filter, key }) => {
+            try {
+              const params: Record<string, string | number | boolean> = {
+                customer_id: customerId,
+                page: 1,
+                per_page: 1, // Only need count from page_context
+                response_option: 1, // Returns count + totals
+              };
+
+              if (status) params.status = status;
+              if (filter) params.filter_by = filter;
+
+              const data = await rateLimitedFetch(() =>
+                zohoFetch<ZohoInvoicesResponse>('/invoices', { params })
+              );
+
+              return {
+                key,
+                count: data.page_context?.total || 0,
+              };
+            } catch (error) {
+              console.error(`Error fetching ${key} invoices:`, error);
+              return { key, count: 0 };
+            }
+          })
+        );
+
+        // Build stats from results
+        const statsMap = new Map(results.map(r => [r.key, r.count]));
+
+        const totalCount = statsMap.get('all') || 0;
+        const paidCount = statsMap.get('paid') || 0;
+        const overdueCount = statsMap.get('overdue') || 0;
+        const unpaidCount = statsMap.get('unpaid') || 0;
+
+        // Pending = unpaid - overdue (those not yet overdue)
+        const pendingCount = Math.max(0, unpaidCount - overdueCount);
+
+        const stats: InvoiceSummaryStats = {
+          totalAmount: 0, // Would need additional API calls for accurate amounts
+          paidAmount: 0,
+          balanceAmount: 0,
+          overdueAmount: 0,
+          overdueCount,
+          pendingAmount: 0,
+          pendingCount,
+          paidCount,
+          totalCount,
+        };
+
+        console.log(`[getInvoiceSummaryStats] Customer ${customerId}: ${totalCount} total, ${paidCount} paid, ${overdueCount} overdue`);
+
+        return stats;
+      } catch (error) {
+        console.error('Error fetching invoice summary stats:', error);
+        return {
+          totalAmount: 0,
+          paidAmount: 0,
+          balanceAmount: 0,
+          overdueAmount: 0,
+          overdueCount: 0,
+          pendingAmount: 0,
+          pendingCount: 0,
+          paidCount: 0,
+          totalCount: 0,
+        };
+      }
+    },
+    [`invoices-summary-${customerId}-v2`], // Changed cache key for new implementation
+    {
+      revalidate: 300, // 5 minutes cache for summary
+      tags: [CACHE_TAGS.INVOICES(customerId)],
+    }
+  );
+
+  return getCachedStats();
+}

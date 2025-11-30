@@ -1,152 +1,236 @@
 // ============================================
 // Zoho Products/Items API - Server Only
 // ============================================
+// MIGRATION: Using Zoho Books API for products instead of Inventory
+// Reason: Zoho Books has higher API rate limits than Zoho Inventory
+// Books: ~100 requests/minute
+// Inventory: ~3,750 requests/day (can be exhausted quickly)
+// ============================================
 
 import { unstable_cache } from 'next/cache';
 import { zohoFetch, CACHE_TAGS, rateLimitedFetch } from './client';
+import { getCachedStockBulk, getStockCacheStatus } from './stock-cache';
 import type { ZohoItem, ZohoCategory, PaginatedResponse } from '@/types';
 
 // ============================================
-// WAREHOUSE CONFIGURATION
+// WAREHOUSE/LOCATION CONFIGURATION
 // Stock should ONLY come from WholeSale WareHouse
 // Using Accounting Stock > Available for Sale
 // ============================================
-const WHOLESALE_WAREHOUSE_NAME = 'WholeSale WareHouse (Warehouse)';
+const WHOLESALE_LOCATION_NAME = 'WholeSale WareHouse (Warehouse)';
+const WHOLESALE_WAREHOUSE_ID = '2646610000000077024'; // For filtering list API
 
-interface ZohoWarehouse {
-  warehouse_id: string;
-  warehouse_name: string;
+// ============================================
+// ZOHO BOOKS API TYPES
+// ============================================
+
+interface ZohoBooksItem {
+  item_id: string;
+  name: string;
+  description?: string;
+  sku: string;
+  rate: number;
+  unit: string;
   status: string;
-  is_primary: boolean;
+  item_type: string;
+  product_type?: string;
+  is_taxable?: boolean;
+  tax_id?: string;
+  tax_name?: string;
+  tax_percentage?: number;
+  purchase_rate?: number;
+  account_id?: string;
+  account_name?: string;
+  purchase_account_id?: string;
+  purchase_account_name?: string;
+  // Stock fields from Books API
+  stock_on_hand?: number;
+  available_stock?: number;
+  actual_available_stock?: number;
+  committed_stock?: number;
+  actual_committed_stock?: number;
+  // Image fields
+  image_name?: string;
+  image_document_id?: string;
+  // Category (Books uses category_id and category_name)
+  category_id?: string;
+  category_name?: string;
+  // Brand
+  brand?: string;
+  manufacturer?: string;
+  // Warehouse stock (Books may include this)
+  warehouses?: Array<{
+    warehouse_id: string;
+    warehouse_name: string;
+    warehouse_stock_on_hand: number;
+    warehouse_available_stock: number;
+    warehouse_actual_available_stock?: number;
+    warehouse_committed_stock?: number;
+  }>;
 }
 
-interface ZohoWarehousesResponse {
-  warehouses: ZohoWarehouse[];
-}
-
-interface ZohoItemsResponse {
-  items: ZohoItem[];
+interface ZohoBooksItemsResponse {
+  items: ZohoBooksItem[];
   page_context: {
     page: number;
     per_page: number;
     has_more_page: boolean;
     total: number;
-    total_pages: number;
+    total_pages?: number;
   };
 }
 
-interface ZohoItemResponse {
-  item: ZohoItem;
+interface ZohoBooksSingleItemResponse {
+  item: ZohoBooksItem;
 }
 
-// Warehouse stock info included in item response
-interface ZohoItemWarehouseStock {
-  warehouse_id: string;
-  warehouse_name: string;
-  warehouse_stock_on_hand: number;
-  warehouse_available_stock: number;
-  warehouse_actual_available_stock: number;
-  warehouse_committed_stock: number;
+interface ZohoBooksCategory {
+  category_id: string;
+  category_name: string;
+  description?: string;
+  is_inactive?: boolean;
+  // Some additional fields Books might return
+  parent_category_id?: string;
+  depth?: number;
 }
 
-// Extended item type with warehouse breakdown
-interface ZohoItemWithWarehouses extends ZohoItem {
-  warehouses?: ZohoItemWarehouseStock[];
+interface ZohoBooksCategoriesResponse {
+  categories: ZohoBooksCategory[];
 }
 
-// Get all warehouses (cached)
-export const getWarehouses = unstable_cache(
-  async (): Promise<ZohoWarehouse[]> => {
-    try {
-      const data = await rateLimitedFetch(() =>
-        zohoFetch<ZohoWarehousesResponse>('/warehouses', {
-          api: 'inventory',
-        })
-      );
-      return data.warehouses || [];
-    } catch (error) {
-      console.error('Error fetching warehouses:', error);
-      return [];
+// ============================================
+// HELPER FUNCTIONS
+// ============================================
+
+/**
+ * Extract available stock from warehouse array (if present)
+ * Zoho Books may include warehouse breakdown in item response
+ */
+function getWholesaleStockFromItem(item: ZohoBooksItem): number {
+  // Check if item has warehouses array
+  if (item.warehouses && item.warehouses.length > 0) {
+    const wholesaleWarehouse = item.warehouses.find(
+      (w) => w.warehouse_name === WHOLESALE_LOCATION_NAME || w.warehouse_id === WHOLESALE_WAREHOUSE_ID
+    );
+
+    if (wholesaleWarehouse) {
+      // Use warehouse_available_stock (which is stock_on_hand - committed_stock)
+      return wholesaleWarehouse.warehouse_available_stock ??
+             wholesaleWarehouse.warehouse_actual_available_stock ??
+             0;
     }
-  },
-  ['warehouses'],
-  {
-    revalidate: 86400, // 24 hours - warehouses don't change often
-    tags: ['warehouses'],
-  }
-);
-
-// Get WholeSale WareHouse ID
-export const getWholesaleWarehouseId = unstable_cache(
-  async (): Promise<string | null> => {
-    try {
-      const warehouses = await getWarehouses();
-      const wholesaleWarehouse = warehouses.find(
-        (w) => w.warehouse_name === WHOLESALE_WAREHOUSE_NAME
-      );
-      if (wholesaleWarehouse) {
-        console.log(`✅ Found WholeSale WareHouse ID: ${wholesaleWarehouse.warehouse_id}`);
-        return wholesaleWarehouse.warehouse_id;
-      }
-      console.warn(`⚠️ WholeSale WareHouse not found, available warehouses:`,
-        warehouses.map(w => w.warehouse_name));
-      return null;
-    } catch (error) {
-      console.error('Error getting wholesale warehouse ID:', error);
-      return null;
-    }
-  },
-  ['wholesale-warehouse-id'],
-  {
-    revalidate: 86400,
-    tags: ['warehouses'],
-  }
-);
-
-// Extract available stock for WholeSale WareHouse from item
-function getWholesaleAvailableStock(item: ZohoItemWithWarehouses): number {
-  if (!item.warehouses || item.warehouses.length === 0) {
-    // Fallback to item-level available_stock if no warehouse breakdown
-    return item.available_stock || 0;
   }
 
-  const wholesaleWarehouse = item.warehouses.find(
-    (w) => w.warehouse_name === WHOLESALE_WAREHOUSE_NAME
-  );
-
-  if (wholesaleWarehouse) {
-    // Use warehouse_available_stock (Available for Sale in Accounting Stock)
-    return wholesaleWarehouse.warehouse_available_stock || 0;
-  }
-
-  // If WholeSale WareHouse not found in item, return 0
-  return 0;
+  // Fallback to item-level stock
+  // Books API returns available_stock at item level
+  return item.available_stock ?? item.actual_available_stock ?? item.stock_on_hand ?? 0;
 }
 
-interface ZohoCategoriesResponse {
-  categories: ZohoCategory[];
-}
-
-// Extended response type that may include warehouse data
-interface ZohoItemsWithWarehousesResponse {
-  items: ZohoItemWithWarehouses[];
-  page_context: {
-    page: number;
-    per_page: number;
-    has_more_page: boolean;
-    total: number;
-    total_pages: number;
+/**
+ * Convert Zoho Books item to our ZohoItem type
+ */
+function booksItemToZohoItem(item: ZohoBooksItem): ZohoItem {
+  return {
+    item_id: item.item_id,
+    name: item.name,
+    description: item.description,
+    sku: item.sku,
+    rate: item.rate,
+    unit: item.unit,
+    status: item.status,
+    item_type: item.item_type,
+    product_type: item.product_type,
+    is_taxable: item.is_taxable,
+    tax_id: item.tax_id,
+    tax_name: item.tax_name,
+    tax_percentage: item.tax_percentage,
+    purchase_rate: item.purchase_rate,
+    stock_on_hand: item.stock_on_hand ?? 0,
+    available_stock: getWholesaleStockFromItem(item),
+    actual_available_stock: item.actual_available_stock,
+    committed_stock: item.committed_stock,
+    image_name: item.image_name,
+    image_document_id: item.image_document_id,
+    category_id: item.category_id,
+    category_name: item.category_name,
+    brand: item.brand ?? item.manufacturer,
   };
 }
 
-// Get all items with stock > 0 (cached)
-// Stock is filtered to WholeSale WareHouse only
+/**
+ * Convert Zoho Books category to our ZohoCategory type
+ */
+function booksCategoryToZohoCategory(cat: ZohoBooksCategory): ZohoCategory {
+  return {
+    category_id: cat.category_id,
+    name: cat.category_name,
+    description: cat.description,
+    is_active: !cat.is_inactive,
+  };
+}
+
+// ============================================
+// PRODUCTS API (Using Zoho Books)
+// ============================================
+
+/**
+ * Get all items with pagination using Zoho Books API
+ * Higher rate limits than Inventory API
+ */
+export async function getAllProducts(
+  page = 1,
+  perPage = 50
+): Promise<PaginatedResponse<ZohoItem>> {
+  try {
+    const data = await rateLimitedFetch(() =>
+      zohoFetch<ZohoBooksItemsResponse>('/items', {
+        api: 'books', // Changed from 'inventory' to 'books'
+        params: {
+          page,
+          per_page: perPage,
+          filter_by: 'Status.Active',
+          sort_column: 'name',
+          sort_order: 'A',
+        },
+      })
+    );
+
+    const items = (data.items || []).map(booksItemToZohoItem);
+
+    return {
+      data: items,
+      page_context: {
+        page: data.page_context?.page ?? page,
+        per_page: data.page_context?.per_page ?? perPage,
+        has_more_page: data.page_context?.has_more_page ?? false,
+        total: data.page_context?.total ?? items.length,
+        total_pages: data.page_context?.total_pages ?? 1,
+      },
+    };
+  } catch (error) {
+    console.error('Error fetching all products:', error);
+    return {
+      data: [],
+      page_context: {
+        page: 1,
+        per_page: perPage,
+        has_more_page: false,
+        total: 0,
+        total_pages: 0,
+      },
+    };
+  }
+}
+
+/**
+ * Get all items with stock > 0 using Zoho Books API (cached)
+ */
 export const getProductsInStock = unstable_cache(
   async (page = 1, perPage = 50): Promise<PaginatedResponse<ZohoItem>> => {
     try {
       const data = await rateLimitedFetch(() =>
-        zohoFetch<ZohoItemsWithWarehousesResponse>('/items', {
-          api: 'inventory',
+        zohoFetch<ZohoBooksItemsResponse>('/items', {
+          api: 'books',
           params: {
             page,
             per_page: perPage,
@@ -157,23 +241,23 @@ export const getProductsInStock = unstable_cache(
         })
       );
 
-      // Apply warehouse-specific stock and filter items with stock > 0
-      const itemsWithWarehouseStock = data.items.map((item) => ({
-        ...item,
-        available_stock: getWholesaleAvailableStock(item),
-      }));
+      const allItems = (data.items || []).map(booksItemToZohoItem);
 
-      // Filter items with WholeSale WareHouse stock > 0
-      const itemsInStock = itemsWithWarehouseStock.filter(
-        (item) => item.available_stock > 0
-      );
+      // Filter items with stock > 0
+      const itemsInStock = allItems.filter((item) => (item.available_stock ?? 0) > 0);
 
       return {
         data: itemsInStock,
-        page_context: data.page_context,
+        page_context: {
+          page: data.page_context?.page ?? 1,
+          per_page: data.page_context?.per_page ?? perPage,
+          has_more_page: data.page_context?.has_more_page ?? false,
+          total: data.page_context?.total ?? itemsInStock.length,
+          total_pages: data.page_context?.total_pages ?? 1,
+        },
       };
     } catch (error) {
-      console.error('Error fetching products:', error);
+      console.error('Error fetching products in stock:', error);
       return {
         data: [],
         page_context: {
@@ -186,175 +270,168 @@ export const getProductsInStock = unstable_cache(
       };
     }
   },
-  ['products-in-stock'],
+  ['products-in-stock-books'],
   {
     revalidate: 86400, // 24 hours - webhook-triggered revalidation handles updates
     tags: [CACHE_TAGS.PRODUCTS],
   }
 );
 
-// Get all items (including out of stock) - for catalog view
-// Stock is filtered to WholeSale WareHouse only
-export const getAllProducts = unstable_cache(
-  async (page = 1, perPage = 50): Promise<PaginatedResponse<ZohoItem>> => {
-    try {
-      const data = await rateLimitedFetch(() =>
-        zohoFetch<ZohoItemsWithWarehousesResponse>('/items', {
-          api: 'inventory',
-          params: {
-            page,
-            per_page: perPage,
-            filter_by: 'Status.Active',
-            sort_column: 'name',
-            sort_order: 'A',
-          },
-        })
-      );
-
-      // Apply warehouse-specific stock filtering
-      const itemsWithWarehouseStock = data.items.map((item) => ({
-        ...item,
-        available_stock: getWholesaleAvailableStock(item),
-      }));
-
-      return {
-        data: itemsWithWarehouseStock,
-        page_context: data.page_context,
-      };
-    } catch (error) {
-      console.error('Error fetching all products:', error);
-      return {
-        data: [],
-        page_context: {
-          page: 1,
-          per_page: perPage,
-          has_more_page: false,
-          total: 0,
-          total_pages: 0,
-        },
-      };
-    }
-  },
-  ['all-products'],
-  {
-    revalidate: 86400, // 24 hours - webhook-triggered revalidation handles updates
-    tags: [CACHE_TAGS.PRODUCTS],
-  }
-);
-
-// Extended item response that may include warehouse data
-interface ZohoItemWithWarehouseResponse {
-  item: ZohoItemWithWarehouses;
-}
-
-// Get single product by ID
-// Returns warehouse-specific available stock from WholeSale WareHouse
+/**
+ * Get single product by ID using Zoho Books API
+ */
 export const getProduct = unstable_cache(
   async (itemId: string): Promise<ZohoItem | null> => {
     try {
       const data = await rateLimitedFetch(() =>
-        zohoFetch<ZohoItemWithWarehouseResponse>(`/items/${itemId}`, {
-          api: 'inventory',
+        zohoFetch<ZohoBooksSingleItemResponse>(`/items/${itemId}`, {
+          api: 'books',
         })
       );
 
       if (!data.item) return null;
 
-      // Apply warehouse-specific stock filtering
-      // Stock should ONLY come from WholeSale WareHouse's Available for Sale
-      return {
-        ...data.item,
-        available_stock: getWholesaleAvailableStock(data.item),
-      };
+      return booksItemToZohoItem(data.item);
     } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      // Re-throw rate limit errors so callers can handle them
+      if (errorMsg.includes('429') || errorMsg.includes('rate') || errorMsg.includes('blocked') || errorMsg.includes('exceeded')) {
+        console.error('Rate limit error fetching product:', itemId);
+        throw error;
+      }
       console.error('Error fetching product:', error);
       return null;
     }
   },
-  ['product'],
+  ['product-books'],
   {
-    revalidate: 86400, // 24 hours - webhook-triggered revalidation handles updates
+    revalidate: 86400,
     tags: [CACHE_TAGS.PRODUCTS],
   }
 );
 
-// Get categories/catalogs (cached)
+/**
+ * Get product stock from Zoho Inventory API (warehouse-specific)
+ * Use this when stock cache is not available
+ */
+export async function getProductWithInventoryStock(itemId: string): Promise<number> {
+  try {
+    const data = await rateLimitedFetch(() =>
+      zohoFetch<{
+        item: {
+          item_id: string;
+          available_stock?: number;
+          stock_on_hand?: number;
+          locations?: Array<{
+            location_id: string;
+            location_name: string;
+            location_available_for_sale_stock: number;
+          }>;
+        };
+      }>(`/items/${itemId}`, {
+        api: 'inventory',
+      })
+    );
+
+    if (!data.item) return 0;
+
+    // Check for warehouse-specific stock
+    if (data.item.locations && data.item.locations.length > 0) {
+      const wholesaleLocation = data.item.locations.find(
+        (loc) => loc.location_name === WHOLESALE_LOCATION_NAME
+      );
+      if (wholesaleLocation) {
+        console.log(`[getProductWithInventoryStock] ${itemId}: Found ${wholesaleLocation.location_available_for_sale_stock} in WholeSale WareHouse`);
+        return wholesaleLocation.location_available_for_sale_stock || 0;
+      }
+    }
+
+    // Fallback to item-level stock
+    const stock = data.item.available_stock ?? data.item.stock_on_hand ?? 0;
+    console.log(`[getProductWithInventoryStock] ${itemId}: Item-level stock = ${stock}`);
+    return stock;
+  } catch (error) {
+    console.error('Error fetching product stock from Inventory API:', error);
+    return 0;
+  }
+}
+
+/**
+ * Get categories using Zoho Books API
+ */
 export const getCategories = unstable_cache(
   async (): Promise<ZohoCategory[]> => {
     try {
       const data = await rateLimitedFetch(() =>
-        zohoFetch<ZohoCategoriesResponse>('/categories', {
-          api: 'inventory',
+        zohoFetch<ZohoBooksCategoriesResponse>('/categories', {
+          api: 'books',
         })
       );
 
-      return data.categories || [];
+      return (data.categories || []).map(booksCategoryToZohoCategory);
     } catch (error) {
       console.error('Error fetching categories:', error);
       return [];
     }
   },
-  ['categories'],
+  ['categories-books'],
   {
-    revalidate: 86400, // 24 hours - webhook-triggered revalidation handles updates
+    revalidate: 86400,
     tags: [CACHE_TAGS.CATEGORIES],
   }
 );
 
-// Get products by category
-// Stock is filtered to WholeSale WareHouse only
-export const getProductsByCategory = unstable_cache(
-  async (
-    categoryId: string,
-    page = 1,
-    perPage = 50
-  ): Promise<PaginatedResponse<ZohoItem>> => {
-    try {
-      const data = await rateLimitedFetch(() =>
-        zohoFetch<ZohoItemsWithWarehousesResponse>('/items', {
-          api: 'inventory',
-          params: {
-            page,
-            per_page: perPage,
-            category_id: categoryId,
-            filter_by: 'Status.Active',
-          },
-        })
-      );
-
-      // Apply warehouse-specific stock filtering
-      const itemsWithWarehouseStock = data.items.map((item) => ({
-        ...item,
-        available_stock: getWholesaleAvailableStock(item),
-      }));
-
-      return {
-        data: itemsWithWarehouseStock,
-        page_context: data.page_context,
-      };
-    } catch (error) {
-      console.error('Error fetching products by category:', error);
-      return {
-        data: [],
-        page_context: {
-          page: 1,
+/**
+ * Get products by category using Zoho Books API
+ */
+export async function getProductsByCategory(
+  categoryId: string,
+  page = 1,
+  perPage = 50
+): Promise<PaginatedResponse<ZohoItem>> {
+  try {
+    const data = await rateLimitedFetch(() =>
+      zohoFetch<ZohoBooksItemsResponse>('/items', {
+        api: 'books',
+        params: {
+          page,
           per_page: perPage,
-          has_more_page: false,
-          total: 0,
-          total_pages: 0,
+          category_id: categoryId,
+          filter_by: 'Status.Active',
         },
-      };
-    }
-  },
-  ['products-by-category'],
-  {
-    revalidate: 86400, // 24 hours - webhook-triggered revalidation handles updates
-    tags: [CACHE_TAGS.PRODUCTS, CACHE_TAGS.CATEGORIES],
-  }
-);
+      })
+    );
 
-// Search products
-// Stock is filtered to WholeSale WareHouse only
+    const items = (data.items || []).map(booksItemToZohoItem);
+
+    return {
+      data: items,
+      page_context: {
+        page: data.page_context?.page ?? 1,
+        per_page: data.page_context?.per_page ?? perPage,
+        has_more_page: data.page_context?.has_more_page ?? false,
+        total: data.page_context?.total ?? items.length,
+        total_pages: data.page_context?.total_pages ?? 1,
+      },
+    };
+  } catch (error) {
+    console.error('Error fetching products by category:', error);
+    return {
+      data: [],
+      page_context: {
+        page: 1,
+        per_page: perPage,
+        has_more_page: false,
+        total: 0,
+        total_pages: 0,
+      },
+    };
+  }
+}
+
+/**
+ * Search products using Zoho Books API
+ */
 export async function searchProducts(
   query: string,
   page = 1,
@@ -362,8 +439,8 @@ export async function searchProducts(
 ): Promise<PaginatedResponse<ZohoItem>> {
   try {
     const data = await rateLimitedFetch(() =>
-      zohoFetch<ZohoItemsWithWarehousesResponse>('/items', {
-        api: 'inventory',
+      zohoFetch<ZohoBooksItemsResponse>('/items', {
+        api: 'books',
         params: {
           page,
           per_page: perPage,
@@ -373,15 +450,17 @@ export async function searchProducts(
       })
     );
 
-    // Apply warehouse-specific stock filtering
-    const itemsWithWarehouseStock = data.items.map((item) => ({
-      ...item,
-      available_stock: getWholesaleAvailableStock(item),
-    }));
+    const items = (data.items || []).map(booksItemToZohoItem);
 
     return {
-      data: itemsWithWarehouseStock,
-      page_context: data.page_context,
+      data: items,
+      page_context: {
+        page: data.page_context?.page ?? 1,
+        per_page: data.page_context?.per_page ?? perPage,
+        has_more_page: data.page_context?.has_more_page ?? false,
+        total: data.page_context?.total ?? items.length,
+        total_pages: data.page_context?.total_pages ?? 1,
+      },
     };
   } catch (error) {
     console.error('Error searching products:', error);
@@ -398,36 +477,35 @@ export async function searchProducts(
   }
 }
 
-// Get product image URL
-// Zoho Inventory returns image_document_id but not image_url
-// We use our proxy API route to fetch images with OAuth authentication
+/**
+ * Get product image URL
+ * Uses our proxy API route to fetch images with OAuth authentication
+ */
 export function getProductImageUrl(item: ZohoItem): string | null {
-  // If item has an image (check image_document_id or image_name)
   if (item.image_document_id || item.image_name) {
-    // Use our proxy API route to fetch the image
     return `/api/zoho/images/${item.item_id}`;
   }
-  // Return null to show placeholder
   return null;
 }
 
 // ============================================
 // FETCH ALL PRODUCTS (with full pagination)
-// Guarantees ALL products from Zoho are fetched
-// Returns warehouse-specific available stock from WholeSale WareHouse
+// Uses Zoho Books API for higher rate limits
 // ============================================
 export const getAllProductsComplete = unstable_cache(
   async (): Promise<ZohoItem[]> => {
-    const allProducts: ZohoItemWithWarehouses[] = [];
+    const allProducts: ZohoItem[] = [];
     let currentPage = 1;
     const perPage = 200; // Max per page for efficiency
     let hasMorePages = true;
 
     try {
+      console.log('🔄 Fetching all products using Zoho Books API...');
+
       while (hasMorePages) {
         const data = await rateLimitedFetch(() =>
-          zohoFetch<ZohoItemsWithWarehousesResponse>('/items', {
-            api: 'inventory',
+          zohoFetch<ZohoBooksItemsResponse>('/items', {
+            api: 'books', // Using Books API instead of Inventory
             params: {
               page: currentPage,
               per_page: perPage,
@@ -439,50 +517,67 @@ export const getAllProductsComplete = unstable_cache(
         );
 
         if (data.items && data.items.length > 0) {
-          allProducts.push(...data.items);
+          const items = data.items.map(booksItemToZohoItem);
+          allProducts.push(...items);
+          console.log(`📦 Page ${currentPage}: Fetched ${data.items.length} items (total: ${allProducts.length})`);
         }
 
-        // Check if there are more pages
         hasMorePages = data.page_context?.has_more_page ?? false;
         currentPage++;
 
-        // Safety limit to prevent infinite loops
         if (currentPage > 50) {
           console.warn('Reached max page limit (50) when fetching products');
           break;
         }
       }
 
-      console.log(`✅ Fetched ${allProducts.length} total products from Zoho`);
+      console.log(`✅ Fetched ${allProducts.length} total products from Zoho Books API`);
 
-      // Apply warehouse-specific stock filtering
-      // Stock should ONLY come from WholeSale WareHouse's Available for Sale
-      const productsWithWarehouseStock = allProducts.map((item) => ({
-        ...item,
-        // Override available_stock with WholeSale WareHouse specific stock
-        available_stock: getWholesaleAvailableStock(item),
-      }));
+      // Try to get cached warehouse-specific stock (from Redis)
+      const itemIds = allProducts.map(item => item.item_id);
+      const cachedStock = await getCachedStockBulk(itemIds);
+      const cacheStatus = await getStockCacheStatus();
 
-      return productsWithWarehouseStock;
+      if (cachedStock.size > 0) {
+        console.log(`📦 Using cached warehouse stock for ${cachedStock.size}/${allProducts.length} items (cache age: ${cacheStatus.ageSeconds}s)`);
+
+        // Merge cached stock with products
+        const productsWithStock = allProducts.map((item) => ({
+          ...item,
+          available_stock: cachedStock.has(item.item_id)
+            ? cachedStock.get(item.item_id)!
+            : item.available_stock,
+        }));
+
+        return productsWithStock;
+      }
+
+      // No cache - use Books API stock (total across warehouses)
+      console.log('⚠️ No stock cache available, using Zoho Books API stock');
+      console.log('💡 Run /api/sync/stock to populate warehouse-specific stock cache');
+
+      return allProducts;
     } catch (error) {
       console.error('Error fetching all products:', error);
       return [];
     }
   },
-  ['all-products-complete'],
+  ['all-products-complete-books'],
   {
-    revalidate: 86400, // 24 hours - webhook-triggered revalidation handles updates
+    revalidate: 86400, // 24 hours
     tags: [CACHE_TAGS.PRODUCTS],
   }
 );
 
-// Get total product count
+/**
+ * Get total product count using Zoho Books API
+ */
 export const getProductCount = unstable_cache(
   async (): Promise<number> => {
     try {
       const data = await rateLimitedFetch(() =>
-        zohoFetch<ZohoItemsResponse>('/items', {
-          api: 'inventory',
+        zohoFetch<ZohoBooksItemsResponse>('/items', {
+          api: 'books',
           params: {
             page: 1,
             per_page: 1,
@@ -497,9 +592,254 @@ export const getProductCount = unstable_cache(
       return 0;
     }
   },
-  ['product-count'],
+  ['product-count-books'],
   {
-    revalidate: 86400, // 24 hours - webhook-triggered revalidation handles updates
+    revalidate: 86400,
     tags: [CACHE_TAGS.PRODUCTS],
   }
 );
+
+// ============================================
+// LEGACY EXPORTS (for backward compatibility)
+// These functions use Inventory API when needed
+// ============================================
+
+interface ZohoWarehouse {
+  warehouse_id: string;
+  warehouse_name: string;
+  status: string;
+  is_primary: boolean;
+}
+
+interface ZohoWarehousesResponse {
+  warehouses: ZohoWarehouse[];
+}
+
+/**
+ * Get all warehouses (uses Inventory API - rarely called)
+ */
+export const getWarehouses = unstable_cache(
+  async (): Promise<ZohoWarehouse[]> => {
+    try {
+      const data = await rateLimitedFetch(() =>
+        zohoFetch<ZohoWarehousesResponse>('/warehouses', {
+          api: 'inventory', // Warehouses only exist in Inventory API
+        })
+      );
+      return data.warehouses || [];
+    } catch (error) {
+      console.error('Error fetching warehouses:', error);
+      return [];
+    }
+  },
+  ['warehouses'],
+  {
+    revalidate: 86400 * 7, // 7 days - warehouses rarely change
+    tags: ['warehouses'],
+  }
+);
+
+/**
+ * Get WholeSale WareHouse ID
+ */
+export const getWholesaleWarehouseId = unstable_cache(
+  async (): Promise<string | null> => {
+    try {
+      const warehouses = await getWarehouses();
+      const wholesaleWarehouse = warehouses.find(
+        (w) => w.warehouse_name === WHOLESALE_LOCATION_NAME
+      );
+      if (wholesaleWarehouse) {
+        return wholesaleWarehouse.warehouse_id;
+      }
+      return WHOLESALE_WAREHOUSE_ID; // Fallback to hardcoded ID
+    } catch (error) {
+      console.error('Error getting wholesale warehouse ID:', error);
+      return WHOLESALE_WAREHOUSE_ID;
+    }
+  },
+  ['wholesale-warehouse-id'],
+  {
+    revalidate: 86400 * 7,
+    tags: ['warehouses'],
+  }
+);
+
+// Stock batch functions - kept for sync endpoints
+export async function fetchAccurateStockBatch(
+  items: ZohoItem[],
+  _concurrency = 5
+): Promise<Map<string, number>> {
+  const stockMap = new Map<string, number>();
+  items.forEach(item => {
+    stockMap.set(item.item_id, item.available_stock ?? 0);
+  });
+  return stockMap;
+}
+
+export async function fetchAccurateStockBatchOptimized(
+  items: ZohoItem[],
+  _concurrency = 5
+): Promise<Map<string, number>> {
+  return fetchAccurateStockBatch(items, _concurrency);
+}
+
+// ============================================
+// OPTIMIZED: Products + Prices Combined Cache
+// ============================================
+// Fetches products and prices together, cached per price list
+// Eliminates 13+ API calls per shop page load
+// ============================================
+
+interface ZohoItemWithPrice extends ZohoItem {
+  display_price: number;
+  price_currency: string;
+  in_price_list: boolean;
+}
+
+interface ZohoPricebookRateResponse {
+  items: Array<{
+    item_id: string;
+    name: string;
+    rate: number;
+    pricebook_rate: number;
+    sales_rate?: number;
+  }>;
+}
+
+/**
+ * Fetch prices for items from a pricebook (internal helper)
+ */
+async function fetchPricesForItems(
+  pricebookId: string,
+  itemIds: string[]
+): Promise<Map<string, number>> {
+  const priceMap = new Map<string, number>();
+
+  if (!itemIds.length) return priceMap;
+
+  const batchSize = 100;
+  const concurrencyLimit = 3;
+
+  // Create batches
+  const batches: string[][] = [];
+  for (let i = 0; i < itemIds.length; i += batchSize) {
+    batches.push(itemIds.slice(i, i + batchSize));
+  }
+
+  // Process batches with concurrency limit
+  for (let i = 0; i < batches.length; i += concurrencyLimit) {
+    const batchChunk = batches.slice(i, i + concurrencyLimit);
+
+    const results = await Promise.all(
+      batchChunk.map(async (batchIds) => {
+        try {
+          const data = await rateLimitedFetch(() =>
+            zohoFetch<ZohoPricebookRateResponse>('/items/pricebookrate', {
+              api: 'books',
+              params: {
+                pricebook_id: pricebookId,
+                item_ids: batchIds.join(','),
+                sales_or_purchase_type: 'sales',
+              },
+            })
+          );
+
+          return data.items || [];
+        } catch (error) {
+          console.error('Error fetching pricebook rates batch:', error);
+          return [];
+        }
+      })
+    );
+
+    // Add prices to map
+    results.flat().forEach(item => {
+      priceMap.set(item.item_id, item.pricebook_rate ?? item.rate ?? 0);
+    });
+  }
+
+  return priceMap;
+}
+
+/**
+ * Get all products with prices for a specific price list
+ * CACHED per price list ID for 24 hours
+ *
+ * This eliminates ~13 API calls per shop page load by caching
+ * products and prices together.
+ */
+export const getProductsWithPrices = unstable_cache(
+  async (priceListId: string): Promise<{
+    products: ZohoItemWithPrice[];
+    currency: string;
+    priceListName: string;
+  }> => {
+    console.log(`🛒 getProductsWithPrices: Fetching for price list ${priceListId}`);
+
+    try {
+      // Get all products (uses its own cache)
+      const products = await getAllProductsComplete();
+
+      if (!products.length) {
+        console.warn('⚠️ No products found');
+        return { products: [], currency: 'IQD', priceListName: 'Unknown' };
+      }
+
+      console.log(`📦 Got ${products.length} products, now fetching prices...`);
+
+      // Fetch prices for all product IDs
+      const itemIds = products.map(p => p.item_id);
+      const priceMap = await fetchPricesForItems(priceListId, itemIds);
+
+      console.log(`💰 Got prices for ${priceMap.size} items`);
+
+      // Get price list info for currency
+      const priceListInfo = await rateLimitedFetch(() =>
+        zohoFetch<{ pricebook: { name: string; currency_code: string } }>(`/pricebooks/${priceListId}`, {
+          api: 'books',
+        })
+      ).catch(() => ({ pricebook: { name: 'Unknown', currency_code: 'IQD' } }));
+
+      const currency = priceListInfo.pricebook?.currency_code || 'IQD';
+      const priceListName = priceListInfo.pricebook?.name || 'Unknown';
+
+      // Merge products with prices
+      const productsWithPrices: ZohoItemWithPrice[] = products.map(product => ({
+        ...product,
+        display_price: priceMap.get(product.item_id) || 0,
+        price_currency: currency,
+        in_price_list: priceMap.has(product.item_id),
+      }));
+
+      console.log(`✅ getProductsWithPrices: Returning ${productsWithPrices.length} products with prices`);
+
+      return {
+        products: productsWithPrices,
+        currency,
+        priceListName,
+      };
+    } catch (error) {
+      console.error('Error in getProductsWithPrices:', error);
+      return { products: [], currency: 'IQD', priceListName: 'Unknown' };
+    }
+  },
+  ['products-with-prices'],
+  {
+    revalidate: 86400, // 24 hours
+    tags: [CACHE_TAGS.PRODUCTS, CACHE_TAGS.PRICE_LISTS],
+  }
+);
+
+/**
+ * Get products with consumer prices (for public visitors)
+ * Convenience wrapper with pre-set consumer price list
+ */
+export async function getProductsWithConsumerPrices(): Promise<{
+  products: ZohoItemWithPrice[];
+  currency: string;
+  priceListName: string;
+}> {
+  const CONSUMER_PRICE_LIST_ID = '2646610000049149103';
+  return getProductsWithPrices(CONSUMER_PRICE_LIST_ID);
+}

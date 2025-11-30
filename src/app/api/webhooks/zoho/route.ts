@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { revalidateTag } from "next/cache";
-import { CACHE_TAGS } from "@/lib/zoho/client";
+import { CACHE_TAGS, getAccessToken } from "@/lib/zoho/client";
+import { syncSingleImage } from "@/lib/blob/image-cache";
 
 // Webhook secret for verification
 const WEBHOOK_SECRET = process.env.ZOHO_WEBHOOK_SECRET;
@@ -32,6 +33,22 @@ async function revalidateProducts(reason: string) {
   await safeRevalidate('products-in-stock', reason);
 }
 
+// Sync product image to Vercel Blob (fire-and-forget)
+async function syncProductImage(itemId: string, reason: string) {
+  try {
+    console.log(`[Webhook] 🖼️ Syncing image for ${itemId}: ${reason}`);
+    const token = await getAccessToken();
+    const result = await syncSingleImage(itemId, token);
+    if (result.success) {
+      console.log(`[Webhook] ✅ Image synced for ${itemId}: ${result.url}`);
+    } else {
+      console.log(`[Webhook] ⚠️ Image sync skipped for ${itemId}: ${result.error}`);
+    }
+  } catch (error) {
+    console.error(`[Webhook] ❌ Failed to sync image for ${itemId}:`, error);
+  }
+}
+
 export async function POST(request: NextRequest) {
   // Verify webhook authenticity
   if (WEBHOOK_SECRET && !verifyWebhook(request)) {
@@ -46,15 +63,25 @@ export async function POST(request: NextRequest) {
 
     // Handle different event types and revalidate appropriate cache tags
     switch (event_type) {
-      // Item/Product events - revalidate all product caches
+      // Item/Product events - revalidate caches and sync images
       case "item.created":
         await revalidateProducts("new product created");
+        // Sync image to Blob CDN (fire-and-forget, don't block response)
+        if (data?.item_id) {
+          syncProductImage(data.item_id, "new product").catch(() => {});
+        }
         break;
       case "item.updated":
         await revalidateProducts(`product updated: ${data?.item_id || 'unknown'}`);
+        // Re-sync image in case it changed
+        if (data?.item_id) {
+          syncProductImage(data.item_id, "product updated").catch(() => {});
+        }
         break;
       case "item.deleted":
         await revalidateProducts(`product deleted: ${data?.item_id || 'unknown'}`);
+        // Note: We don't delete from Blob to avoid orphaned images
+        // Blob cleanup can be done periodically if needed
         break;
 
       // Stock/Inventory change events (critical for accurate display)

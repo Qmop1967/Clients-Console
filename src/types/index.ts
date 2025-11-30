@@ -19,6 +19,9 @@ export interface ZohoCustomer {
   payment_terms_label: string;
   price_list_id?: string;
   price_list_name?: string;
+  // Zoho Books API uses pricebook_id instead of price_list_id
+  pricebook_id?: string;
+  pricebook_name?: string;
   billing_address?: ZohoAddress;
   shipping_address?: ZohoAddress;
   created_time: string;
@@ -37,6 +40,7 @@ export interface ZohoAddress {
 }
 
 // Zoho Product/Item
+// Note: Fields are made optional to support both Zoho Books and Inventory APIs
 export interface ZohoItem {
   item_id: string;
   name: string;
@@ -45,13 +49,15 @@ export interface ZohoItem {
   unit: string;
   status: string;
   rate: number;
-  purchase_rate: number;
+  purchase_rate?: number;
   tax_id?: string;
   tax_name?: string;
   tax_percentage?: number;
-  product_type: string;
-  is_returnable: boolean;
-  // Image fields from Zoho Inventory API
+  item_type?: string;
+  product_type?: string;
+  is_taxable?: boolean;
+  is_returnable?: boolean;
+  // Image fields from Zoho API
   image_name?: string;
   image_type?: string;
   image_document_id?: string;
@@ -61,15 +67,16 @@ export interface ZohoItem {
   category_name?: string;
   brand?: string;
   manufacturer?: string;
-  stock_on_hand: number;
-  available_stock: number;
-  actual_available_stock: number;
-  committed_stock: number;
+  // Stock fields (optional as they may not be present in all contexts)
+  stock_on_hand?: number;
+  available_stock?: number;
+  actual_available_stock?: number;
+  committed_stock?: number;
   warehouse_name?: string;
   warehouse_id?: string;
   reorder_level?: number;
-  created_time: string;
-  last_modified_time: string;
+  created_time?: string;
+  last_modified_time?: string;
 }
 
 // Zoho Price List (Zoho Inventory uses pricebook)
@@ -127,14 +134,71 @@ export interface ZohoSalesOrder {
   notes?: string;
   terms?: string;
   line_items: ZohoLineItem[];
+  packages?: ZohoPackage[];
+  shipments?: ZohoShipment[];
   created_time: string;
   last_modified_time: string;
+}
+
+// Zoho Package (Carton)
+export interface ZohoPackage {
+  package_id: string;
+  package_number: string;
+  salesorder_id: string;
+  date: string;
+  status: string;
+  tracking_number?: string;
+  carrier?: string;
+  notes?: string;
+  line_items: ZohoPackageLineItem[];
+  created_time: string;
+  last_modified_time: string;
+}
+
+export interface ZohoPackageLineItem {
+  line_item_id: string;
+  item_id: string;
+  item_name: string;
+  sku?: string;
+  quantity: number;
+}
+
+// Zoho Shipment
+export interface ZohoShipment {
+  shipment_id: string;
+  shipment_number: string;
+  salesorder_id: string;
+  package_ids: string[];
+  date: string;
+  delivery_date?: string;
+  carrier: string;
+  tracking_number?: string;
+  tracking_url?: string;
+  shipping_charge?: number;
+  notes?: string;
+  status: string;
+  delivered_date?: string;
+  documents?: ZohoDocument[];
+  created_time: string;
+  last_modified_time: string;
+}
+
+// Zoho Document/Attachment
+export interface ZohoDocument {
+  document_id: string;
+  file_name: string;
+  file_type: string;
+  file_size?: number;
+  source?: string;
+  created_time: string;
 }
 
 export interface ZohoLineItem {
   line_item_id: string;
   item_id: string;
-  item_name: string;
+  item_name?: string;  // Inventory API uses this
+  name?: string;       // Books API uses this
+  sku?: string;
   description?: string;
   rate: number;
   quantity: number;
@@ -170,6 +234,7 @@ export interface ZohoInvoice {
   write_off_amount: number;
   notes?: string;
   terms?: string;
+  invoice_url?: string;
   line_items: ZohoLineItem[];
   payments: ZohoPaymentInfo[];
   created_time: string;

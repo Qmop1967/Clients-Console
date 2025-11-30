@@ -1,6 +1,5 @@
 "use client";
 
-import { useTranslations } from "next-intl";
 import { ShoppingCart, Bell } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -13,30 +12,48 @@ interface HeaderProps {
 
 export function Header({ title, cartCount = 0, onCartClick }: HeaderProps) {
   return (
-    <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+    <header className="sticky top-0 z-40 border-b border-border/40 bg-background/80 backdrop-blur-lg supports-[backdrop-filter]:bg-background/60">
       <div className="flex h-14 items-center justify-between px-4">
-        <div className="flex items-center gap-2">
-          <h1 className="text-lg font-semibold">{title || "TSH"}</h1>
+        {/* Logo / Title */}
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2.5">
+            {/* Gold accent logo */}
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-amber-500 to-amber-600 shadow-sm">
+              <span className="font-display text-lg font-bold text-white">T</span>
+            </div>
+            <div className="flex flex-col">
+              <h1 className="font-display text-lg font-semibold tracking-tight">
+                {title || "TSH"}
+              </h1>
+            </div>
+          </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        {/* Actions */}
+        <div className="flex items-center gap-1">
           {/* Notifications */}
-          <Button variant="ghost" size="icon" className="relative">
-            <Bell className="h-5 w-5" />
+          <Button
+            variant="ghost"
+            size="icon"
+            className="relative h-10 w-10 rounded-full transition-all hover:bg-secondary"
+            aria-label="Notifications"
+          >
+            <Bell className="h-5 w-5 text-foreground/70" strokeWidth={1.5} />
           </Button>
 
           {/* Cart */}
           <Button
             variant="ghost"
             size="icon"
-            className="relative"
+            className="relative h-10 w-10 rounded-full transition-all hover:bg-secondary"
             onClick={onCartClick}
+            aria-label="Shopping cart"
           >
-            <ShoppingCart className="h-5 w-5" />
+            <ShoppingCart className="h-5 w-5 text-foreground/70" strokeWidth={1.5} />
             {cartCount > 0 && (
               <Badge
-                variant="destructive"
-                className="absolute -right-1 -top-1 h-5 w-5 rounded-full p-0 text-xs"
+                variant="gold"
+                className="absolute -end-0.5 -top-0.5 h-5 min-w-5 rounded-full p-0 text-[10px] flex items-center justify-center border-2 border-background animate-scale-in"
               >
                 {cartCount > 99 ? "99+" : cartCount}
               </Badge>

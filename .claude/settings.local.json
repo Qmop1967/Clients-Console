@@ -1,0 +1,53 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cat:*)",
+      "Skill(example-skills:skill-creator)",
+      "mcp__ide__getDiagnostics",
+      "Bash(npm run build:*)",
+      "Bash(npm run lint)",
+      "Skill(example-skills:frontend-design)",
+      "Bash(curl:*)",
+      "Bash(vercel:*)",
+      "Skill(example-skills:webapp-testing)",
+      "Bash(python3:*)",
+      "Bash(pip3 install:*)",
+      "Bash(playwright install:*)",
+      "Bash(npm install:*)",
+      "Bash(printf:*)",
+      "Bash(echo:*)",
+      "Bash(source ~/.namecheap_credentials)",
+      "Bash(dig:*)",
+      "Bash(dig +short A:*)",
+      "Bash(for i in 1 2 3)",
+      "Bash(do)",
+      "Bash(done)",
+      "Bash(export NAMECHEAP_API_USER=\"tshcompany17\" export NAMECHEAP_API_KEY=\"97f298b1903e409ca15d4ee92c23ee28\" export NAMECHEAP_USERNAME=\"tshcompany17\" export NAMECHEAP_CLIENT_IP=\"82.129.23.215\" curl -s \"https://api.namecheap.com/xml.response?ApiUser=$NAMECHEAP_API_USER&ApiKey=$NAMECHEAP_API_KEY&UserName=$NAMECHEAP_USERNAME&ClientIp=$NAMECHEAP_CLIENT_IP&Command=namecheap.domains.dns.getHosts&SLD=tsh&TLD=sale\")",
+      "Bash(timeout 15 vercel logs:*)",
+      "WebFetch(domain:www.tsh.sale)",
+      "Bash(timeout 20 vercel logs:*)",
+      "Bash(npx shadcn@latest add:*)",
+      "Bash(timeout 90 vercel logs:*)",
+      "Bash(ls:*)",
+      "Bash(tree:*)",
+      "Bash(head:*)",
+      "WebSearch",
+      "WebFetch(domain:www.zoho.com)",
+      "WebFetch(domain:github.com)",
+      "Bash(claude mcp add:*)",
+      "Bash(claude mcp:*)",
+      "Bash(find:*)",
+      "mcp__zoho__ZohoBooks_list_items",
+      "mcp__zoho__ZohoInventory_get_item",
+      "Bash(source:*)",
+      "Bash(BLOB_READ_WRITE_TOKEN=\"vercel_blob_rw_LAnsoqc5n02d04nJ_MkH5pordfqgmYPDRSgtL9qgXhqeCBT\" vercel blob list:*)",
+      "Bash(git add:*)"
+    ],
+    "deny": [],
+    "ask": []
+  },
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [
+    "zoho"
+  ]
+}

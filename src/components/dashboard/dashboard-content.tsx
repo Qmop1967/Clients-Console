@@ -14,7 +14,6 @@ import {
   Package,
   FileText,
   HeadphonesIcon,
-  AlertCircle,
 } from "lucide-react";
 import type { ZohoSalesOrder, ZohoInvoice } from "@/types";
 
@@ -44,7 +43,6 @@ interface DashboardContentProps {
 }
 
 export function DashboardContent({
-  userId,
   zohoContactId,
   userName,
   currencyCode,
@@ -59,10 +57,12 @@ export function DashboardContent({
   const displayCurrency = balance?.currency_code || currencyCode;
 
   const formatCurrency = (amount: number, currency: string) => {
-    return new Intl.NumberFormat("en-IQ", {
+    // USD needs 2 decimal places, IQD typically uses 0
+    const decimals = currency === "IQD" ? 0 : 2;
+    return new Intl.NumberFormat("en-US", {
       style: "decimal",
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
+      minimumFractionDigits: decimals,
+      maximumFractionDigits: decimals,
     }).format(amount) + ` ${currency}`;
   };
 
@@ -108,9 +108,9 @@ export function DashboardContent({
 
   return (
     <div className="space-y-6">
-      {/* Welcome Section */}
-      <div>
-        <h1 className="text-2xl font-bold">
+      {/* Welcome Section - Luxury styling */}
+      <div className="space-y-1">
+        <h1 className="font-display text-3xl font-semibold tracking-tight">
           {t("welcome", { name: userName || "Guest" })}
         </h1>
         <p className="text-muted-foreground">
@@ -120,62 +120,102 @@ export function DashboardContent({
         </p>
       </div>
 
-      {/* Stats Grid */}
+      {/* Stats Grid - Premium cards */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
+        {/* Outstanding Balance Card */}
+        <Card variant="elevated" className="relative overflow-hidden">
+          <div className="absolute end-0 top-0 h-24 w-24 translate-x-8 -translate-y-8 rounded-full bg-red-500/10" />
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
               {t("outstandingBalance")}
             </CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-red-100 dark:bg-red-900/30">
+              <DollarSign className="h-5 w-5 text-red-600 dark:text-red-400" strokeWidth={1.5} />
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-destructive">
+            <div className="price-display text-red-600 dark:text-red-400">
               {formatCurrency(balance?.outstanding || 0, displayCurrency)}
             </div>
           </CardContent>
         </Card>
 
-        <Card>
+        {/* Unused Credits Card */}
+        <Card variant="elevated" className="relative overflow-hidden">
+          <div className="absolute end-0 top-0 h-24 w-24 translate-x-8 -translate-y-8 rounded-full bg-emerald-500/10" />
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
               {t("unusedCredits")}
             </CardTitle>
-            <CreditCard className="h-4 w-4 text-muted-foreground" />
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-100 dark:bg-emerald-900/30">
+              <CreditCard className="h-5 w-5 text-emerald-600 dark:text-emerald-400" strokeWidth={1.5} />
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-600">
+            <div className="price-display text-emerald-600 dark:text-emerald-400">
               {formatCurrency(balance?.unused_credits || 0, displayCurrency)}
             </div>
           </CardContent>
         </Card>
 
-        <Card>
+        {/* Total Orders Card */}
+        <Card variant="elevated" className="relative overflow-hidden">
+          <div className="absolute end-0 top-0 h-24 w-24 translate-x-8 -translate-y-8 rounded-full bg-primary/10" />
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
               {t("totalOrders")}
             </CardTitle>
-            <ShoppingBag className="h-4 w-4 text-muted-foreground" />
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10">
+              <ShoppingBag className="h-5 w-5 text-primary" strokeWidth={1.5} />
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{orderStats.total}</div>
+            <div className="font-display text-3xl font-semibold">{orderStats.total ?? 0}</div>
           </CardContent>
         </Card>
 
-        <Card>
+        {/* Pending Orders Card */}
+        <Card variant="elevated" className="relative overflow-hidden">
+          <div className="absolute end-0 top-0 h-24 w-24 translate-x-8 -translate-y-8 rounded-full bg-amber-500/10" />
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
               {t("pendingOrders")}
             </CardTitle>
-            <Clock className="h-4 w-4 text-muted-foreground" />
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-amber-100 dark:bg-amber-900/30">
+              <Clock className="h-5 w-5 text-amber-600 dark:text-amber-400" strokeWidth={1.5} />
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-yellow-600">
-              {orderStats.pending}
+            <div className="font-display text-3xl font-semibold text-amber-600 dark:text-amber-400">
+              {orderStats.pending ?? 0}
             </div>
           </CardContent>
         </Card>
       </div>
+
+      {/* Account Not Linked Warning */}
+      {!zohoContactId && (
+        <Card className="border-amber-500/50 bg-amber-50 dark:bg-amber-950/20">
+          <CardContent className="flex items-center gap-4 py-4">
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-900/50">
+              <CreditCard className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+            </div>
+            <div className="flex-1">
+              <p className="font-medium text-amber-800 dark:text-amber-200">
+                {t("accountNotLinked")}
+              </p>
+              <p className="text-sm text-amber-600 dark:text-amber-400">
+                {t("contactSupportToLink")}
+              </p>
+            </div>
+            <Link href="/support">
+              <Button size="sm" variant="outline" className="border-amber-500 text-amber-700 hover:bg-amber-100 dark:text-amber-300 dark:hover:bg-amber-900/50">
+                {t("contactSupport")}
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Quick Actions */}
       <Card>
@@ -224,7 +264,7 @@ export function DashboardContent({
               <div className="flex flex-col items-center justify-center py-8 text-center">
                 <ShoppingBag className="h-12 w-12 text-muted-foreground/50 mb-3" />
                 <p className="text-sm text-muted-foreground">{t("noOrders")}</p>
-                <Link href="/shop" className="mt-3">
+                <Link href="/products" className="mt-3">
                   <Button size="sm">{t("startShopping")}</Button>
                 </Link>
               </div>

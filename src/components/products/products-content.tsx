@@ -99,7 +99,6 @@ const mockCategories = [
 ];
 
 export function ProductsContent({
-  priceListId,
   currencyCode,
 }: ProductsContentProps) {
   const t = useTranslations("products");

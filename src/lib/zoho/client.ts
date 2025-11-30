@@ -348,12 +348,13 @@ export async function zohoFetch<T>(
   return data;
 }
 
-// Rate limiting helper
+// Rate limiting helper with retry logic
 let requestCount = 0;
 let resetTime = Date.now() + 60000;
 
 export async function rateLimitedFetch<T>(
-  fetchFn: () => Promise<T>
+  fetchFn: () => Promise<T>,
+  maxRetries = 3
 ): Promise<T> {
   // Reset counter every minute
   if (Date.now() > resetTime) {
@@ -370,7 +371,40 @@ export async function rateLimitedFetch<T>(
   }
 
   requestCount++;
-  return fetchFn();
+
+  // Try with exponential backoff on rate limit errors
+  let lastError: Error | null = null;
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      return await fetchFn();
+    } catch (error) {
+      lastError = error as Error;
+
+      // Get error message - handle both Error objects and strings
+      const errorMsg = error instanceof Error ? error.message : String(error);
+
+      // Check if it's a rate limit error (429 or Zoho code 43)
+      const isRateLimit = errorMsg.includes('429') ||
+                          errorMsg.includes('code":43') ||
+                          errorMsg.includes('blocked') ||
+                          errorMsg.includes('exceeded the maximum');
+
+      if (isRateLimit) {
+        // Exponential backoff: 2s, 4s, 8s
+        const waitTime = Math.pow(2, attempt + 1) * 1000;
+        console.log(`⏳ Rate limited, retrying in ${waitTime/1000}s (attempt ${attempt + 1}/${maxRetries})`);
+        await new Promise((resolve) => setTimeout(resolve, waitTime));
+        continue; // Try again
+      } else {
+        // Not a rate limit error, don't retry
+        throw error;
+      }
+    }
+  }
+
+  // All retries exhausted
+  console.log(`❌ Rate limit retries exhausted after ${maxRetries} attempts`);
+  throw lastError;
 }
 
 // Cache tags for revalidation

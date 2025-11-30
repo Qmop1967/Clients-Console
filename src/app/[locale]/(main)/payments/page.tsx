@@ -74,13 +74,16 @@ export default async function PaymentsPage({
 
   const currencyCode = session.user.currencyCode || "IQD";
 
-  const formatCurrency = (amount: number) => {
+  const formatCurrency = (amount: number, currency?: string) => {
+    const curr = currency || currencyCode;
+    // USD needs 2 decimal places, IQD typically uses 0
+    const decimals = curr === "IQD" ? 0 : 2;
     return (
-      new Intl.NumberFormat("en-IQ", {
+      new Intl.NumberFormat("en-US", {
         style: "decimal",
-        minimumFractionDigits: 0,
-        maximumFractionDigits: 0,
-      }).format(amount) + ` ${currencyCode}`
+        minimumFractionDigits: decimals,
+        maximumFractionDigits: decimals,
+      }).format(amount) + ` ${curr}`
     );
   };
 

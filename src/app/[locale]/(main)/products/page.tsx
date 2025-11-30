@@ -6,6 +6,7 @@ import { AuthenticatedProductsContent } from "@/components/products/authenticate
 import { ProductsSkeleton } from "@/components/products/products-skeleton";
 import { getAllProductsComplete, getCategories, getProductImageUrl } from "@/lib/zoho/products";
 import { getCustomerPriceList, getItemPriceFromList, PRICE_LIST_IDS } from "@/lib/zoho/price-lists";
+import { getZohoCustomer } from "@/lib/zoho/customers";
 
 export async function generateMetadata() {
   const t = await getTranslations("products");
@@ -91,18 +92,48 @@ export default async function ProductsPage() {
     redirect("/login");
   }
 
+  // Get price list ID from session, or fetch from Zoho if not in session
+  let priceListId = session.user.priceListId;
+  let customerCurrency = session.user.currencyCode;
+
+  // If session doesn't have price list but has zohoContactId, fetch from Zoho
+  if (!priceListId && session.user.zohoContactId) {
+    try {
+      const customer = await getZohoCustomer(session.user.zohoContactId);
+      if (customer) {
+        // Zoho Books uses pricebook_id, Inventory uses price_list_id
+        priceListId = customer.pricebook_id || customer.price_list_id || '';
+        customerCurrency = customer.currency_code || customerCurrency;
+        console.log(`[Products] Fetched from Zoho: priceListId=${priceListId}, currency=${customerCurrency}`);
+      }
+    } catch (e) {
+      console.error('[Products] Failed to fetch customer price list:', e);
+    }
+  }
+
+  // If still no price list, use default based on customer currency
+  if (!priceListId) {
+    if (customerCurrency === 'USD') {
+      // Default to Retailor price list for USD customers
+      priceListId = PRICE_LIST_IDS.RETAILOR;
+      console.log(`[Products] No price list assigned, defaulting to Retailor (USD) for currency: ${customerCurrency}`);
+    } else {
+      // Default to Consumer price list for IQD customers
+      priceListId = PRICE_LIST_IDS.CONSUMER;
+      console.log(`[Products] No price list assigned, defaulting to Consumer (IQD) for currency: ${customerCurrency}`);
+    }
+  }
+
   // Fetch products with customer's price list
   const { products, categories, currencyCode, priceListName, error } =
-    await fetchAuthenticatedProducts(session.user.priceListId);
+    await fetchAuthenticatedProducts(priceListId);
 
   return (
     <div className="container mx-auto px-4 py-6">
       <Suspense fallback={<ProductsSkeleton />}>
         <AuthenticatedProductsContent
           products={products}
-          categories={categories}
           currencyCode={currencyCode}
-          priceListName={priceListName}
           error={error}
         />
       </Suspense>

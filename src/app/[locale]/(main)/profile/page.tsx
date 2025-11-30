@@ -5,7 +5,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { User, Mail, Phone, Building, MapPin, CreditCard } from "lucide-react";
+import { User, Mail, Phone, Building, MapPin, CreditCard, AlertCircle } from "lucide-react";
+import { getZohoCustomer } from "@/lib/zoho/customers";
+import { getPriceList } from "@/lib/zoho/price-lists";
 
 export async function generateMetadata() {
   const t = await getTranslations("profile");
@@ -22,31 +24,66 @@ export default async function ProfilePage() {
     redirect("/login");
   }
 
-  // Mock profile data - will be replaced with Zoho data
+  // Fetch real Zoho customer data if linked
+  const zohoCustomer = session.user.zohoContactId
+    ? await getZohoCustomer(session.user.zohoContactId)
+    : null;
+
+  // Fetch price list info if available
+  const priceList = zohoCustomer?.price_list_id
+    ? await getPriceList(zohoCustomer.price_list_id)
+    : null;
+
+  // Build profile from Zoho data or fallback to session data
   const profile = {
-    name: session.user.name || "Customer",
-    email: session.user.email || "",
-    phone: "+964 750 123 4567",
-    company: "ABC Trading Co.",
-    priceList: "Wholesale Price List",
-    currency: session.user.currencyCode || "IQD",
-    paymentTerms: "Net 30",
-    billingAddress: {
-      address: "123 Main Street",
-      city: "Baghdad",
-      country: "Iraq",
+    name: zohoCustomer?.contact_name || session.user.name || "Customer",
+    email: zohoCustomer?.email || session.user.email || "",
+    phone: zohoCustomer?.phone || zohoCustomer?.mobile || "Not provided",
+    company: zohoCustomer?.company_name || "Not provided",
+    priceList: priceList?.name || "Standard",
+    currency: zohoCustomer?.currency_code || session.user.currencyCode || "IQD",
+    paymentTerms: zohoCustomer?.payment_terms_label || "Net 30",
+    billingAddress: zohoCustomer?.billing_address || {
+      address: "Not provided",
+      city: "",
+      country: "",
     },
-    shippingAddress: {
-      address: "456 Industrial Area",
-      city: "Baghdad",
-      country: "Iraq",
+    shippingAddress: zohoCustomer?.shipping_address || {
+      address: "Not provided",
+      city: "",
+      country: "",
     },
+  };
+
+  // Helper to format address
+  const formatAddress = (addr: { address?: string; city?: string; state?: string; country?: string; zip?: string }) => {
+    const parts = [addr.address, addr.city, addr.state, addr.country].filter(Boolean);
+    return parts.length > 0 ? parts.join(", ") : "Not provided";
   };
 
   return (
     <div className="container mx-auto px-4 py-6">
       <div className="space-y-6">
         <h1 className="text-2xl font-bold">{t("title")}</h1>
+
+        {/* Account Not Linked Warning */}
+        {!session.user.zohoContactId && (
+          <Card className="border-amber-500/50 bg-amber-50 dark:bg-amber-950/20">
+            <CardContent className="flex items-center gap-4 py-4">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-900/50">
+                <AlertCircle className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+              </div>
+              <div>
+                <p className="font-medium text-amber-800 dark:text-amber-200">
+                  Account Not Linked
+                </p>
+                <p className="text-sm text-amber-600 dark:text-amber-400">
+                  Your account is not linked to our system. Contact support to link your account.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Profile Header */}
         <Card>
@@ -143,9 +180,8 @@ export default async function ProfilePage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <p>{profile.billingAddress.address}</p>
-              <p>
-                {profile.billingAddress.city}, {profile.billingAddress.country}
+              <p className="text-muted-foreground">
+                {formatAddress(profile.billingAddress)}
               </p>
             </CardContent>
           </Card>
@@ -158,10 +194,8 @@ export default async function ProfilePage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <p>{profile.shippingAddress.address}</p>
-              <p>
-                {profile.shippingAddress.city},{" "}
-                {profile.shippingAddress.country}
+              <p className="text-muted-foreground">
+                {formatAddress(profile.shippingAddress)}
               </p>
             </CardContent>
           </Card>

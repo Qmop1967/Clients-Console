@@ -1,15 +1,19 @@
 import type { Metadata, Viewport } from "next";
-import { Inter } from "next/font/google";
 import { notFound } from "next/navigation";
 import { NextIntlClientProvider } from "next-intl";
 import { getMessages } from "next-intl/server";
 import { ThemeProvider } from "@/components/providers/theme-provider";
 import { SessionProvider } from "@/components/providers/session-provider";
-import { CartProvider } from "@/components/providers/cart-provider";
+import { CartSessionProvider } from "@/components/providers/cart-session-provider";
+import { Toaster } from "@/components/ui/toaster";
 import { locales, localeDirection, type Locale } from "@/i18n/config";
 import "../globals.css";
 
-const inter = Inter({ subsets: ["latin"] });
+// Fonts are loaded via CSS @import in globals.css:
+// - Display: Cormorant Garamond (serif) - for headings, prices, hero text
+// - Body: Plus Jakarta Sans (sans-serif) - for body text, labels
+// - Arabic Display: Cairo (serif) - for Arabic headings
+// - Arabic Body: IBM Plex Sans Arabic (sans-serif) - for Arabic body text
 
 export const metadata: Metadata = {
   title: {
@@ -71,7 +75,7 @@ export default async function RootLayout({
 
   return (
     <html lang={locale} dir={dir} suppressHydrationWarning>
-      <body className={inter.className}>
+      <body className="font-body antialiased">
         <SessionProvider>
           <ThemeProvider
             attribute="class"
@@ -80,9 +84,10 @@ export default async function RootLayout({
             disableTransitionOnChange
           >
             <NextIntlClientProvider messages={messages}>
-              <CartProvider currencyCode="IQD">
+              <CartSessionProvider>
                 {children}
-              </CartProvider>
+                <Toaster />
+              </CartSessionProvider>
             </NextIntlClientProvider>
           </ThemeProvider>
         </SessionProvider>

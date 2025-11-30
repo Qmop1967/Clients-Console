@@ -13,7 +13,7 @@
 ## Current Implementation Status
 
 ### Completed Features
-- **Shop Page**: Public product catalog with real Zoho Inventory data (200+ products)
+- **Shop Page**: Public product catalog with real Zoho Books data (1300+ products)
 - **Dashboard**: Real-time customer balance, order stats, recent orders/invoices from Zoho Books
 - **Orders Page**: Full order history with pagination from Zoho Books
 - **Invoices Page**: Invoice listing with status and pagination from Zoho Books
@@ -24,15 +24,21 @@
 - **Theme**: Light/Dark mode support
 
 ### Data Integration
-All authenticated pages now fetch REAL data from Zoho APIs:
-- Products from Zoho Inventory (`/items` endpoint)
-- Categories from Zoho Inventory (`/categories` endpoint)
-- Price Lists from Zoho Inventory (`/pricebooks` endpoint)
+All pages now fetch data primarily from **Zoho Books API** (higher rate limits):
+- Products from Zoho Books (`/items` endpoint) - **MIGRATED from Inventory**
+- Categories from Zoho Books (`/categories` endpoint) - **MIGRATED from Inventory**
+- Price Lists from Zoho Books (`/pricebooks` endpoint) - **MIGRATED from Inventory**
+- Item Prices from Zoho Books (`/items/pricebookrate` endpoint)
 - Orders from Zoho Books (`/salesorders` endpoint)
 - Invoices from Zoho Books (`/invoices` endpoint)
 - Payments from Zoho Books (`/customerpayments` endpoint)
 - Credit Notes from Zoho Books (`/creditnotes` endpoint)
 - Customer Data from Zoho Books (`/contacts` endpoint)
+- Images from Zoho Books (`/items/{id}/image` endpoint) - **MIGRATED from Inventory**
+
+**Note:** Zoho Books has higher API rate limits than Zoho Inventory:
+- Books: ~100 requests/minute per organization
+- Inventory: ~3,750 requests/day per organization (can be exhausted quickly)
 
 ### Caching Strategy
 - Products: 1 hour cache with `unstable_cache`
@@ -45,35 +51,27 @@ All authenticated pages now fetch REAL data from Zoho APIs:
 
 ## Deployment Rules
 
-### CRITICAL: Staging-First Deployment Policy
+### Direct Production Deployment Mode
 
 ```yaml
 DEPLOYMENT WORKFLOW:
-  1. ALWAYS deploy to STAGING first
-  2. VERIFY all changes on staging
-  3. ONLY deploy to PRODUCTION after manual approval
+  Deploy directly to PRODUCTION for rapid iteration
 
 Commands:
-  Staging:    vercel --yes
-  Production: vercel --prod --yes  (MANUAL ONLY after verification)
+  Production: vercel --prod --yes
 
 URLs:
-  Staging:    https://staging.tsh.sale (linked to develop branch)
   Production: https://www.tsh.sale
               https://tsh-clients-console.vercel.app
+  Staging:    https://staging.tsh.sale (available if needed)
 ```
 
-### Deployment Checklist
+### Quick Deploy Command
 
-Before deploying to PRODUCTION:
-- [ ] Deploy to staging: `vercel --yes`
-- [ ] Test all pages load correctly
-- [ ] Verify Arabic/RTL layout works
-- [ ] Test authentication flow
-- [ ] Check Zoho API integration
-- [ ] Verify responsive design
-- [ ] Get explicit user approval
-- [ ] Then deploy: `vercel --prod --yes`
+```bash
+cd "/Users/khaleelal-mulla/General/ Projects/tsh-clients-console"
+vercel --prod --yes
+```
 
 ---
 
@@ -167,11 +165,11 @@ npm run build
 # Lint
 npm run lint
 
-# Deploy to STAGING (default)
-vercel --yes
-
-# Deploy to PRODUCTION (manual only)
+# Deploy directly to PRODUCTION
 vercel --prod --yes
+
+# Deploy to staging (if needed)
+vercel --yes
 ```
 
 ---
@@ -191,10 +189,8 @@ vercel --prod --yes
 - ALWAYS handle loading and error states
 
 ### Deployment
-- NEVER deploy directly to production
-- ALWAYS test on staging first
-- ALWAYS get explicit approval before production deploy
-- NEVER skip the verification step
+- Deploy directly to production: `vercel --prod --yes`
+- Staging available if needed: `vercel --yes`
 
 ### Internationalization
 - ALWAYS add both English and Arabic translations
@@ -209,12 +205,35 @@ Stock Display Rules:
   Source: Zoho Inventory API
   Stock Type: Accounting Stock (NOT Physical Stock)
   Warehouse: WholeSale WareHouse (Warehouse)
-  Field: Available for Sale (available_stock)
+  Warehouse ID: 2646610000000077024
+  Field: location_available_for_sale_stock (from locations array)
+
+  Formula:
+    Available for Sale = Stock on Hand - Committed Stock
 
   NEVER use:
     - Physical Stock
     - Stock from other warehouses (TSH WholeSale Sales, Retail WareHouse, TSH Retail Store)
-    - Stock on Hand (use Available for Sale instead)
+    - Stock on Hand alone (always use Available for Sale)
+    - The `warehouses` array (Zoho uses `locations` array instead)
+
+Technical Implementation:
+  # Zoho API returns `locations` array (NOT `warehouses`) for item stock breakdown
+  # Single item endpoint: GET /items/{item_id} returns locations array
+  # List endpoint: GET /items does NOT return locations data
+
+  Code Location: src/lib/zoho/products.ts
+  Key Function: getWholesaleAvailableStock(item)
+
+  The function extracts stock from the locations array:
+    - Finds location with name "WholeSale WareHouse (Warehouse)"
+    - Returns location_available_for_sale_stock value
+    - Falls back to item-level available_stock if no locations data
+
+  Important:
+    - Detail page (getProduct): Fetches single item with locations array → accurate stock
+    - List page (getAllProductsComplete): Uses warehouse_id filter, relies on item-level stock
+    - The warehouse_id parameter filters items but doesn't change stock values
 ```
 
 #### Pricing Rules (CRITICAL)
@@ -427,6 +446,56 @@ Debug Endpoints (remove after debugging):
 
 ---
 
+## MCP Browser Tools - Best Practices
+
+### Avoiding Large MCP Responses (Context Overflow)
+
+When using Playwright/Chrome DevTools MCP tools, large responses can fill up context quickly. Follow these rules:
+
+```yaml
+CRITICAL: Product listing pages can return 25k+ tokens in snapshots!
+
+DO:
+  - Use `browser_take_screenshot` for visual verification on listing pages
+  - Navigate to specific product pages (/shop/{id}) for detailed testing
+  - Close browser immediately after verification with `browser_close`
+  - Use URL parameters to filter/limit results (?search=specific-item)
+
+DON'T:
+  - Use `browser_snapshot` on pages with many elements (shop listings, tables)
+  - Leave browser open between unrelated tasks
+  - Take full-page snapshots when a screenshot suffices
+
+Example - Testing a specific product:
+  ✅ Navigate to: /en/shop/2646610000109854052 (specific product)
+  ❌ Navigate to: /en/shop (listing with 1000+ products)
+
+Example - Visual verification:
+  ✅ browser_take_screenshot (small response)
+  ❌ browser_snapshot on listing page (25k+ tokens)
+```
+
+### Cache Revalidation Endpoint
+
+```yaml
+Endpoint: /api/revalidate
+Method: GET
+Auth: ?secret=tsh-revalidate-2024
+
+Usage:
+  Revalidate products: /api/revalidate?tag=products&secret=tsh-revalidate-2024
+  Revalidate all:      /api/revalidate?tag=all&secret=tsh-revalidate-2024
+
+Available tags: products, categories, price-lists, warehouses, all
+
+When to use:
+  - After deploying code changes that affect cached data
+  - When cached data appears stale
+  - After fixing data calculation bugs (like stock display)
+```
+
+---
+
 ## Webhook Events
 
 The app listens for Zoho webhooks at `/api/webhooks/zoho`:
@@ -442,13 +511,60 @@ The app listens for Zoho webhooks at `/api/webhooks/zoho`:
 
 | Domain | Purpose | Status |
 |--------|---------|--------|
+| staging.tsh.sale | **Staging (DEFAULT)** | Configured |
 | www.tsh.sale | Production | Configured |
 | tsh-clients-console.vercel.app | Vercel default | Active |
-| staging URLs | Preview deployments | Auto-generated |
 
 DNS Configuration (Namecheap):
+- `staging` CNAME → `cname.vercel-dns.com` (for staging.tsh.sale)
 - `www` CNAME → `cname.vercel-dns.com`
 - `_vercel` TXT → Verification record
+
+---
+
+## Design System (v1.6.0)
+
+### Typography
+```yaml
+Display (Headings):
+  English: Cormorant Garamond (serif) - elegant, luxury feel
+  Arabic: Cairo - refined Arabic display font
+  Usage: .font-display, h1-h3, product titles, prices
+
+Body (Content):
+  English: Plus Jakarta Sans (sans-serif) - modern, readable
+  Arabic: IBM Plex Sans Arabic - clean Arabic body text
+  Usage: .font-body (default), paragraphs, UI elements
+```
+
+### Color System
+```css
+/* Gold Accent System */
+--gold: 38 70% 50%        /* Primary gold */
+--gold-subtle: 38 40% 92% /* Subtle gold tint */
+--accent: 38 60% 45%      /* Muted gold */
+
+/* Usage Classes */
+.text-gold      /* Gold text */
+.bg-gold        /* Gold background */
+.price-tag      /* For prices - serif + semibold */
+.price-display  /* For large price displays - serif + bold */
+```
+
+### Component Variants
+
+| Component | Variants |
+|-----------|----------|
+| Button | `gold`, `luxury`, `premium-outline`, `success`, sizes: `xl`, `icon-sm`, `icon-lg` |
+| Card | `elevated`, `premium`, `interactive`, `glass`, `outline`, `ghost` |
+| Badge | `gold`, `gold-subtle`, `glass`, `pending`, `confirmed`, `shipped`, `delivered` |
+| Input | `default`, `premium`, `ghost`, `error`, sizes: `sm`, `lg` |
+
+### Shadow System
+```css
+--shadow-gold: 0 4px 14px hsl(38 70% 50% / 0.15)
+--shadow-glow: 0 0 20px hsl(38 70% 50% / 0.3)
+```
 
 ---
 
@@ -456,10 +572,57 @@ DNS Configuration (Namecheap):
 
 At the start of EVERY session:
 - [ ] Read this CLAUDE.md file
+- [ ] Read `.claude/PROJECT_MEMORY.md` for critical IDs and rules
 - [ ] Check current git branch
 - [ ] Review recent changes: `git log --oneline -5`
 - [ ] Understand the task before coding
-- [ ] Remember: STAGING FIRST, then PRODUCTION
+- [ ] Deploy directly to production: `vercel --prod --yes`
+
+---
+
+## Claude Code Documentation & Commands
+
+### Slash Commands (11 Available)
+
+| Command | Purpose |
+|---------|---------|
+| `/zoho-debug` | Debug Zoho API issues (token, rate limits, errors) |
+| `/zoho-price` | Quick reference for price list rules and IDs |
+| `/zoho-stock` | Stock calculation rules and warehouse info |
+| `/zoho-sync` | Trigger cache revalidation and check sync |
+| `/deploy` | Production deployment workflow with checklist |
+| `/i18n-add` | Add new translations to EN and AR files |
+| `/component-new` | Create new component with proper structure |
+| `/api-new` | Create new API route with Zoho integration |
+| `/diagnose` | Run comprehensive project health check |
+| `/cache-clear` | Clear caches (products, prices, all) |
+| `/logs` | View Vercel logs and debugging guide |
+
+### Documentation Files (in `.claude/`)
+
+| File | Purpose |
+|------|---------|
+| `PROJECT_MEMORY.md` | **READ EVERY SESSION** - Critical IDs, golden rules, file references |
+| `ZOHO_INTEGRATION.md` | Complete Zoho API reference, auth flow, endpoints |
+| `PRICING_RULES.md` | Price list logic, code examples, debugging |
+| `STOCK_RULES.md` | Stock calculation, warehouse config, code examples |
+| `TROUBLESHOOTING.md` | Decision trees for common issues |
+| `COMPONENT_PATTERNS.md` | UI patterns, RTL, dark mode, responsive design |
+| `DEPLOYMENT.md` | Deployment workflow and commands |
+| `QUICK_REFERENCE.md` | 30-second quick facts |
+
+### Quick Reference: Critical IDs
+
+| Entity | ID |
+|--------|-----|
+| Organization | `748369814` |
+| WholeSale Warehouse | `2646610000000077024` |
+| Consumer Price List | `2646610000049149103` |
+| Retailor Price List | `2646610000004453985` |
+| Technical IQD | `2646610000057419683` |
+| Technical USD | `2646610000045742089` |
+| Wholesale A | `2646610000004152175` |
+| Wholesale B | `2646610000004453961` |
 
 ---
 
@@ -472,10 +635,55 @@ At the start of EVERY session:
 
 ---
 
-**Last Updated:** 2025-11-27
-**Version:** 1.3.0
+**Last Updated:** 2025-11-30
+**Version:** 1.6.0
 
-## Recent Changes (v1.3.0)
+## Recent Changes (v1.6.0)
+- **Luxury Frontend Redesign**: Complete UI/UX overhaul with premium B2B aesthetics
+  - Typography: Cormorant Garamond (serif display) + Plus Jakarta Sans (body)
+  - Arabic Support: Cairo (display) + IBM Plex Sans Arabic (body)
+  - Gold accent color system with HSL variables
+  - Premium shadow system (--shadow-xs through --shadow-2xl, --shadow-gold, --shadow-glow)
+  - New CSS utility classes: .font-display, .font-body, .price-tag, .price-display
+- **Component Library Upgrade**:
+  - Button: New variants (gold, luxury, premium-outline, success), new sizes (xl, icon-sm, icon-lg)
+  - Card: CVA variants (elevated, premium, interactive, glass, outline, ghost)
+  - Badge: New variants (gold, gold-subtle, glass, pending, confirmed, shipped, delivered)
+  - Input: CVA variants (default, premium, ghost, error) with gold focus ring
+  - Skeleton: New patterns (SkeletonCard, SkeletonText, SkeletonAvatar)
+  - EmptyState: Pre-built empty states (EmptyCart, EmptyOrders, EmptySearch, EmptyProducts)
+- **Layout Enhancements**:
+  - Headers with gold gradient logo and refined backdrop blur
+  - Menu drawer with premium avatar, gold ring styling, wholesale client badge
+  - Product cards with serif fonts, image hover zoom, low stock warnings
+- **Page Styling**:
+  - Dashboard: Elevated stat cards with decorative circles, color-coded icons
+  - Orders: Premium summary cards, gold status tabs, interactive order cards
+  - Invoices: Elevated cards with status indicators, premium search inputs
+- **Deployment**: Now triggers GitHub CI/CD to staging.tsh.sale
+
+## Previous Changes (v1.5.0)
+- **CRITICAL FIX**: Migrated from Zoho Inventory to Zoho Books API
+  - All product fetching now uses Books API (`/items`, `/categories`, `/pricebooks`)
+  - Image fetching uses Books API (`/items/{id}/image`)
+  - Price lists use Books API (`/pricebooks`, `/items/pricebookrate`)
+  - **Why:** Zoho Books has ~100 req/min limit vs Inventory's 3,750/day limit
+  - This prevents API rate limiting issues that caused "No products found" errors
+- Added rate limit error handling with user-friendly messages
+- Added translations for rate limit errors (EN/AR)
+- Created Playwright test suite (`scripts/test_all_pages.py`)
+- Enhanced frontend design with new typography and animations
+- Updated ZohoItem type to support both Books and Inventory API responses
+
+## Previous Changes (v1.4.0)
+- Fixed stock display to show "Available for Sale" instead of "Stock on Hand"
+  - Changed from `warehouses` array to `locations` array (Zoho API naming)
+  - Stock formula: `Available for Sale = Stock on Hand - Committed Stock`
+- Added `/api/revalidate` endpoint for manual cache revalidation
+- Added `/api/debug/stock` endpoint for stock debugging
+- Added `WHOLESALE_WAREHOUSE_ID` constant for Zoho API filtering
+
+## Previous Changes (v1.3.0)
 - **CRITICAL FIX**: Implemented Upstash Redis for Zoho OAuth token caching
 - Fixed "Contact for price" issue caused by Zoho OAuth rate limiting
 - Added multi-tier caching: Memory → Upstash Redis → Vercel KV → Zoho refresh

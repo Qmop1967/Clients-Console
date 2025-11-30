@@ -17,6 +17,7 @@ export async function generateMetadata() {
 
 async function fetchDashboardData(zohoContactId: string | undefined) {
   if (!zohoContactId) {
+    console.log('[Dashboard] No zohoContactId provided');
     return {
       balance: null,
       orderStats: { total: 0, pending: 0, confirmed: 0, shipped: 0, delivered: 0 },
@@ -24,6 +25,8 @@ async function fetchDashboardData(zohoContactId: string | undefined) {
       recentInvoices: [],
     };
   }
+
+  console.log(`[Dashboard] Fetching data for zohoContactId: ${zohoContactId}`);
 
   try {
     // Fetch all data in parallel for efficiency
@@ -34,6 +37,8 @@ async function fetchDashboardData(zohoContactId: string | undefined) {
       getRecentInvoices(zohoContactId, 5),
     ]);
 
+    console.log(`[Dashboard] Results - Balance: ${JSON.stringify(balance)}, Orders total: ${orderStats.total}, Recent orders: ${recentOrders.length}, Recent invoices: ${recentInvoices.length}`);
+
     return {
       balance,
       orderStats,
@@ -41,7 +46,7 @@ async function fetchDashboardData(zohoContactId: string | undefined) {
       recentInvoices,
     };
   } catch (error) {
-    console.error("Error fetching dashboard data:", error);
+    console.error("[Dashboard] Error fetching dashboard data:", error);
     return {
       balance: null,
       orderStats: { total: 0, pending: 0, confirmed: 0, shipped: 0, delivered: 0 },

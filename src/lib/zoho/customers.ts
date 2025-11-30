@@ -4,7 +4,7 @@
 
 import { unstable_cache } from 'next/cache';
 import { zohoFetch, CACHE_TAGS, rateLimitedFetch } from './client';
-import type { ZohoCustomer, PaginatedResponse } from '@/types';
+import type { ZohoCustomer } from '@/types';
 
 interface ZohoCustomersResponse {
   contacts: ZohoCustomer[];
@@ -119,16 +119,24 @@ export async function getCustomerBalance(
   currency_code: string;
 } | null> {
   try {
+    if (!contactId) {
+      console.warn('[getCustomerBalance] No contactId provided');
+      return null;
+    }
+
     const customer = await getCustomerWithTag(contactId);
-    if (!customer) return null;
+    if (!customer) {
+      console.warn(`[getCustomerBalance] Customer not found for contactId: ${contactId}`);
+      return null;
+    }
 
     return {
-      outstanding: customer.outstanding_receivable_amount,
-      unused_credits: customer.unused_credits_receivable_amount,
-      currency_code: customer.currency_code,
+      outstanding: customer.outstanding_receivable_amount ?? 0,
+      unused_credits: customer.unused_credits_receivable_amount ?? 0,
+      currency_code: customer.currency_code || 'IQD',
     };
   } catch (error) {
-    console.error('Error fetching customer balance:', error);
+    console.error(`[getCustomerBalance] Error for contactId ${contactId}:`, error);
     return null;
   }
 }

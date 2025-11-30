@@ -1,65 +1,194 @@
 import NextAuth from 'next-auth';
 import { authConfig } from './auth.config';
 import Resend from 'next-auth/providers/resend';
-import { getZohoCustomerByEmail, createZohoCustomer } from '@/lib/zoho/customers';
+import { UpstashRedisAdapter } from '@auth/upstash-redis-adapter';
+import { Redis } from '@upstash/redis';
+import { getZohoCustomerByEmail, getZohoCustomer } from '@/lib/zoho/customers';
+import { Resend as ResendClient } from 'resend';
 
-// Build providers array conditionally
+// Initialize Upstash Redis client for NextAuth adapter
+const redis = new Redis({
+  url: process.env.UPSTASH_REDIS_REST_URL!,
+  token: process.env.UPSTASH_REDIS_REST_TOKEN!,
+});
+
+// Professional Arabic Email Template
+function generateMagicLinkEmail(url: string): string {
+  return `
+<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>تسجيل الدخول - TSH</title>
+</head>
+<body style="margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Arial, sans-serif; background-color: #f8fafc; direction: rtl;">
+  <table role="presentation" style="width: 100%; border-collapse: collapse;">
+    <tr>
+      <td align="center" style="padding: 40px 20px;">
+        <table role="presentation" style="width: 100%; max-width: 480px; border-collapse: collapse;">
+
+          <!-- Logo Section -->
+          <tr>
+            <td align="center" style="padding-bottom: 32px;">
+              <div style="background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 50%, #06b6d4 100%); padding: 3px; border-radius: 16px; display: inline-block;">
+                <div style="background: white; padding: 16px 24px; border-radius: 14px;">
+                  <img src="https://www.tsh.sale/images/tsh-logo.jpg" alt="TSH" style="height: 50px; width: auto; display: block;" />
+                </div>
+              </div>
+            </td>
+          </tr>
+
+          <!-- Main Card -->
+          <tr>
+            <td>
+              <table role="presentation" style="width: 100%; border-collapse: collapse; background: white; border-radius: 24px; box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08);">
+
+                <!-- Header -->
+                <tr>
+                  <td style="padding: 40px 32px 24px; text-align: center;">
+                    <div style="width: 72px; height: 72px; background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); border-radius: 50%; margin: 0 auto 20px; display: flex; align-items: center; justify-content: center;">
+                      <table role="presentation" style="width: 72px; height: 72px;">
+                        <tr>
+                          <td align="center" valign="middle" style="background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); border-radius: 50%;">
+                            <img src="https://img.icons8.com/fluency/48/ffffff/password.png" alt="" style="width: 36px; height: 36px;" />
+                          </td>
+                        </tr>
+                      </table>
+                    </div>
+                    <h1 style="margin: 0 0 8px; font-size: 24px; font-weight: 700; color: #1e293b;">
+                      مرحباً بك في TSH
+                    </h1>
+                    <p style="margin: 0; font-size: 16px; color: #64748b; line-height: 1.6;">
+                      اضغط على الزر أدناه لتسجيل الدخول إلى حسابك
+                    </p>
+                  </td>
+                </tr>
+
+                <!-- Button -->
+                <tr>
+                  <td style="padding: 8px 32px 32px; text-align: center;">
+                    <a href="${url}" style="display: inline-block; background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); color: white; text-decoration: none; font-size: 16px; font-weight: 600; padding: 16px 48px; border-radius: 12px; box-shadow: 0 4px 14px rgba(59, 130, 246, 0.4);">
+                      تسجيل الدخول
+                    </a>
+                  </td>
+                </tr>
+
+                <!-- Divider -->
+                <tr>
+                  <td style="padding: 0 32px;">
+                    <div style="height: 1px; background: linear-gradient(to right, transparent, #e2e8f0, transparent);"></div>
+                  </td>
+                </tr>
+
+                <!-- Info Box -->
+                <tr>
+                  <td style="padding: 24px 32px;">
+                    <table role="presentation" style="width: 100%; background: #f8fafc; border-radius: 12px; border-collapse: collapse;">
+                      <tr>
+                        <td style="padding: 16px 20px;">
+                          <table role="presentation" style="width: 100%; border-collapse: collapse;">
+                            <tr>
+                              <td style="width: 40px; vertical-align: top;">
+                                <div style="width: 32px; height: 32px; background: #dbeafe; border-radius: 8px; text-align: center; line-height: 32px;">
+                                  <span style="font-size: 16px;">⏱️</span>
+                                </div>
+                              </td>
+                              <td style="vertical-align: middle; padding-right: 12px;">
+                                <p style="margin: 0; font-size: 14px; color: #64748b; line-height: 1.5;">
+                                  هذا الرابط صالح لمدة <strong style="color: #1e293b;">24 ساعة</strong> فقط
+                                </p>
+                              </td>
+                            </tr>
+                          </table>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+
+                <!-- Security Note -->
+                <tr>
+                  <td style="padding: 0 32px 32px;">
+                    <table role="presentation" style="width: 100%; background: #fef3c7; border-radius: 12px; border-collapse: collapse;">
+                      <tr>
+                        <td style="padding: 16px 20px;">
+                          <table role="presentation" style="width: 100%; border-collapse: collapse;">
+                            <tr>
+                              <td style="width: 40px; vertical-align: top;">
+                                <div style="width: 32px; height: 32px; background: #fde68a; border-radius: 8px; text-align: center; line-height: 32px;">
+                                  <span style="font-size: 16px;">🔒</span>
+                                </div>
+                              </td>
+                              <td style="vertical-align: middle; padding-right: 12px;">
+                                <p style="margin: 0; font-size: 14px; color: #92400e; line-height: 1.5;">
+                                  إذا لم تطلب هذا البريد، يمكنك تجاهله بأمان
+                                </p>
+                              </td>
+                            </tr>
+                          </table>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+
+              </table>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="padding: 32px 20px; text-align: center;">
+              <p style="margin: 0 0 8px; font-size: 14px; color: #64748b;">
+                <strong style="color: #1e293b;">TSH</strong> - Tech Spider Hand
+              </p>
+              <p style="margin: 0 0 16px; font-size: 13px; color: #94a3b8;">
+                بوابة العملاء للبيع بالجملة
+              </p>
+              <p style="margin: 0; font-size: 12px; color: #cbd5e1;">
+                © ${new Date().getFullYear()} TSH. جميع الحقوق محفوظة.
+              </p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+`;
+}
+
+// Build providers array
 const providers = [];
 
-// Only add Resend provider if API key is configured
-if (process.env.RESEND_API_KEY && process.env.RESEND_API_KEY !== 'your-resend-api-key') {
+// Add Resend provider for magic link emails with custom Arabic template
+if (process.env.RESEND_API_KEY) {
+  const resendClient = new ResendClient(process.env.RESEND_API_KEY);
+
   providers.push(
     Resend({
       apiKey: process.env.RESEND_API_KEY,
       from: process.env.EMAIL_FROM || 'TSH <noreply@tsh.sale>',
-      // Custom email template
       async sendVerificationRequest({ identifier: email, url, provider }) {
-        const { Resend: ResendClient } = await import('resend');
-        const resend = new ResendClient(provider.apiKey);
-
         try {
-          await resend.emails.send({
-            from: provider.from!,
+          const fromEmail = provider.from || 'TSH <noreply@tsh.sale>';
+          const result = await resendClient.emails.send({
+            from: fromEmail,
             to: email,
-            subject: 'Sign in to TSH Clients Console',
-            html: `
-              <!DOCTYPE html>
-              <html dir="ltr">
-              <head>
-                <meta charset="UTF-8">
-                <meta name="viewport" content="width=device-width, initial-scale=1.0">
-              </head>
-              <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f5f5f5;">
-                <div style="background-color: white; padding: 40px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-                  <div style="text-align: center; margin-bottom: 30px;">
-                    <h1 style="color: #1a1a1a; margin: 0; font-size: 24px;">TSH</h1>
-                    <p style="color: #666; margin-top: 5px;">Clients Console</p>
-                  </div>
-
-                  <p style="color: #333; font-size: 16px; line-height: 1.6;">
-                    Click the button below to sign in to your TSH account:
-                  </p>
-
-                  <div style="text-align: center; margin: 30px 0;">
-                    <a href="${url}" style="display: inline-block; background-color: #0070f3; color: white; padding: 14px 32px; text-decoration: none; border-radius: 6px; font-weight: 500; font-size: 16px;">
-                      Sign In to TSH
-                    </a>
-                  </div>
-
-                  <p style="color: #666; font-size: 14px; line-height: 1.5;">
-                    If you didn't request this email, you can safely ignore it.
-                  </p>
-
-                  <p style="color: #999; font-size: 12px; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee;">
-                    This link will expire in 24 hours and can only be used once.
-                  </p>
-                </div>
-              </body>
-              </html>
-            `,
+            subject: 'تسجيل الدخول إلى TSH | Sign in to TSH',
+            html: generateMagicLinkEmail(url),
           });
+
+          if (result.error) {
+            throw new Error(result.error.message);
+          }
+
+          console.log('[Auth] Magic link email sent to:', email);
         } catch (error) {
-          console.error('Failed to send verification email:', error);
+          console.error('[Auth] Failed to send magic link email:', error);
           throw new Error('Failed to send verification email');
         }
       },
@@ -74,28 +203,42 @@ export const {
   signOut,
 } = NextAuth({
   ...authConfig,
+  adapter: UpstashRedisAdapter(redis),
   providers,
   callbacks: {
     ...authConfig.callbacks,
-    async signIn({ user, email }) {
+    async signIn({ user }) {
       if (!user.email) return false;
 
       try {
-        // Check if customer exists in Zoho
-        const customer = await getZohoCustomerByEmail(user.email);
+        // First, find customer by email (list endpoint - returns basic data)
+        const customerBasic = await getZohoCustomerByEmail(user.email);
 
-        if (customer) {
+        if (customerBasic) {
+          // Fetch full customer details by ID (single endpoint - returns all fields)
+          const customerFull = await getZohoCustomer(customerBasic.contact_id);
+          const customer = customerFull || customerBasic;
+
           // Existing customer - attach Zoho data
+          // Note: Zoho Books uses pricebook_id, not price_list_id
           user.zohoContactId = customer.contact_id;
-          user.priceListId = customer.price_list_id;
+          user.priceListId = customer.pricebook_id || customer.price_list_id || '';
           user.currencyCode = customer.currency_code;
           user.name = customer.contact_name;
+
+          console.log('[Auth] Customer data fetched:', {
+            contactId: customer.contact_id,
+            priceListId: customer.pricebook_id || customer.price_list_id,
+            pricebookName: customer.pricebook_name,
+            currencyCode: customer.currency_code,
+          });
         } else {
           // New customer - will be created on first order
           // For now, just allow login with default settings
           user.zohoContactId = '';
           user.priceListId = '';
           user.currencyCode = 'IQD';
+          console.log('[Auth] New customer - no Zoho contact found for:', user.email);
         }
 
         return true;
@@ -107,10 +250,10 @@ export const {
     },
   },
   session: {
-    strategy: 'jwt',
+    strategy: 'database',
     maxAge: 30 * 24 * 60 * 60, // 30 days
   },
-  debug: process.env.NODE_ENV === 'development',
+  debug: true, // Temporarily enabled for debugging
 });
 
 // Type augmentation for NextAuth

@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "zoho": {
+      "type": "http",
+      "url": "https://tsh-clients-console-zoho-905434759.zohomcp.com/mcp/message?key=8f6ae48d33eed24c3d52a03617177847"
+    }
+  }
+}
