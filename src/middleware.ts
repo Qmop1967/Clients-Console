@@ -9,7 +9,8 @@ const intlMiddleware = createIntlMiddleware({
 });
 
 // Public paths that don't require authentication
-const publicPaths = ['/login', '/shop', '/cart', '/register', '/api'];
+// Note: /products redirects to /shop, so it must be public too
+const publicPaths = ['/login', '/shop', '/cart', '/register', '/api', '/products'];
 
 function isPublicPath(pathname: string): boolean {
   // Check if the path includes any public path segment
