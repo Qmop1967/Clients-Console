@@ -102,7 +102,7 @@ export function MenuDrawer({
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
-        side={locale === "ar" ? "left" : "right"}
+        side={locale === "ar" ? "right" : "left"}
         className="w-80 border-border/50"
       >
         <SheetHeader className="text-start">

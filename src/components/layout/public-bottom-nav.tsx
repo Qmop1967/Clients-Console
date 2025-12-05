@@ -69,8 +69,8 @@ export function PublicBottomNav({ onMenuClick }: PublicBottomNavProps) {
   ];
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-border/30 bg-background/98 backdrop-blur-xl supports-[backdrop-filter]:bg-background/90 safe-area-bottom">
-      <div className="flex h-[60px] items-center justify-around px-2">
+    <nav className="fixed bottom-0 inset-x-0 z-50 border-t border-border/30 bg-background/98 backdrop-blur-xl supports-[backdrop-filter]:bg-background/90 safe-area-bottom">
+      <div className="flex h-[60px] items-center justify-around px-2 rtl:flex-row-reverse">
         {navItems.map((item) => {
           const isActive =
             item.key !== "menu" && pathname.includes(item.href);

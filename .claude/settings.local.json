@@ -63,7 +63,11 @@
       "Bash(git stash:*)",
       "WebFetch(domain:vercel.com)",
       "Bash(timeout 30 vercel logs:*)",
-      "WebFetch(domain:staging.tsh.sale)"
+      "WebFetch(domain:staging.tsh.sale)",
+      "Bash(npm run dev:*)",
+      "Bash(git show-branch:*)",
+      "Bash(git ls-tree:*)",
+      "Skill(production-debugger)"
     ],
     "deny": [],
     "ask": []

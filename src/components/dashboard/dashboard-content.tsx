@@ -255,7 +255,7 @@ export function DashboardContent({
             <Link href="/orders">
               <Button variant="ghost" size="sm" className="gap-1">
                 {t("viewAll")}
-                <ArrowRight className="h-4 w-4" />
+                <ArrowRight className="h-4 w-4 rtl:rotate-180" />
               </Button>
             </Link>
           </CardHeader>
@@ -304,7 +304,7 @@ export function DashboardContent({
             <Link href="/invoices">
               <Button variant="ghost" size="sm" className="gap-1">
                 {t("viewAll")}
-                <ArrowRight className="h-4 w-4" />
+                <ArrowRight className="h-4 w-4 rtl:rotate-180" />
               </Button>
             </Link>
           </CardHeader>
