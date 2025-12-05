@@ -48,7 +48,25 @@ jobs:
 
       - name: Alias to staging.tsh.sale
         run: |
-          vercel alias ${{ steps.deploy.outputs.preview_url }} staging.tsh.sale --token=${{ secrets.VERCEL_TOKEN }} --scope=${{ secrets.VERCEL_ORG_ID }}
+          # Get deployment ID from URL
+          DEPLOY_URL="${{ steps.deploy.outputs.preview_url }}"
+          DEPLOY_HOST=$(echo "$DEPLOY_URL" | sed 's|https://||')
+
+          # Get deployment UID via API
+          DEPLOY_INFO=$(curl -s -H "Authorization: Bearer ${{ secrets.VERCEL_TOKEN }}" \
+            "https://api.vercel.com/v13/deployments/$DEPLOY_HOST?teamId=${{ secrets.VERCEL_ORG_ID }}")
+          DEPLOY_UID=$(echo "$DEPLOY_INFO" | jq -r '.uid')
+
+          echo "Deployment UID: $DEPLOY_UID"
+
+          # Create alias via API
+          ALIAS_RESULT=$(curl -s -X POST \
+            -H "Authorization: Bearer ${{ secrets.VERCEL_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d '{"alias":"staging.tsh.sale"}' \
+            "https://api.vercel.com/v2/deployments/$DEPLOY_UID/aliases?teamId=${{ secrets.VERCEL_ORG_ID }}")
+
+          echo "Alias result: $ALIAS_RESULT"
           echo "Aliased to: https://staging.tsh.sale"
 
       - name: Deployment Summary
