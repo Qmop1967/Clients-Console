@@ -20,6 +20,13 @@ const ZOHO_ENTITY_TYPES = [
   'pricebook', 'price_book',
   'vendorpayment', 'vendor_payment',
   'expense', 'expenses',
+  // Package/Shipment events
+  'package', 'packages', 'shipment', 'shipments',
+  // Sales Return events (CRITICAL for stock)
+  'salesreturn', 'sales_return', 'salesreturns',
+  'salesreturnreceive', 'returnreceipt', 'return_receipt',
+  // Inventory Adjustment events (CRITICAL for stock)
+  'inventoryadjustment', 'inventory_adjustment', 'stockadjustment',
 ] as const;
 
 // Normalize entity type to standard format
@@ -46,6 +53,19 @@ function normalizeEntityType(key: string): string {
     'vendorpayment': 'vendorpayment',
     'vendorpayments': 'vendorpayment',
     'expenses': 'expense',
+    // Package/Shipment mappings
+    'packages': 'package',
+    'shipment': 'package',
+    'shipments': 'package',
+    // Sales Return mappings (CRITICAL for stock)
+    'salesreturn': 'salesreturn',
+    'salesreturns': 'salesreturn',
+    // Sales Return Receive mappings (CRITICAL for stock)
+    'salesreturnreceive': 'salesreturnreceive',
+    'returnreceipt': 'salesreturnreceive',
+    // Inventory Adjustment mappings (CRITICAL for stock)
+    'inventoryadjustment': 'inventoryadjustment',
+    'stockadjustment': 'inventoryadjustment',
   };
   return mapping[normalized] || normalized;
 }
@@ -205,6 +225,46 @@ export async function POST(request: NextRequest) {
       case "stock":
       case "shipmentorder":
         await revalidateProducts(`stock changed: ${eventType}`);
+        break;
+
+      // ============================================
+      // PACKAGE/SHIPMENT EVENTS
+      // ============================================
+      case "package":
+        // Packages affect order fulfillment and may release committed stock
+        await revalidateProducts(`package shipped: ${eventType}`);
+        const pkgCustomerId = (data.customer_id as string) || (data.contact_id as string);
+        if (pkgCustomerId) {
+          await safeRevalidate(CACHE_TAGS.ORDERS(pkgCustomerId), eventType);
+        }
+        break;
+
+      // ============================================
+      // SALES RETURN EVENTS (CRITICAL for stock)
+      // ============================================
+      case "salesreturn":
+        // Sales returns affect stock (items potentially coming back)
+        await revalidateProducts(`sales return: ${eventType}`);
+        const srCustomerId = (data.customer_id as string) || (data.contact_id as string);
+        if (srCustomerId) {
+          await safeRevalidate(CACHE_TAGS.ORDERS(srCustomerId), eventType);
+        }
+        break;
+
+      // ============================================
+      // SALES RETURN RECEIVE EVENTS (CRITICAL for stock)
+      // ============================================
+      case "salesreturnreceive":
+        // When return is physically received, stock increases
+        await revalidateProducts(`sales return received: ${eventType}`);
+        break;
+
+      // ============================================
+      // INVENTORY ADJUSTMENT EVENTS (CRITICAL for stock)
+      // ============================================
+      case "inventoryadjustment":
+        // Direct stock adjustments (damage, theft, count corrections)
+        await revalidateProducts(`inventory adjusted: ${eventType}`);
         break;
 
       // ============================================
