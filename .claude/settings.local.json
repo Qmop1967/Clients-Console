@@ -68,7 +68,8 @@
       "Bash(git show-branch:*)",
       "Bash(git ls-tree:*)",
       "Skill(production-debugger)",
-      "Bash(timeout 60 vercel logs:*)"
+      "Bash(timeout 60 vercel logs:*)",
+      "Bash(grep:*)"
     ],
     "deny": [],
     "ask": []

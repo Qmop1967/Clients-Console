@@ -424,57 +424,108 @@ export async function syncWholesaleStock(options: {
 /**
  * Quick sync: Only sync items that have been updated recently
  * Faster than full sync, good for frequent updates
+ *
+ * IMPORTANT: Uses Inventory API (not Books) because it returns
+ * warehouse-specific stock via the `locations` array.
+ *
+ * Includes retry logic for rate limits and better error tracking.
  */
 export async function quickSyncStock(itemIds: string[]): Promise<{
   success: boolean;
   itemsUpdated: number;
+  errors: string[];
 }> {
   if (itemIds.length === 0) {
-    return { success: true, itemsUpdated: 0 };
+    return { success: true, itemsUpdated: 0, errors: [] };
   }
 
-  console.log(`🔄 Quick sync for ${itemIds.length} items...`);
+  console.log(`🔄 [quickSyncStock] Starting sync for ${itemIds.length} items: [${itemIds.join(', ')}]`);
 
   // Get existing cache
   const cached = await getStockCache();
   const stockMap: StockMap = cached?.stock || {};
+  const errors: string[] = [];
 
-  // Fetch individual items
+  // Fetch individual items with retry logic
   let updatedCount = 0;
 
   for (const itemId of itemIds) {
-    try {
-      const data = await rateLimitedFetch(() =>
-        zohoFetch<ZohoSingleItemResponse>(`/items/${itemId}`, {
-          api: 'inventory',
-        })
-      );
-      stockMap[itemId] = getWholesaleAvailableStock(data.item);
-      updatedCount++;
+    let retries = 3;
+    let lastError: Error | null = null;
 
-      // Small delay between requests
-      if (itemIds.length > 1) {
-        await new Promise(resolve => setTimeout(resolve, 200));
+    while (retries > 0) {
+      try {
+        const data = await rateLimitedFetch(() =>
+          zohoFetch<ZohoSingleItemResponse>(`/items/${itemId}`, {
+            api: 'inventory', // Required for warehouse-specific stock
+          })
+        );
+
+        const stock = getWholesaleAvailableStock(data.item);
+        stockMap[itemId] = stock;
+        updatedCount++;
+        console.log(`📦 [quickSyncStock] ${itemId}: stock = ${stock}`);
+        break; // Success, exit retry loop
+
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error(String(error));
+        const errorMsg = lastError.message;
+
+        // Check if rate limited
+        if (errorMsg.includes('429') || errorMsg.includes('rate') || errorMsg.includes('blocked')) {
+          console.warn(`⚠️ [quickSyncStock] Rate limited on ${itemId}, waiting 3s (${retries - 1} retries left)...`);
+          await new Promise(resolve => setTimeout(resolve, 3000));
+          retries--;
+        } else {
+          // Non-rate-limit error, don't retry
+          console.error(`❌ [quickSyncStock] Failed to fetch ${itemId}: ${errorMsg}`);
+          errors.push(`${itemId}: ${errorMsg}`);
+          break;
+        }
       }
-    } catch (error) {
-      console.error(`Failed to sync stock for ${itemId}:`, error);
+    }
+
+    if (retries === 0 && lastError) {
+      errors.push(`${itemId}: Rate limited after 3 retries`);
+      console.error(`❌ [quickSyncStock] Gave up on ${itemId} after rate limit retries`);
+    }
+
+    // Small delay between requests to avoid rate limits
+    if (itemIds.length > 1) {
+      await new Promise(resolve => setTimeout(resolve, 300));
     }
   }
 
-  // Save updated cache
+  // Save updated cache with retry
   const cacheData: StockCacheData = {
     stock: stockMap,
     updatedAt: Date.now(),
     itemCount: Object.keys(stockMap).length,
   };
 
-  const saved = await redisSet(STOCK_CACHE_KEY, cacheData, STOCK_CACHE_TTL);
+  let saved = false;
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    saved = await redisSet(STOCK_CACHE_KEY, cacheData, STOCK_CACHE_TTL);
+    if (saved) {
+      console.log(`✅ [quickSyncStock] Redis save successful on attempt ${attempt}`);
+      break;
+    }
+    console.warn(`⚠️ [quickSyncStock] Redis save attempt ${attempt} failed, retrying...`);
+    await new Promise(resolve => setTimeout(resolve, 500 * attempt));
+  }
 
-  console.log(`✅ Quick sync complete: ${updatedCount}/${itemIds.length} items updated`);
+  if (!saved) {
+    errors.push('Redis: Failed to save after 3 attempts');
+    console.error(`❌ [quickSyncStock] CRITICAL: Failed to save to Redis after 3 attempts!`);
+  }
+
+  const success = saved && errors.length === 0;
+  console.log(`${success ? '✅' : '⚠️'} [quickSyncStock] Complete: ${updatedCount}/${itemIds.length} items updated, ${errors.length} errors`);
 
   return {
-    success: saved,
+    success,
     itemsUpdated: updatedCount,
+    errors,
   };
 }
 

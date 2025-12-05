@@ -202,11 +202,18 @@ async function syncStockForItemsAndWait(itemIds: string[], reason: string): Prom
 
   try {
     const result = await quickSyncStock(itemIds);
+
     if (result.success) {
       console.log(`[Webhook] ✅ Stock synced for ${result.itemsUpdated} items`);
       return true;
+    } else {
+      console.error(`[Webhook] ⚠️ Stock sync partial failure: ${result.itemsUpdated}/${itemIds.length} updated`);
+      if (result.errors.length > 0) {
+        console.error(`[Webhook] ❌ Errors: ${result.errors.join(', ')}`);
+      }
+      // Return true if at least some items were updated
+      return result.itemsUpdated > 0;
     }
-    return false;
   } catch (error) {
     console.error(`[Webhook] ❌ Stock sync failed:`, error);
     return false;
@@ -215,38 +222,43 @@ async function syncStockForItemsAndWait(itemIds: string[], reason: string): Prom
 
 // Fetch invoice line items from Zoho Books API
 // Zoho webhooks don't include line_items, so we need to fetch the full invoice
+// THROWS on error instead of silent failure - caller must handle
 async function fetchInvoiceLineItems(invoiceId: string): Promise<string[]> {
-  try {
-    const token = await getAccessToken();
-    const orgId = process.env.ZOHO_ORGANIZATION_ID || '748369814';
+  const token = await getAccessToken();
+  const orgId = process.env.ZOHO_ORGANIZATION_ID || '748369814';
 
-    const response = await fetch(
-      `https://www.zohoapis.com/books/v3/invoices/${invoiceId}?organization_id=${orgId}`,
-      {
-        headers: {
-          Authorization: `Zoho-oauthtoken ${token}`,
-        },
-      }
-    );
+  console.log(`[Webhook] 📋 Fetching invoice ${invoiceId} from Zoho Books API...`);
 
-    if (!response.ok) {
-      console.error(`[Webhook] Failed to fetch invoice ${invoiceId}: ${response.status}`);
-      return [];
+  const response = await fetch(
+    `https://www.zohoapis.com/books/v3/invoices/${invoiceId}?organization_id=${orgId}`,
+    {
+      headers: {
+        Authorization: `Zoho-oauthtoken ${token}`,
+      },
     }
+  );
 
-    const data = await response.json();
-    const lineItems = data.invoice?.line_items || [];
+  if (!response.ok) {
+    const errorText = await response.text().catch(() => 'Unknown error');
+    const errorMsg = `Zoho API returned ${response.status}: ${errorText}`;
+    console.error(`[Webhook] ❌ Failed to fetch invoice ${invoiceId}: ${errorMsg}`);
+    throw new Error(errorMsg);
+  }
 
-    const itemIds = lineItems
-      .filter((item: { item_id?: string }) => item.item_id)
-      .map((item: { item_id: string }) => item.item_id);
+  const data = await response.json();
+  const lineItems = data.invoice?.line_items || [];
 
-    console.log(`[Webhook] 📋 Fetched ${itemIds.length} items from invoice ${invoiceId}`);
-    return itemIds;
-  } catch (error) {
-    console.error(`[Webhook] Error fetching invoice ${invoiceId}:`, error);
+  if (lineItems.length === 0) {
+    console.warn(`[Webhook] ⚠️ Invoice ${invoiceId} has no line_items`);
     return [];
   }
+
+  const itemIds = lineItems
+    .filter((item: { item_id?: string }) => item.item_id)
+    .map((item: { item_id: string }) => item.item_id);
+
+  console.log(`[Webhook] ✅ Fetched ${itemIds.length} items from invoice ${invoiceId}: [${itemIds.join(', ')}]`);
+  return itemIds;
 }
 
 // Sync product image to Vercel Blob (fire-and-forget)
@@ -423,23 +435,44 @@ export async function POST(request: NextRequest) {
       // ============================================
       // INVOICE EVENTS
       // ============================================
-      case "invoice":
+      case "invoice": {
+        // Track success for response
+        let stockSyncSuccess = false;
+        let stockSyncError: string | null = null;
+        let itemsSynced = 0;
+
         // Zoho webhooks don't include line_items, so we need to fetch them from API
         const invoiceId = (data.invoice_id as string) || (data.id as string);
         if (invoiceId) {
           console.log(`[Webhook] 🧾 Processing invoice ${invoiceId}`);
-          // Fetch line items from Zoho API
-          const invoiceItemIds = await fetchInvoiceLineItems(invoiceId);
-          if (invoiceItemIds.length > 0) {
-            // IMPORTANT: Sync stock FIRST and WAIT for completion
-            // Then revalidate cache so it rebuilds with fresh stock data
-            await syncStockForItemsAndWait(invoiceItemIds, `invoice: ${eventType}`);
+          try {
+            // Fetch line items from Zoho API - THROWS on error
+            const invoiceItemIds = await fetchInvoiceLineItems(invoiceId);
+            if (invoiceItemIds.length > 0) {
+              // IMPORTANT: Sync stock FIRST and WAIT for completion
+              // Then revalidate cache so it rebuilds with fresh stock data
+              const syncResult = await syncStockForItemsAndWait(invoiceItemIds, `invoice: ${eventType}`);
+              stockSyncSuccess = syncResult;
+              itemsSynced = invoiceItemIds.length;
+              if (!syncResult) {
+                stockSyncError = 'Stock sync returned false';
+                console.error(`[Webhook] ❌ Stock sync FAILED for invoice ${invoiceId}`);
+              }
+            } else {
+              // No line items is not an error, but note it
+              stockSyncSuccess = true;
+              console.log(`[Webhook] ℹ️ Invoice ${invoiceId} has no inventory items to sync`);
+            }
+          } catch (error) {
+            stockSyncError = error instanceof Error ? error.message : String(error);
+            console.error(`[Webhook] ❌ CRITICAL: Invoice ${invoiceId} processing FAILED:`, stockSyncError);
           }
         } else {
-          console.log(`[Webhook] ⚠️ Invoice webhook missing invoice_id`);
+          stockSyncError = 'Invoice webhook missing invoice_id';
+          console.error(`[Webhook] ❌ ${stockSyncError}`);
         }
 
-        // NOW revalidate products cache (AFTER stock sync completed)
+        // NOW revalidate products cache (AFTER stock sync completed or failed)
         await revalidateProducts(`invoice: ${eventType}`);
 
         // Also revalidate customer invoices list
@@ -447,7 +480,24 @@ export async function POST(request: NextRequest) {
         if (invCustomerId) {
           await safeRevalidate(CACHE_TAGS.INVOICES(invCustomerId), eventType);
         }
-        break;
+
+        // Return detailed response for invoice events
+        return NextResponse.json({
+          success: true,
+          event: eventType,
+          entity: entityType,
+          handled: true,
+          invoiceId,
+          stockSync: {
+            success: stockSyncSuccess,
+            itemsSynced,
+            error: stockSyncError,
+          },
+          message: stockSyncSuccess
+            ? `Stock synced for ${itemsSynced} items`
+            : `Stock sync failed: ${stockSyncError}`,
+        });
+      }
 
       // ============================================
       // PAYMENT EVENTS
