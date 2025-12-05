@@ -18,8 +18,8 @@ const navItems = [
     icon: LayoutDashboard,
   },
   {
-    key: "products",
-    href: "/products",
+    key: "shop",
+    href: "/shop",
     icon: Package,
   },
   {

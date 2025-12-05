@@ -32,7 +32,7 @@ export function PublicBottomNav({ onMenuClick }: PublicBottomNavProps) {
   const navItems = [
     {
       key: "shop",
-      href: isAuthenticated ? "/products" : "/shop",
+      href: "/shop",
       icon: ShoppingBag,
       label: tCommon("shop"),
     },

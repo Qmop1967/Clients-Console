@@ -422,7 +422,7 @@ export function OrderDetailContent({
               {t("backToOrders")}
             </Button>
           </Link>
-          <Link href="/products">
+          <Link href="/shop">
             <Button className="gap-2">
               <ShoppingBag className="h-4 w-4" />
               {t("continueShopping")}

@@ -378,7 +378,7 @@ export function OrdersContent({
                 {t("clearFilters")}
               </Button>
             ) : (
-              <Link href="/products">
+              <Link href="/shop">
                 <Button variant="gold">{t("startShopping")}</Button>
               </Link>
             )}

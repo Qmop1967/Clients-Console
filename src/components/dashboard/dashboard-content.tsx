@@ -224,7 +224,7 @@ export function DashboardContent({
         </CardHeader>
         <CardContent>
           <div className="grid gap-3 sm:grid-cols-3">
-            <Link href="/products">
+            <Link href="/shop">
               <Button variant="outline" className="w-full justify-start gap-2">
                 <Package className="h-4 w-4" />
                 {t("placeOrder")}
@@ -264,7 +264,7 @@ export function DashboardContent({
               <div className="flex flex-col items-center justify-center py-8 text-center">
                 <ShoppingBag className="h-12 w-12 text-muted-foreground/50 mb-3" />
                 <p className="text-sm text-muted-foreground">{t("noOrders")}</p>
-                <Link href="/products" className="mt-3">
+                <Link href="/shop" className="mt-3">
                   <Button size="sm">{t("startShopping")}</Button>
                 </Link>
               </div>

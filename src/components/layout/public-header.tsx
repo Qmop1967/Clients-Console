@@ -21,8 +21,8 @@ export function PublicHeader({ locale }: PublicHeaderProps) {
 
   const isAuthenticated = status === "authenticated" && !!session?.user;
 
-  // Logo links to /products for authenticated users, /shop for public visitors
-  const logoHref = isAuthenticated ? `/${locale}/products` : `/${locale}/shop`;
+  // Logo always links to /shop (unified shop page)
+  const logoHref = `/${locale}/shop`;
 
   return (
     <header className="sticky top-0 z-50 border-b border-border/50 bg-background/95 backdrop-blur-xl supports-[backdrop-filter]:bg-background/80 safe-area-inset-top">
@@ -67,7 +67,7 @@ export function PublicHeader({ locale }: PublicHeaderProps) {
 
           {/* Language Switcher */}
           <Link
-            href={isAuthenticated ? `/${otherLocale}/products` : `/${otherLocale}/shop`}
+            href={`/${otherLocale}/shop`}
             className="native-press flex h-10 w-10 items-center justify-center rounded-xl border border-border/50 bg-background/50 transition-all hover:border-primary/30 hover:bg-secondary"
             aria-label={`Switch to ${otherLocale === "ar" ? "Arabic" : "English"}`}
           >
