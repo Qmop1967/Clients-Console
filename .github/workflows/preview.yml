@@ -42,32 +42,48 @@ jobs:
       - name: Deploy to Preview (NOT Production)
         id: deploy
         run: |
+          # Deploy and capture both URL and inspect output
           url=$(vercel deploy --prebuilt --token=${{ secrets.VERCEL_TOKEN }})
           echo "preview_url=$url" >> $GITHUB_OUTPUT
           echo "Deployed to: $url"
 
+          # Get deployment ID using vercel inspect
+          DEPLOY_INFO=$(vercel inspect "$url" --token=${{ secrets.VERCEL_TOKEN }} 2>&1 || true)
+          DEPLOY_ID=$(echo "$DEPLOY_INFO" | grep -oP 'dpl_[a-zA-Z0-9]+' | head -1)
+          echo "deploy_id=$DEPLOY_ID" >> $GITHUB_OUTPUT
+          echo "Deployment ID: $DEPLOY_ID"
+
       - name: Alias to staging.tsh.sale
         run: |
-          # Get deployment ID from URL
-          DEPLOY_URL="${{ steps.deploy.outputs.preview_url }}"
-          DEPLOY_HOST=$(echo "$DEPLOY_URL" | sed 's|https://||')
+          DEPLOY_ID="${{ steps.deploy.outputs.deploy_id }}"
+          echo "Using Deployment ID: $DEPLOY_ID"
 
-          # Get deployment UID via API
-          DEPLOY_INFO=$(curl -s -H "Authorization: Bearer ${{ secrets.VERCEL_TOKEN }}" \
-            "https://api.vercel.com/v13/deployments/$DEPLOY_HOST?teamId=${{ secrets.VERCEL_ORG_ID }}")
-          DEPLOY_UID=$(echo "$DEPLOY_INFO" | jq -r '.uid')
-
-          echo "Deployment UID: $DEPLOY_UID"
+          if [ -z "$DEPLOY_ID" ] || [ "$DEPLOY_ID" = "null" ]; then
+            echo "Warning: No deployment ID found, trying to get from recent deployments..."
+            # Fallback: Get most recent deployment from API
+            DEPLOY_ID=$(curl -s -H "Authorization: Bearer ${{ secrets.VERCEL_TOKEN }}" \
+              "https://api.vercel.com/v6/deployments?teamId=${{ secrets.VERCEL_ORG_ID }}&projectId=${{ secrets.VERCEL_PROJECT_ID }}&limit=1" \
+              | jq -r '.deployments[0].uid')
+            echo "Found deployment ID: $DEPLOY_ID"
+          fi
 
           # Create alias via API
           ALIAS_RESULT=$(curl -s -X POST \
             -H "Authorization: Bearer ${{ secrets.VERCEL_TOKEN }}" \
             -H "Content-Type: application/json" \
             -d '{"alias":"staging.tsh.sale"}' \
-            "https://api.vercel.com/v2/deployments/$DEPLOY_UID/aliases?teamId=${{ secrets.VERCEL_ORG_ID }}")
+            "https://api.vercel.com/v2/deployments/$DEPLOY_ID/aliases?teamId=${{ secrets.VERCEL_ORG_ID }}")
 
           echo "Alias result: $ALIAS_RESULT"
-          echo "Aliased to: https://staging.tsh.sale"
+
+          # Check if successful
+          if echo "$ALIAS_RESULT" | jq -e '.uid' > /dev/null 2>&1; then
+            echo "Successfully aliased to: https://staging.tsh.sale"
+          elif echo "$ALIAS_RESULT" | jq -e '.error.code == "not_modified"' > /dev/null 2>&1; then
+            echo "Alias already set to: https://staging.tsh.sale"
+          else
+            echo "Warning: Alias may have failed. Check Vercel dashboard."
+          fi
 
       - name: Deployment Summary
         run: |
