@@ -538,28 +538,27 @@ export const getAllProductsComplete = unstable_cache(
       const cachedStock = await getCachedStockBulk(itemIds);
       const cacheStatus = await getStockCacheStatus();
 
+      // STRICT RULE: Only use warehouse-specific stock from Redis cache
+      // Items NOT in cache = assume 0 stock (will be filtered out by shop page)
+      // This ensures we ONLY show products with confirmed WholeSale warehouse stock
+
       if (cachedStock.size > 0) {
         console.log(`📦 Using cached warehouse stock for ${cachedStock.size}/${allProducts.length} items (cache age: ${cacheStatus.ageSeconds}s)`);
-
-        // Merge cached stock with products
-        // For items NOT in cache, use Books API stock as fallback (may be total across warehouses)
-        const productsWithStock = allProducts.map((item) => ({
-          ...item,
-          available_stock: cachedStock.has(item.item_id)
-            ? cachedStock.get(item.item_id)!
-            : item.available_stock, // Fallback to Books API stock
-        }));
-
-        return productsWithStock;
+      } else {
+        console.warn('⚠️ Stock cache EMPTY - all products will show 0 stock');
+        console.warn('💡 Run /api/sync/stock?action=sync&secret=tsh-stock-sync-2024 to populate cache');
       }
 
-      // No cache available - use Books API stock (may be inaccurate for warehouse-specific)
-      // This is better than showing 0 which would hide all products
-      // Products will still be visible, stock numbers may differ from detail page until cache is synced
-      console.warn('⚠️ Stock cache EMPTY - using Books API stock (may include all warehouses)');
-      console.warn('💡 Run /api/sync/stock to get accurate WholeSale warehouse stock');
+      // Merge cached stock with products
+      // CRITICAL: Items NOT in cache get 0 stock (not Books API stock)
+      const productsWithStock = allProducts.map((item) => ({
+        ...item,
+        available_stock: cachedStock.has(item.item_id)
+          ? cachedStock.get(item.item_id)!
+          : 0, // NOT in cache = 0 stock (strict rule)
+      }));
 
-      return allProducts;
+      return productsWithStock;
     } catch (error) {
       console.error('Error fetching all products:', error);
       return [];

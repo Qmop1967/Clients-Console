@@ -82,12 +82,17 @@ async function fetchShopData(priceListId: string) {
     const itemsWithPrices = productsWithPrices.filter(p => p.inPriceList).length;
     console.log(`💰 ${itemsWithPrices}/${productsWithPrices.length} products have prices in ${priceList?.name || 'price list'}`);
 
+    // STRICT RULE: Only show products with WholeSale warehouse stock > 0
+    // This filters using the Redis-cached warehouse-specific stock
+    const inStockProducts = productsWithPrices.filter(p => p.available_stock > 0);
+    console.log(`📦 ${inStockProducts.length}/${productsWithPrices.length} products have stock > 0 in WholeSale warehouse`);
+
     return {
-      products: productsWithPrices,
+      products: inStockProducts,
       categories: categories.filter((c) => c.is_active),
       currencyCode: priceList?.currency_code || "IQD",
       currencySymbol: priceList?.currency_symbol || "IQD",
-      totalProducts: allProducts.length,
+      totalProducts: inStockProducts.length,
       error: null,
     };
   } catch (error) {
