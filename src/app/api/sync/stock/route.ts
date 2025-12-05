@@ -43,10 +43,15 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Action: sync - Trigger full stock sync
+    // Action: sync - Trigger stock sync (supports chunked sync)
     if (action === 'sync') {
-      // Check if sync is needed (unless force=true)
-      if (!force) {
+      // Get chunked sync parameters
+      const offset = parseInt(searchParams.get('offset') || '0', 10);
+      const limit = parseInt(searchParams.get('limit') || '100', 10); // Default 100 items per chunk
+
+      // Check if sync is needed (unless force=true or doing chunked sync)
+      const isChunkedSync = offset > 0;
+      if (!force && !isChunkedSync) {
         const isStale = await isStockCacheStale(15 * 60 * 1000); // 15 minutes
         if (!isStale) {
           const status = await getStockCacheStatus();
@@ -59,13 +64,15 @@ export async function GET(request: NextRequest) {
         }
       }
 
-      console.log('📦 Starting stock sync via API...');
+      console.log(`📦 Starting stock sync via API (offset=${offset}, limit=${limit})...`);
 
-      // Run sync with conservative settings to avoid rate limits
+      // Run sync with chunked settings to avoid timeout
       const result = await syncWholesaleStock({
-        batchSize: 8,      // 8 items per batch
-        delayMs: 1500,     // 1.5s between batches (~5 req/s)
-        maxItems: undefined, // Sync all items
+        batchSize: 5,       // 5 items per batch (reduced for reliability)
+        delayMs: 500,       // 0.5s between batches
+        maxItems: limit,    // Process chunk of items
+        offset: offset,     // Starting position
+        skipLock: isChunkedSync, // Skip lock for chunked sync
       });
 
       const status = await getStockCacheStatus();
@@ -76,8 +83,14 @@ export async function GET(request: NextRequest) {
           itemsProcessed: result.itemsProcessed,
           errors: result.errors,
           durationSeconds: Math.round(result.durationMs / 1000),
+          totalItems: result.totalItems,
+          nextOffset: result.nextOffset,
         },
         cacheStatus: status,
+        // Include next URL for easy continuation
+        nextSyncUrl: result.nextOffset
+          ? `/api/sync/stock?action=sync&secret=${SYNC_SECRET}&offset=${result.nextOffset}&limit=${limit}`
+          : null,
       });
     }
 

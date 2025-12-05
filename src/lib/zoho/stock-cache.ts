@@ -238,28 +238,36 @@ export async function getCachedStockBulk(itemIds: string[]): Promise<Map<string,
  * Options:
  * - batchSize: Number of items to fetch per batch (default: 10)
  * - delayMs: Delay between batches in milliseconds (default: 1000)
- * - maxItems: Maximum items to process (default: unlimited)
+ * - maxItems: Maximum items to process per call (default: unlimited)
+ * - offset: Starting offset for chunked sync (default: 0)
+ * - skipLock: Skip lock check for chunked sync (default: false)
  */
 export async function syncWholesaleStock(options: {
   batchSize?: number;
   delayMs?: number;
   maxItems?: number;
+  offset?: number;
+  skipLock?: boolean;
 } = {}): Promise<{
   success: boolean;
   itemsProcessed: number;
   errors: number;
   durationMs: number;
+  totalItems?: number;
+  nextOffset?: number;
 }> {
-  const { batchSize = 10, delayMs = 1000, maxItems } = options;
+  const { batchSize = 10, delayMs = 1000, maxItems, offset = 0, skipLock = false } = options;
   const startTime = Date.now();
 
-  console.log('🔄 Starting wholesale stock sync...');
+  console.log(`🔄 Starting wholesale stock sync (offset=${offset}, maxItems=${maxItems || 'all'})...`);
 
-  // Try to acquire lock to prevent concurrent syncs
-  const lockAcquired = await redisSetNx(STOCK_SYNC_LOCK_KEY, Date.now().toString(), STOCK_SYNC_LOCK_TTL);
-  if (!lockAcquired) {
-    console.log('⏳ Stock sync already in progress, skipping...');
-    return { success: false, itemsProcessed: 0, errors: 0, durationMs: 0 };
+  // Try to acquire lock to prevent concurrent syncs (skip for chunked sync)
+  if (!skipLock) {
+    const lockAcquired = await redisSetNx(STOCK_SYNC_LOCK_KEY, Date.now().toString(), STOCK_SYNC_LOCK_TTL);
+    if (!lockAcquired) {
+      console.log('⏳ Stock sync already in progress, skipping...');
+      return { success: false, itemsProcessed: 0, errors: 0, durationMs: 0 };
+    }
   }
 
   try {
@@ -294,10 +302,14 @@ export async function syncWholesaleStock(options: {
       if (currentPage > 20) break;
     }
 
-    console.log(`📦 Found ${allItems.length} products to sync`);
+    console.log(`📦 Found ${allItems.length} total products`);
 
-    // Apply maxItems limit if specified
-    const itemsToProcess = maxItems ? allItems.slice(0, maxItems) : allItems;
+    // Apply offset and maxItems for chunked sync
+    const startIndex = Math.min(offset, allItems.length);
+    const endIndex = maxItems ? Math.min(startIndex + maxItems, allItems.length) : allItems.length;
+    const itemsToProcess = allItems.slice(startIndex, endIndex);
+
+    console.log(`📊 Processing items ${startIndex + 1} to ${endIndex} of ${allItems.length}`);
 
     // Step 2: Fetch individual items to get location-specific stock
     const stockMap: StockMap = {};
@@ -361,19 +373,33 @@ export async function syncWholesaleStock(options: {
       }
     }
 
-    // Step 3: Save to Redis
+    // Step 3: Save to Redis (merge with existing cache for chunked sync)
+    const existingCache = await getStockCache();
+    const mergedStock: StockMap = existingCache?.stock || {};
+
+    // Merge new stock data
+    for (const [itemId, stock] of Object.entries(stockMap)) {
+      mergedStock[itemId] = stock;
+    }
+
     const cacheData: StockCacheData = {
-      stock: stockMap,
+      stock: mergedStock,
       updatedAt: Date.now(),
-      itemCount: Object.keys(stockMap).length,
+      itemCount: Object.keys(mergedStock).length,
     };
 
     const saved = await redisSet(STOCK_CACHE_KEY, cacheData, STOCK_CACHE_TTL);
 
     const durationMs = Date.now() - startTime;
 
+    // Calculate next offset for chunked sync
+    const nextOffset = endIndex < allItems.length ? endIndex : undefined;
+
     if (saved) {
-      console.log(`✅ Stock sync complete: ${processedCount} items in ${Math.round(durationMs / 1000)}s`);
+      console.log(`✅ Stock sync complete: ${processedCount} items (total cached: ${cacheData.itemCount}) in ${Math.round(durationMs / 1000)}s`);
+      if (nextOffset) {
+        console.log(`📝 More items to sync. Next offset: ${nextOffset}`);
+      }
     } else {
       console.error('❌ Failed to save stock cache to Redis');
     }
@@ -383,11 +409,15 @@ export async function syncWholesaleStock(options: {
       itemsProcessed: processedCount,
       errors: errorCount,
       durationMs,
+      totalItems: allItems.length,
+      nextOffset,
     };
 
   } finally {
-    // Release lock
-    await redisDel(STOCK_SYNC_LOCK_KEY);
+    // Release lock (only if we acquired it)
+    if (!skipLock) {
+      await redisDel(STOCK_SYNC_LOCK_KEY);
+    }
   }
 }
 
