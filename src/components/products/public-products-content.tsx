@@ -334,9 +334,10 @@ export function PublicProductsContent({
     }
   }, [searchQuery, searchFromUrl]);
 
-  // Filter products by search and show only in-stock items
+  // Filter products by search (show all products, including out-of-stock)
+  // Out-of-stock products are shown but marked as unavailable
   const filteredProducts = useMemo(() => {
-    let filtered = products.filter((p) => p.available_stock > 0);
+    let filtered = [...products];
 
     // Search filter
     if (searchQuery) {
@@ -350,8 +351,14 @@ export function PublicProductsContent({
       );
     }
 
-    // Sort by name ascending by default
-    filtered.sort((a, b) => a.name.localeCompare(b.name));
+    // Sort: in-stock items first, then by name
+    filtered.sort((a, b) => {
+      // In-stock items come first
+      if (a.available_stock > 0 && b.available_stock <= 0) return -1;
+      if (a.available_stock <= 0 && b.available_stock > 0) return 1;
+      // Then sort by name
+      return a.name.localeCompare(b.name);
+    });
 
     return filtered;
   }, [products, searchQuery]);

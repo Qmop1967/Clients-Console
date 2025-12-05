@@ -542,32 +542,24 @@ export const getAllProductsComplete = unstable_cache(
         console.log(`📦 Using cached warehouse stock for ${cachedStock.size}/${allProducts.length} items (cache age: ${cacheStatus.ageSeconds}s)`);
 
         // Merge cached stock with products
-        // IMPORTANT: For items NOT in cache, use 0 (conservative) to match detail page behavior
+        // For items NOT in cache, use Books API stock as fallback (may be total across warehouses)
         const productsWithStock = allProducts.map((item) => ({
           ...item,
           available_stock: cachedStock.has(item.item_id)
             ? cachedStock.get(item.item_id)!
-            : 0, // Conservative: show 0 if not in cache (consistent with detail page)
+            : item.available_stock, // Fallback to Books API stock
         }));
 
         return productsWithStock;
       }
 
-      // No cache available - use 0 as conservative fallback
-      // This ensures listing page matches detail page behavior
-      // Books API stock is TOTAL across all warehouses, which is WRONG
-      // We only show WholeSale warehouse stock, so 0 is the safe fallback
-      console.warn('⚠️ Stock cache EMPTY - using 0 for all products (conservative fallback)');
-      console.warn('💡 Run /api/sync/stock to populate warehouse-specific stock cache');
-      console.warn('⚠️ Without cache, stock will show as "Out of Stock" for all products');
+      // No cache available - use Books API stock (may be inaccurate for warehouse-specific)
+      // This is better than showing 0 which would hide all products
+      // Products will still be visible, stock numbers may differ from detail page until cache is synced
+      console.warn('⚠️ Stock cache EMPTY - using Books API stock (may include all warehouses)');
+      console.warn('💡 Run /api/sync/stock to get accurate WholeSale warehouse stock');
 
-      // Return products with 0 stock (safer than showing incorrect Books API totals)
-      const productsWithZeroStock = allProducts.map((item) => ({
-        ...item,
-        available_stock: 0,
-      }));
-
-      return productsWithZeroStock;
+      return allProducts;
     } catch (error) {
       console.error('Error fetching all products:', error);
       return [];
