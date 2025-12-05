@@ -1,7 +1,8 @@
 import { redirect } from "next/navigation";
 
 // Redirect /products to /shop for backward compatibility
-// The /shop page handles both authenticated and public users
+// This page is outside the (main) protected route group
+// so it redirects without requiring authentication
 export default function ProductsRedirect() {
   redirect("/shop");
 }

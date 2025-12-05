@@ -62,7 +62,8 @@
       "Bash(git pull:*)",
       "Bash(git stash:*)",
       "WebFetch(domain:vercel.com)",
-      "Bash(timeout 30 vercel logs:*)"
+      "Bash(timeout 30 vercel logs:*)",
+      "WebFetch(domain:staging.tsh.sale)"
     ],
     "deny": [],
     "ask": []
