@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { revalidateTag } from "next/cache";
 import { CACHE_TAGS, getAccessToken } from "@/lib/zoho/client";
 import { syncSingleImage } from "@/lib/blob/image-cache";
+import { quickSyncStock } from "@/lib/zoho/stock-cache";
 
 // Webhook secret for verification
 const WEBHOOK_SECRET = process.env.ZOHO_WEBHOOK_SECRET;
@@ -140,7 +141,56 @@ async function revalidateProducts(reason: string) {
   await safeRevalidate(CACHE_TAGS.PRODUCTS, reason);
   // Also revalidate the complete products cache
   await safeRevalidate('all-products-complete', reason);
+  await safeRevalidate('all-products-complete-books', reason);
   await safeRevalidate('products-in-stock', reason);
+}
+
+// Extract item IDs from webhook data (line_items, items array, or single item)
+function extractItemIds(data: Record<string, unknown>): string[] {
+  const itemIds: string[] = [];
+
+  // Single item
+  if (data.item_id && typeof data.item_id === 'string') {
+    itemIds.push(data.item_id);
+  }
+
+  // Line items array (bills, sales orders, invoices, etc.)
+  if (Array.isArray(data.line_items)) {
+    for (const item of data.line_items) {
+      if (item && typeof item === 'object' && 'item_id' in item && typeof item.item_id === 'string') {
+        itemIds.push(item.item_id);
+      }
+    }
+  }
+
+  // Items array (some webhook formats)
+  if (Array.isArray(data.items)) {
+    for (const item of data.items) {
+      if (item && typeof item === 'object' && 'item_id' in item && typeof item.item_id === 'string') {
+        itemIds.push(item.item_id);
+      }
+    }
+  }
+
+  return [...new Set(itemIds)]; // Remove duplicates
+}
+
+// Sync stock for affected items (fire-and-forget, don't block webhook response)
+async function syncStockForItems(itemIds: string[], reason: string) {
+  if (itemIds.length === 0) return;
+
+  console.log(`[Webhook] 📦 Triggering stock sync for ${itemIds.length} items: ${reason}`);
+
+  // Fire-and-forget - don't await, let it run in background
+  quickSyncStock(itemIds)
+    .then((result) => {
+      if (result.success) {
+        console.log(`[Webhook] ✅ Stock synced for ${result.itemsUpdated} items`);
+      }
+    })
+    .catch((error) => {
+      console.error(`[Webhook] ❌ Stock sync failed:`, error);
+    });
 }
 
 // Sync product image to Vercel Blob (fire-and-forget)
@@ -177,6 +227,9 @@ export async function POST(request: NextRequest) {
       hasLineItems: 'line_items' in data,
     });
 
+    // Extract item IDs from webhook data for stock sync
+    const affectedItemIds = extractItemIds(data);
+
     // Handle based on entity type for better coverage
     switch (entityType) {
       // ============================================
@@ -185,6 +238,8 @@ export async function POST(request: NextRequest) {
       case "bill":
         // Purchase bills receive inventory - MUST revalidate stock
         await revalidateProducts(`bill received: ${eventType}`);
+        // Sync stock cache for affected items
+        syncStockForItems(affectedItemIds, `bill: ${eventType}`);
         // Check if line items have item IDs to sync images
         if (Array.isArray(data.line_items)) {
           for (const item of data.line_items as Array<{ item_id?: string }>) {
@@ -198,6 +253,8 @@ export async function POST(request: NextRequest) {
       case "purchaseorder":
         // Purchase orders may affect committed stock
         await revalidateProducts(`purchase order: ${eventType}`);
+        // Sync stock cache for affected items
+        syncStockForItems(affectedItemIds, `purchase order: ${eventType}`);
         break;
 
       case "vendorpayment":
@@ -211,6 +268,8 @@ export async function POST(request: NextRequest) {
       // ============================================
       case "item":
         await revalidateProducts(`item ${eventType}`);
+        // Sync stock cache for this item
+        syncStockForItems(affectedItemIds, `item: ${eventType}`);
         // Sync image for item events
         const itemId = (data.item_id as string) || (data.id as string);
         if (itemId) {
@@ -225,6 +284,8 @@ export async function POST(request: NextRequest) {
       case "stock":
       case "shipmentorder":
         await revalidateProducts(`stock changed: ${eventType}`);
+        // Sync stock cache for affected items
+        syncStockForItems(affectedItemIds, `stock: ${eventType}`);
         break;
 
       // ============================================
@@ -233,6 +294,8 @@ export async function POST(request: NextRequest) {
       case "package":
         // Packages affect order fulfillment and may release committed stock
         await revalidateProducts(`package shipped: ${eventType}`);
+        // Sync stock cache for affected items (shipped items release committed stock)
+        syncStockForItems(affectedItemIds, `package: ${eventType}`);
         const pkgCustomerId = (data.customer_id as string) || (data.contact_id as string);
         if (pkgCustomerId) {
           await safeRevalidate(CACHE_TAGS.ORDERS(pkgCustomerId), eventType);
@@ -245,6 +308,8 @@ export async function POST(request: NextRequest) {
       case "salesreturn":
         // Sales returns affect stock (items potentially coming back)
         await revalidateProducts(`sales return: ${eventType}`);
+        // Sync stock cache for returned items
+        syncStockForItems(affectedItemIds, `sales return: ${eventType}`);
         const srCustomerId = (data.customer_id as string) || (data.contact_id as string);
         if (srCustomerId) {
           await safeRevalidate(CACHE_TAGS.ORDERS(srCustomerId), eventType);
@@ -257,6 +322,8 @@ export async function POST(request: NextRequest) {
       case "salesreturnreceive":
         // When return is physically received, stock increases
         await revalidateProducts(`sales return received: ${eventType}`);
+        // Sync stock cache - stock has increased
+        syncStockForItems(affectedItemIds, `sales return received: ${eventType}`);
         break;
 
       // ============================================
@@ -265,6 +332,8 @@ export async function POST(request: NextRequest) {
       case "inventoryadjustment":
         // Direct stock adjustments (damage, theft, count corrections)
         await revalidateProducts(`inventory adjusted: ${eventType}`);
+        // Sync stock cache for adjusted items
+        syncStockForItems(affectedItemIds, `inventory adjustment: ${eventType}`);
         break;
 
       // ============================================
@@ -287,6 +356,8 @@ export async function POST(request: NextRequest) {
       case "salesorder":
         // Sales orders affect both stock (committed) and customer orders
         await revalidateProducts(`sales order: ${eventType}`);
+        // Sync stock cache for ordered items (committed stock changes)
+        syncStockForItems(affectedItemIds, `sales order: ${eventType}`);
         const soCustomerId = (data.customer_id as string) || (data.contact_id as string);
         if (soCustomerId) {
           await safeRevalidate(CACHE_TAGS.ORDERS(soCustomerId), eventType);
