@@ -67,7 +67,8 @@
       "Bash(npm run dev:*)",
       "Bash(git show-branch:*)",
       "Bash(git ls-tree:*)",
-      "Skill(production-debugger)"
+      "Skill(production-debugger)",
+      "Bash(timeout 60 vercel logs:*)"
     ],
     "deny": [],
     "ask": []

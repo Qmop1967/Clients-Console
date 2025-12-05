@@ -492,84 +492,120 @@ export function getProductImageUrl(item: ZohoItem): string | null {
 // FETCH ALL PRODUCTS (with full pagination)
 // Uses Zoho Books API for higher rate limits
 // ============================================
-export const getAllProductsComplete = unstable_cache(
-  async (): Promise<ZohoItem[]> => {
-    const allProducts: ZohoItem[] = [];
-    let currentPage = 1;
-    const perPage = 200; // Max per page for efficiency
-    let hasMorePages = true;
 
-    try {
-      console.log('🔄 Fetching all products using Zoho Books API...');
+/**
+ * Internal helper to fetch all products from Zoho Books API
+ * Returns products WITHOUT stock data (stock is merged separately for freshness)
+ */
+async function fetchAllProductsFromBooks(): Promise<ZohoItem[]> {
+  const allProducts: ZohoItem[] = [];
+  let currentPage = 1;
+  const perPage = 200; // Max per page for efficiency
+  let hasMorePages = true;
 
-      while (hasMorePages) {
-        const data = await rateLimitedFetch(() =>
-          zohoFetch<ZohoBooksItemsResponse>('/items', {
-            api: 'books', // Using Books API instead of Inventory
-            params: {
-              page: currentPage,
-              per_page: perPage,
-              filter_by: 'Status.Active',
-              sort_column: 'name',
-              sort_order: 'A',
-            },
-          })
-        );
+  try {
+    console.log('🔄 Fetching all products using Zoho Books API...');
 
-        if (data.items && data.items.length > 0) {
-          const items = data.items.map(booksItemToZohoItem);
-          allProducts.push(...items);
-          console.log(`📦 Page ${currentPage}: Fetched ${data.items.length} items (total: ${allProducts.length})`);
-        }
+    while (hasMorePages) {
+      const data = await rateLimitedFetch(() =>
+        zohoFetch<ZohoBooksItemsResponse>('/items', {
+          api: 'books', // Using Books API instead of Inventory
+          params: {
+            page: currentPage,
+            per_page: perPage,
+            filter_by: 'Status.Active',
+            sort_column: 'name',
+            sort_order: 'A',
+          },
+        })
+      );
 
-        hasMorePages = data.page_context?.has_more_page ?? false;
-        currentPage++;
-
-        if (currentPage > 50) {
-          console.warn('Reached max page limit (50) when fetching products');
-          break;
-        }
+      if (data.items && data.items.length > 0) {
+        const items = data.items.map(booksItemToZohoItem);
+        allProducts.push(...items);
+        console.log(`📦 Page ${currentPage}: Fetched ${data.items.length} items (total: ${allProducts.length})`);
       }
 
-      console.log(`✅ Fetched ${allProducts.length} total products from Zoho Books API`);
+      hasMorePages = data.page_context?.has_more_page ?? false;
+      currentPage++;
 
-      // Try to get cached warehouse-specific stock (from Redis)
-      const itemIds = allProducts.map(item => item.item_id);
-      const cachedStock = await getCachedStockBulk(itemIds);
-      const cacheStatus = await getStockCacheStatus();
-
-      // STRICT RULE: Only use warehouse-specific stock from Redis cache
-      // Items NOT in cache = assume 0 stock (will be filtered out by shop page)
-      // This ensures we ONLY show products with confirmed WholeSale warehouse stock
-
-      if (cachedStock.size > 0) {
-        console.log(`📦 Using cached warehouse stock for ${cachedStock.size}/${allProducts.length} items (cache age: ${cacheStatus.ageSeconds}s)`);
-      } else {
-        console.warn('⚠️ Stock cache EMPTY - all products will show 0 stock');
-        console.warn('💡 Run /api/sync/stock?action=sync&secret=tsh-stock-sync-2024 to populate cache');
+      if (currentPage > 50) {
+        console.warn('Reached max page limit (50) when fetching products');
+        break;
       }
-
-      // Merge cached stock with products
-      // CRITICAL: Items NOT in cache get 0 stock (not Books API stock)
-      const productsWithStock = allProducts.map((item) => ({
-        ...item,
-        available_stock: cachedStock.has(item.item_id)
-          ? cachedStock.get(item.item_id)!
-          : 0, // NOT in cache = 0 stock (strict rule)
-      }));
-
-      return productsWithStock;
-    } catch (error) {
-      console.error('Error fetching all products:', error);
-      return [];
     }
+
+    console.log(`✅ Fetched ${allProducts.length} total products from Zoho Books API`);
+    return allProducts;
+  } catch (error) {
+    console.error('Error fetching all products:', error);
+    return [];
+  }
+}
+
+/**
+ * Get all products METADATA only (cached for 24 hours)
+ * IMPORTANT: Does NOT include stock data - stock must be fetched separately
+ * This ensures stock is always fresh from Redis, not cached with product data
+ */
+export const getAllProductsMetadata = unstable_cache(
+  async (): Promise<ZohoItem[]> => {
+    const products = await fetchAllProductsFromBooks();
+    // Return products with available_stock set to 0 (placeholder)
+    // Stock will be merged separately from Redis for freshness
+    return products.map(p => ({ ...p, available_stock: 0 }));
   },
-  ['all-products-complete-books'],
+  ['all-products-metadata-books'],
   {
-    revalidate: 86400, // 24 hours
+    revalidate: 86400, // 24 hours - products rarely change
     tags: [CACHE_TAGS.PRODUCTS],
   }
 );
+
+/**
+ * Get all products WITH fresh stock from Redis
+ * IMPORTANT: This function fetches fresh stock on EVERY call
+ * - Product metadata is cached (24 hours)
+ * - Stock is fetched fresh from Redis each time
+ * This ensures stock updates are reflected immediately after webhook triggers
+ */
+export async function getAllProductsComplete(): Promise<ZohoItem[]> {
+  try {
+    // Step 1: Get cached product metadata (no stock)
+    const products = await getAllProductsMetadata();
+
+    if (products.length === 0) {
+      return [];
+    }
+
+    // Step 2: Fetch FRESH stock from Redis (NOT cached with products)
+    const itemIds = products.map(item => item.item_id);
+    const cachedStock = await getCachedStockBulk(itemIds);
+    const cacheStatus = await getStockCacheStatus();
+
+    // Log stock cache status
+    if (cachedStock.size > 0) {
+      console.log(`📦 [getAllProductsComplete] Fresh Redis stock: ${cachedStock.size}/${products.length} items (cache age: ${cacheStatus.ageSeconds}s)`);
+    } else {
+      console.warn('⚠️ [getAllProductsComplete] Stock cache EMPTY - all products will show 0 stock');
+      console.warn('💡 Run /api/sync/stock?action=sync&secret=tsh-stock-sync-2024 to populate cache');
+    }
+
+    // Step 3: Merge FRESH stock with cached products
+    // CRITICAL: Items NOT in cache get 0 stock (not Books API stock)
+    const productsWithStock = products.map((item) => ({
+      ...item,
+      available_stock: cachedStock.has(item.item_id)
+        ? cachedStock.get(item.item_id)!
+        : 0, // NOT in cache = 0 stock (strict rule)
+    }));
+
+    return productsWithStock;
+  } catch (error) {
+    console.error('Error in getAllProductsComplete:', error);
+    return [];
+  }
+}
 
 /**
  * Get total product count using Zoho Books API
