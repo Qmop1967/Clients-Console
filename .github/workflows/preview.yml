@@ -46,9 +46,16 @@ jobs:
           echo "preview_url=$url" >> $GITHUB_OUTPUT
           echo "Deployed to: $url"
 
-      - name: Comment Preview URL
+      - name: Alias to staging.tsh.sale
         run: |
-          echo "## Preview Deployment"
-          echo "Preview URL: ${{ steps.deploy.outputs.preview_url }}"
+          vercel alias ${{ steps.deploy.outputs.preview_url }} staging.tsh.sale --token=${{ secrets.VERCEL_TOKEN }} --scope=${{ secrets.VERCEL_ORG_ID }}
+          echo "Aliased to: https://staging.tsh.sale"
+
+      - name: Deployment Summary
+        run: |
+          echo "## Preview Deployment Complete"
           echo ""
-          echo "staging.tsh.sale will be updated with this preview."
+          echo "Preview URL: ${{ steps.deploy.outputs.preview_url }}"
+          echo "Staging URL: https://staging.tsh.sale"
+          echo ""
+          echo "Production deployment is MANUAL ONLY via Vercel Dashboard."
