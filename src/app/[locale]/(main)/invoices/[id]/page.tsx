@@ -6,7 +6,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Link } from "@/i18n/navigation";
-import Image from "next/image";
 import {
   ArrowLeft,
   FileText,
@@ -122,7 +121,6 @@ export default async function InvoiceDetailPage({
 
   const currency = invoice.currency_code || "USD";
   const statusInfo = getStatusInfo(invoice.status);
-  const StatusIcon = statusInfo.icon;
 
   // Calculate payment progress
   const paymentProgress = invoice.total > 0

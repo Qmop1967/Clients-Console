@@ -176,11 +176,11 @@ export default function SupportPage() {
                         Created: {ticket.created_at}
                       </p>
                       <div className="flex items-center gap-2">
-                        <Badge variant={getStatusVariant(ticket.status) as any}>
+                        <Badge variant={getStatusVariant(ticket.status) as "default" | "secondary" | "destructive" | "outline"}>
                           {t(`statuses.${ticket.status}`)}
                         </Badge>
                         <Badge
-                          variant={getPriorityVariant(ticket.priority) as any}
+                          variant={getPriorityVariant(ticket.priority) as "default" | "secondary" | "destructive" | "outline"}
                         >
                           {t(`priorities.${ticket.priority}`)}
                         </Badge>

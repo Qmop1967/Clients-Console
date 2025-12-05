@@ -17,18 +17,14 @@ import {
   CreditCard,
   FileCheck,
   Search,
-  Filter,
   ArrowUpRight,
   ArrowDownLeft,
   ChevronDown,
   ChevronUp,
-  Clock,
-  CheckCircle2,
-  AlertCircle,
   Banknote,
   ScrollText,
 } from "lucide-react";
-import type { AccountStatementData, StatementTransaction } from "@/lib/zoho/statements";
+import type { AccountStatementData } from "@/lib/zoho/statements";
 import { cn } from "@/lib/utils/cn";
 
 interface AccountStatementContentProps {
@@ -383,7 +379,7 @@ export function AccountStatementContent({
 
             {/* Transaction Rows */}
             <div className="divide-y divide-border">
-              {filteredTransactions.map((tx, index) => {
+              {filteredTransactions.map((tx) => {
                 const Icon = getTransactionIcon(tx.transaction_type);
                 const colors = getTransactionColor(tx.transaction_type);
                 const isExpanded = expandedRows.has(tx.transaction_id);

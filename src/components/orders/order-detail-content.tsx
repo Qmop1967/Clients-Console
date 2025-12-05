@@ -20,19 +20,17 @@ import {
   Calendar,
   Package,
   Truck,
-  Clock,
   CheckCircle2,
   FileText,
   X,
   PackageCheck,
-  Hash,
   User,
   Box,
   FileDown,
   ExternalLink,
   MapPin,
 } from "lucide-react";
-import type { ZohoSalesOrder, ZohoPackage, ZohoShipment, ZohoLineItem } from "@/types";
+import type { ZohoSalesOrder, ZohoPackage, ZohoShipment } from "@/types";
 
 interface OrderDetailContentProps {
   order: ZohoSalesOrder;
@@ -443,7 +441,7 @@ export function OrderDetailContent({
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
-            {packages.map((pkg, pkgIndex) => {
+            {packages.map((pkg) => {
               const statusLower = pkg.status?.toLowerCase() || '';
               const isDelivered = statusLower === 'delivered';
               const isShipped = statusLower === 'shipped' || statusLower === 'in_transit';

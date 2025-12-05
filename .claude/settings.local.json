@@ -60,7 +60,8 @@
       "Bash(git config:*)",
       "Bash(git checkout:*)",
       "Bash(git pull:*)",
-      "Bash(git stash:*)"
+      "Bash(git stash:*)",
+      "WebFetch(domain:vercel.com)"
     ],
     "deny": [],
     "ask": []

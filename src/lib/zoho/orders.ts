@@ -4,7 +4,7 @@
 
 import { unstable_cache } from 'next/cache';
 import { zohoFetch, CACHE_TAGS, rateLimitedFetch } from './client';
-import type { ZohoSalesOrder, ZohoPackage, ZohoShipment, ZohoDocument, PaginatedResponse } from '@/types';
+import type { ZohoSalesOrder, ZohoPackage, ZohoShipment, PaginatedResponse } from '@/types';
 
 interface ZohoOrdersResponse {
   salesorders: ZohoSalesOrder[];
@@ -212,7 +212,7 @@ export async function getOrderWithDetails(
 
     if (shippedPackages.length > 0) {
       // Create shipment entries from shipped packages
-      shipments = shippedPackages.map((pkg, index) => ({
+      shipments = shippedPackages.map((pkg) => ({
         shipment_id: `ship-${pkg.package_id}`,
         shipment_number: `SHP-${pkg.package_number}`,
         salesorder_id: orderId,
@@ -441,13 +441,6 @@ export async function getOrderSummaryStats(customerId: string): Promise<OrderSum
                   },
                 })
               );
-
-              // Calculate total amount from orders if available, otherwise estimate
-              let totalAmount = 0;
-              if (data.salesorders && data.salesorders.length > 0) {
-                // Get first order total as sample (API may return total_amount in future)
-                totalAmount = data.salesorders[0]?.total || 0;
-              }
 
               return {
                 key,

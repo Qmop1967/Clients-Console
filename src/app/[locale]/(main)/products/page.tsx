@@ -125,7 +125,7 @@ export default async function ProductsPage() {
   }
 
   // Fetch products with customer's price list
-  const { products, categories, currencyCode, priceListName, error } =
+  const { products, currencyCode, error } =
     await fetchAuthenticatedProducts(priceListId);
 
   return (

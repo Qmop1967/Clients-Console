@@ -667,8 +667,7 @@ export const getWholesaleWarehouseId = unstable_cache(
 
 // Stock batch functions - kept for sync endpoints
 export async function fetchAccurateStockBatch(
-  items: ZohoItem[],
-  _concurrency = 5
+  items: ZohoItem[]
 ): Promise<Map<string, number>> {
   const stockMap = new Map<string, number>();
   items.forEach(item => {
@@ -678,10 +677,9 @@ export async function fetchAccurateStockBatch(
 }
 
 export async function fetchAccurateStockBatchOptimized(
-  items: ZohoItem[],
-  _concurrency = 5
+  items: ZohoItem[]
 ): Promise<Map<string, number>> {
-  return fetchAccurateStockBatch(items, _concurrency);
+  return fetchAccurateStockBatch(items);
 }
 
 // ============================================

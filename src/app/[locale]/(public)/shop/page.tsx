@@ -139,7 +139,7 @@ export default async function PublicShopPage() {
     console.log(`[Shop] Public visitor - using Consumer price list (IQD)`);
   }
 
-  const { products, categories, currencyCode, totalProducts, error } = await fetchShopData(priceListId);
+  const { products, currencyCode, error } = await fetchShopData(priceListId);
 
   return (
     <div className="space-y-6">

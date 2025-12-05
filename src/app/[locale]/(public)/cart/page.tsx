@@ -23,14 +23,13 @@ import {
 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 
 export default function CartPage() {
   const t = useTranslations("cart");
   const tProducts = useTranslations("products");
   const tCommon = useTranslations("common");
   const { locale } = useParams();
-  const router = useRouter();
   const { data: session, status } = useSession();
   const { items, currencyCode, removeItem, updateQuantity, clearCart } = useCart();
 
