@@ -193,6 +193,26 @@ async function syncStockForItems(itemIds: string[], reason: string) {
     });
 }
 
+// Sync stock for affected items AND WAIT for completion
+// Use this when you need cache revalidation AFTER stock sync
+async function syncStockForItemsAndWait(itemIds: string[], reason: string): Promise<boolean> {
+  if (itemIds.length === 0) return true;
+
+  console.log(`[Webhook] 📦 Syncing stock for ${itemIds.length} items (awaited): ${reason}`);
+
+  try {
+    const result = await quickSyncStock(itemIds);
+    if (result.success) {
+      console.log(`[Webhook] ✅ Stock synced for ${result.itemsUpdated} items`);
+      return true;
+    }
+    return false;
+  } catch (error) {
+    console.error(`[Webhook] ❌ Stock sync failed:`, error);
+    return false;
+  }
+}
+
 // Fetch invoice line items from Zoho Books API
 // Zoho webhooks don't include line_items, so we need to fetch the full invoice
 async function fetchInvoiceLineItems(invoiceId: string): Promise<string[]> {
@@ -404,21 +424,23 @@ export async function POST(request: NextRequest) {
       // INVOICE EVENTS
       // ============================================
       case "invoice":
-        // Invoices affect stock - sold items reduce available stock
-        await revalidateProducts(`invoice: ${eventType}`);
-
         // Zoho webhooks don't include line_items, so we need to fetch them from API
         const invoiceId = (data.invoice_id as string) || (data.id as string);
         if (invoiceId) {
           console.log(`[Webhook] 🧾 Processing invoice ${invoiceId}`);
-          // Fetch line items from Zoho API and sync stock
+          // Fetch line items from Zoho API
           const invoiceItemIds = await fetchInvoiceLineItems(invoiceId);
           if (invoiceItemIds.length > 0) {
-            syncStockForItems(invoiceItemIds, `invoice: ${eventType}`);
+            // IMPORTANT: Sync stock FIRST and WAIT for completion
+            // Then revalidate cache so it rebuilds with fresh stock data
+            await syncStockForItemsAndWait(invoiceItemIds, `invoice: ${eventType}`);
           }
         } else {
           console.log(`[Webhook] ⚠️ Invoice webhook missing invoice_id`);
         }
+
+        // NOW revalidate products cache (AFTER stock sync completed)
+        await revalidateProducts(`invoice: ${eventType}`);
 
         // Also revalidate customer invoices list
         const invCustomerId = (data.customer_id as string) || (data.contact_id as string);
