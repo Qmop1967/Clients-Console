@@ -881,26 +881,33 @@
   background-clip: text;
 }
 
-/* Price styling - Luxury serif font */
+/* ========================================
+   Price & Number Styling - Consistent across languages
+   Uses clean sans-serif for better number readability
+   ======================================== */
+
+/* Price tag - Used for product prices */
 .price-tag {
-  font-family: 'Cormorant Garamond', Georgia, serif;
-  font-weight: 600;
+  font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+  font-weight: 700;
   letter-spacing: -0.01em;
   font-feature-settings: "tnum" 1;
 }
 
-/* RTL price styling */
+/* RTL price styling - Same weight and style */
 [dir="rtl"] .price-tag {
-  font-family: 'Cairo', Georgia, serif;
+  font-family: 'Cairo', system-ui, sans-serif;
+  font-weight: 700;
 }
 
 /* Large price display for hero sections */
 .price-display {
-  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
   font-weight: 700;
   font-size: 1.875rem;
   letter-spacing: -0.02em;
   line-height: 1.1;
+  font-feature-settings: "tnum" 1;
 }
 
 [dir="rtl"] .price-display {
@@ -940,6 +947,30 @@
   font-family: 'Cairo', system-ui, sans-serif;
   font-size: 2.25rem;
   font-weight: 700;
+}
+
+/* Stock number - Bold and clear for inventory display */
+.stock-number {
+  font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+  font-weight: 600;
+  font-feature-settings: "tnum" 1;
+}
+
+[dir="rtl"] .stock-number {
+  font-family: 'Cairo', system-ui, sans-serif;
+  font-weight: 600;
+}
+
+/* Number text utility - For any inline numbers that need consistent styling */
+.number-text {
+  font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+  font-weight: 600;
+  font-feature-settings: "tnum" 1;
+}
+
+[dir="rtl"] .number-text {
+  font-family: 'Cairo', system-ui, sans-serif;
+  font-weight: 600;
 }
 
 /* Scrollbar styling */

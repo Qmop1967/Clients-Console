@@ -81,11 +81,13 @@ export const ProductCard = memo(function ProductCard({ product, currencyCode }: 
           }
           className="absolute end-2 top-2 shadow-sm"
         >
-          {!isInStock
-            ? t("outOfStock")
-            : isLowStock
-            ? `${t("stock")}: ${product.available_stock}`
-            : `${t("stock")}: ${product.available_stock}`}
+          {!isInStock ? (
+            t("outOfStock")
+          ) : (
+            <span className="stock-number">
+              {product.available_stock} {t("inStock")}
+            </span>
+          )}
         </Badge>
 
         {/* Hover overlay with quick add */}
