@@ -1,9 +1,17 @@
-name: Deploy to Preview
+name: Deploy to Preview (Staging)
+
+# DEPLOYMENT WORKFLOW:
+# - Push to 'preview' branch → Auto-deploy to staging.tsh.sale
+# - Push to 'main' branch → NO auto-deploy (production is MANUAL ONLY)
+#
+# CRITICAL: This workflow ONLY deploys to PREVIEW environment
+# Production deployment is FORBIDDEN via GitHub Actions
+# User must manually deploy to production via Vercel Dashboard
 
 on:
   push:
     branches:
-      - main
+      - preview  # ONLY preview branch triggers deployment
 
 env:
   VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}

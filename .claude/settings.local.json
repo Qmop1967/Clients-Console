@@ -54,7 +54,13 @@
       "Bash(git commit -m \"$(cat <<''EOF''\nfeat: set Arabic as default language\n\n- Changed defaultLocale from ''en'' to ''ar'' in i18n config\n- Updated root URL redirect from /en/shop to /ar/shop\n- Visitors now see Arabic interface first (RTL layout)\n- English still available via language toggle\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")",
       "Bash(gh secret set:*)",
       "Bash(gh secret:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(gh run watch:*)",
+      "Bash(gh run view:*)",
+      "Bash(git config:*)",
+      "Bash(git checkout:*)",
+      "Bash(git pull:*)",
+      "Bash(git stash:*)"
     ],
     "deny": [],
     "ask": []

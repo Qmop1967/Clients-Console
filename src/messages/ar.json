@@ -68,7 +68,8 @@
     "accountStatement": "كشف الحساب",
     "supportTicket": "الدعم",
     "profile": "الملف الشخصي",
-    "settings": "الإعدادات"
+    "settings": "الإعدادات",
+    "logout": "تسجيل الخروج"
   },
   "dashboard": {
     "title": "لوحة التحكم",

@@ -1,25 +1,70 @@
-Deploy TSH Clients Console to production.
+# Deploy to Staging (Preview Branch)
+
+This command deploys changes to the staging environment via the `preview` branch.
+
+## CRITICAL: Deployment Rules
+
+```yaml
+ALLOWED for Claude Code:
+  ✅ Push to `preview` branch → Auto-deploys to staging.tsh.sale
+
+FORBIDDEN for Claude Code:
+  ❌ Push to `main` branch
+  ❌ Run `vercel --prod` or any production deployment
+  ❌ Deploy directly to www.tsh.sale
+  ❌ Merge `preview` to `main` without user approval
+
+Production deployment is USER-ONLY via Vercel Dashboard.
+```
+
+## Deployment Workflow
+
+```
+preview branch → GitHub Actions → staging.tsh.sale
+      ↓
+User verifies staging
+      ↓
+User merges to main (optional, for production-ready code)
+      ↓
+User deploys to production via Vercel Dashboard → www.tsh.sale
+```
 
 ## Pre-deployment Checklist
 
-- [ ] All changes committed to git
+- [ ] On `preview` branch (run `git checkout preview` if needed)
+- [ ] All changes committed
 - [ ] Build passes locally: `npm run build`
 - [ ] No TypeScript errors
 - [ ] Translations complete (EN + AR)
-- [ ] Tested locally: `npm run dev`
 
-## Deploy Command
+## Deploy Commands
 
 ```bash
-cd "/Users/khaleelal-mulla/General/ Projects/tsh-clients-console"
-vercel --prod --yes
+# Ensure on preview branch
+git checkout preview
+
+# Stage all changes
+git add -A
+
+# Commit with descriptive message
+git commit -m "feat: description of changes"
+
+# Push to preview branch (triggers staging deployment)
+git push origin preview
 ```
+
+## After Deployment
+
+1. Tell user: "Changes pushed to preview branch"
+2. Tell user: "GitHub Actions is deploying to staging.tsh.sale"
+3. Tell user: "Verify changes on staging.tsh.sale"
+4. Tell user: "Deploy to production via Vercel Dashboard when ready"
 
 ## Post-deployment Verification
 
-1. **Visit production site**
+1. **Visit staging site**
    ```
-   https://www.tsh.sale
+   https://staging.tsh.sale
    ```
 
 2. **Check product prices display**
@@ -38,47 +83,46 @@ vercel --prod --yes
 
 5. **Revalidate caches if needed**
    ```bash
-   curl "https://www.tsh.sale/api/revalidate?tag=all&secret=tsh-revalidate-2024"
+   curl "https://staging.tsh.sale/api/revalidate?tag=all&secret=tsh-revalidate-2024"
    ```
 
 ## URLs
 
-| Environment | URL |
-|-------------|-----|
-| Production | https://www.tsh.sale |
-| Staging | https://staging.tsh.sale |
-| Vercel Dashboard | https://vercel.com/tsh-03790822/tsh-clients-console |
+| Environment | URL | Deployed By | Trigger |
+|-------------|-----|-------------|---------|
+| Staging | staging.tsh.sale | GitHub Actions | Push to `preview` |
+| Production | www.tsh.sale | User (Vercel Dashboard) | Manual only |
+| Vercel Dashboard | https://vercel.com/tsh-03790822/tsh-clients-console | - | - |
 
 ## If Deployment Fails
 
-1. **Check build logs**
-   ```bash
-   vercel logs --prod
-   ```
+1. **Check GitHub Actions logs**
+   - Go to: https://github.com/Qmop1967/Clients-Console/actions
+   - Find the failed workflow run
+   - Check error messages
 
 2. **Common issues:**
    - TypeScript errors → Fix type issues
    - Missing env vars → Check Vercel dashboard
    - Import errors → Check file paths
 
-3. **Rollback if needed**
-   - Go to Vercel Dashboard → Deployments
-   - Find previous working deployment
-   - Click "..." → "Promote to Production"
+3. **Manual staging deployment (if GitHub Actions fails)**
+   ```bash
+   vercel --yes
+   ```
+   Note: This deploys to preview, NOT production.
 
-## Environment Variables
+## Production Deployment (USER ONLY)
 
-Ensure these are set in Vercel Dashboard → Settings → Environment Variables:
+Production deployment is FORBIDDEN for Claude Code.
 
-```
-NEXTAUTH_URL=https://www.tsh.sale
-NEXTAUTH_SECRET=[secret]
-ZOHO_CLIENT_ID=[id]
-ZOHO_CLIENT_SECRET=[secret]
-ZOHO_REFRESH_TOKEN=[token]
-ZOHO_ORGANIZATION_ID=748369814
-UPSTASH_REDIS_REST_URL=https://fine-mole-41883.upstash.io
-UPSTASH_REDIS_REST_TOKEN=[token]
-RESEND_API_KEY=[key]
-EMAIL_FROM=TSH <noreply@tsh.sale>
-```
+User must:
+1. Verify changes on staging.tsh.sale
+2. Go to Vercel Dashboard: https://vercel.com/tsh-03790822/tsh-clients-console
+3. Click "Deployments"
+4. Find the latest preview deployment
+5. Click "..." → "Promote to Production"
+
+Or:
+1. User pushes preview to main: `git checkout main && git merge preview && git push origin main`
+2. User deploys via Vercel Dashboard

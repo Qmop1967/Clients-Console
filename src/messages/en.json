@@ -68,7 +68,8 @@
     "accountStatement": "Account Statement",
     "supportTicket": "Support",
     "profile": "Profile",
-    "settings": "Settings"
+    "settings": "Settings",
+    "logout": "Sign Out"
   },
   "dashboard": {
     "title": "Dashboard",
