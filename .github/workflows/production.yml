@@ -1,0 +1,154 @@
+name: Deploy to Production
+
+# PRODUCTION DEPLOYMENT WORKFLOW:
+# - Push to 'main' branch triggers comprehensive validation + deployment
+# - Validates: lint, typecheck, build
+# - Only deploys if all checks pass
+# - Verifies deployment with health checks
+
+on:
+  push:
+    branches:
+      - main
+
+env:
+  VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+  VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+jobs:
+  # Job 1: Validate code quality
+  validate:
+    name: Validate Code Quality
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run Linting
+        run: npm run lint
+
+      - name: Run TypeScript Check
+        run: npm run typecheck
+
+      - name: Build Project
+        run: npm run build
+
+  # Job 2: Deploy to production (only if validate passes)
+  deploy-production:
+    name: Deploy to Production
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install Vercel CLI
+        run: npm install -g vercel@latest
+
+      - name: Pull Vercel Environment
+        run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+
+      - name: Build Project
+        run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
+
+      - name: Deploy to Production
+        id: deploy
+        run: |
+          url=$(vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }})
+          echo "production_url=$url" >> $GITHUB_OUTPUT
+          echo "Deployed to: $url"
+
+      - name: Deployment Summary
+        run: |
+          echo "## Production Deployment Complete"
+          echo ""
+          echo "Production URL: ${{ steps.deploy.outputs.production_url }}"
+          echo "Domain: https://www.tsh.sale"
+
+  # Job 3: Verify deployment
+  verify:
+    name: Verify Deployment
+    needs: deploy-production
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wait for deployment propagation
+        run: sleep 30
+
+      - name: Verify redirect /en/products to /en/shop
+        run: |
+          echo "Testing English redirect..."
+          RESPONSE=$(curl -sI https://www.tsh.sale/en/products)
+          echo "$RESPONSE"
+          LOCATION=$(echo "$RESPONSE" | grep -i "^location:" | awk '{print $2}' | tr -d '\r\n')
+          if [ "$LOCATION" = "/en/shop" ]; then
+            echo "English redirect working: /en/products -> /en/shop"
+          else
+            echo "English redirect failed. Expected: /en/shop, Got: $LOCATION"
+            exit 1
+          fi
+
+      - name: Verify redirect /ar/products to /ar/shop
+        run: |
+          echo "Testing Arabic redirect..."
+          RESPONSE=$(curl -sI https://www.tsh.sale/ar/products)
+          echo "$RESPONSE"
+          LOCATION=$(echo "$RESPONSE" | grep -i "^location:" | awk '{print $2}' | tr -d '\r\n')
+          if [ "$LOCATION" = "/ar/shop" ]; then
+            echo "Arabic redirect working: /ar/products -> /ar/shop"
+          else
+            echo "Arabic redirect failed. Expected: /ar/shop, Got: $LOCATION"
+            exit 1
+          fi
+
+      - name: Verify homepage accessibility
+        run: |
+          echo "Testing homepage..."
+          STATUS=$(curl -sI https://www.tsh.sale | head -1 | awk '{print $2}')
+          echo "Homepage status: HTTP $STATUS"
+          if [ "$STATUS" = "200" ] || [ "$STATUS" = "307" ] || [ "$STATUS" = "308" ]; then
+            echo "Homepage accessible"
+          else
+            echo "Homepage check failed: HTTP $STATUS"
+            exit 1
+          fi
+
+      - name: Verify shop page loads
+        run: |
+          echo "Testing shop page..."
+          STATUS=$(curl -sI https://www.tsh.sale/en/shop | head -1 | awk '{print $2}')
+          echo "Shop page status: HTTP $STATUS"
+          if [ "$STATUS" = "200" ]; then
+            echo "Shop page accessible"
+          else
+            echo "Shop page check failed: HTTP $STATUS"
+            exit 1
+          fi
+
+      - name: Final Summary
+        run: |
+          echo "====================================="
+          echo "  PRODUCTION DEPLOYMENT VERIFIED"
+          echo "====================================="
+          echo ""
+          echo "All health checks passed:"
+          echo "  - /en/products redirects to /en/shop"
+          echo "  - /ar/products redirects to /ar/shop"
+          echo "  - Homepage is accessible"
+          echo "  - Shop page is accessible"
+          echo ""
+          echo "Production URL: https://www.tsh.sale"
