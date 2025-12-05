@@ -368,6 +368,11 @@ export async function POST(request: NextRequest) {
       // INVOICE EVENTS
       // ============================================
       case "invoice":
+        // Invoices affect stock - sold items reduce available stock
+        await revalidateProducts(`invoice: ${eventType}`);
+        // Sync stock cache for invoiced items (line_items in webhook data)
+        syncStockForItems(affectedItemIds, `invoice: ${eventType}`);
+        // Also revalidate customer invoices list
         const invCustomerId = (data.customer_id as string) || (data.contact_id as string);
         if (invCustomerId) {
           await safeRevalidate(CACHE_TAGS.INVOICES(invCustomerId), eventType);
