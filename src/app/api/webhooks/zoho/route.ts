@@ -193,6 +193,42 @@ async function syncStockForItems(itemIds: string[], reason: string) {
     });
 }
 
+// Fetch invoice line items from Zoho Books API
+// Zoho webhooks don't include line_items, so we need to fetch the full invoice
+async function fetchInvoiceLineItems(invoiceId: string): Promise<string[]> {
+  try {
+    const token = await getAccessToken();
+    const orgId = process.env.ZOHO_ORGANIZATION_ID || '748369814';
+
+    const response = await fetch(
+      `https://www.zohoapis.com/books/v3/invoices/${invoiceId}?organization_id=${orgId}`,
+      {
+        headers: {
+          Authorization: `Zoho-oauthtoken ${token}`,
+        },
+      }
+    );
+
+    if (!response.ok) {
+      console.error(`[Webhook] Failed to fetch invoice ${invoiceId}: ${response.status}`);
+      return [];
+    }
+
+    const data = await response.json();
+    const lineItems = data.invoice?.line_items || [];
+
+    const itemIds = lineItems
+      .filter((item: { item_id?: string }) => item.item_id)
+      .map((item: { item_id: string }) => item.item_id);
+
+    console.log(`[Webhook] 📋 Fetched ${itemIds.length} items from invoice ${invoiceId}`);
+    return itemIds;
+  } catch (error) {
+    console.error(`[Webhook] Error fetching invoice ${invoiceId}:`, error);
+    return [];
+  }
+}
+
 // Sync product image to Vercel Blob (fire-and-forget)
 async function syncProductImage(itemId: string, reason: string) {
   try {
@@ -370,8 +406,20 @@ export async function POST(request: NextRequest) {
       case "invoice":
         // Invoices affect stock - sold items reduce available stock
         await revalidateProducts(`invoice: ${eventType}`);
-        // Sync stock cache for invoiced items (line_items in webhook data)
-        syncStockForItems(affectedItemIds, `invoice: ${eventType}`);
+
+        // Zoho webhooks don't include line_items, so we need to fetch them from API
+        const invoiceId = (data.invoice_id as string) || (data.id as string);
+        if (invoiceId) {
+          console.log(`[Webhook] 🧾 Processing invoice ${invoiceId}`);
+          // Fetch line items from Zoho API and sync stock
+          const invoiceItemIds = await fetchInvoiceLineItems(invoiceId);
+          if (invoiceItemIds.length > 0) {
+            syncStockForItems(invoiceItemIds, `invoice: ${eventType}`);
+          }
+        } else {
+          console.log(`[Webhook] ⚠️ Invoice webhook missing invoice_id`);
+        }
+
         // Also revalidate customer invoices list
         const invCustomerId = (data.customer_id as string) || (data.contact_id as string);
         if (invCustomerId) {
