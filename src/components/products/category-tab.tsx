@@ -22,7 +22,7 @@ interface CategoryTabProps {
     category_id?: string;
     category_name?: string;
   }>;
-  onCategorySelect: (categoryName: string) => void;
+  onCategorySelect: (categoryName: string, itemIds: string[]) => void;
   selectedCategory?: string;
 }
 
@@ -128,12 +128,37 @@ export function CategoryTab({
     return convertToTreeData(categoriesWithCounts, locale as "en" | "ar");
   }, [categoriesWithCounts, locale]);
 
-  // Handle category selection
+  // Handle category selection - find all item_ids in the selected category
   const handleCategorySelect = useCallback(
     (categoryId: string, categoryName: string) => {
-      onCategorySelect(categoryName);
+      // First, find the English category name if Arabic was passed
+      let englishCategoryName = categoryName;
+      for (const cat of CATEGORY_HIERARCHY) {
+        if (cat.name_ar === categoryName) {
+          englishCategoryName = cat.name;
+          break;
+        }
+        if (cat.children) {
+          for (const child of cat.children) {
+            if (child.name_ar === categoryName) {
+              englishCategoryName = child.name;
+              break;
+            }
+          }
+        }
+      }
+
+      // Find all items that belong to this category (primary or sub)
+      const matchingItemIds = classifications
+        .filter(c =>
+          c.primary_category === englishCategoryName ||
+          c.sub_category === englishCategoryName
+        )
+        .map(c => c.item_id);
+
+      onCategorySelect(categoryName, matchingItemIds);
     },
-    [onCategorySelect]
+    [onCategorySelect, classifications]
   );
 
   // Determine which view to show
@@ -192,7 +217,7 @@ export function CategoryTab({
               variant="ghost"
               size="sm"
               className="h-6 w-6 p-0 ms-auto"
-              onClick={() => onCategorySelect("")}
+              onClick={() => onCategorySelect("", [])}
             >
               <X className="h-4 w-4" />
             </Button>

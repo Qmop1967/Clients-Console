@@ -307,6 +307,7 @@ export function PublicProductsContent({
   const [currentPage, setCurrentPage] = useState(pageFromUrl);
   const [activeTab, setActiveTab] = useState<"all" | "categories">(tabFromUrl as "all" | "categories");
   const [selectedCategory, setSelectedCategory] = useState<string>("");
+  const [selectedCategoryItemIds, setSelectedCategoryItemIds] = useState<string[]>([]);
 
   // Use deferred value for search to keep input responsive (improves INP)
   const deferredSearchQuery = useDeferredValue(searchQuery);
@@ -340,8 +341,9 @@ export function PublicProductsContent({
   }, [currentPage, searchQuery, activeTab, pathname]);
 
   // Handle category selection from CategoryTab
-  const handleCategorySelect = useCallback((categoryName: string) => {
+  const handleCategorySelect = useCallback((categoryName: string, itemIds: string[] = []) => {
     setSelectedCategory(categoryName);
+    setSelectedCategoryItemIds(itemIds);
     setCurrentPage(1);
     // Switch to all tab to show filtered products
     if (categoryName) {
@@ -362,8 +364,12 @@ export function PublicProductsContent({
     // First filter: ONLY products with stock > 0 (strict rule)
     let filtered = products.filter((p) => p.available_stock > 0);
 
-    // Category filter - filter by AI category or Zoho category
-    if (selectedCategory) {
+    // Category filter - filter by AI classification item IDs
+    if (selectedCategory && selectedCategoryItemIds.length > 0) {
+      // Use AI classification item IDs for filtering
+      filtered = filtered.filter((p) => selectedCategoryItemIds.includes(p.item_id));
+    } else if (selectedCategory) {
+      // Fallback: filter by Zoho category name (for cases without AI classification)
       const categoryLower = selectedCategory.toLowerCase();
       filtered = filtered.filter(
         (p) =>
@@ -388,7 +394,7 @@ export function PublicProductsContent({
     filtered.sort((a, b) => a.name.localeCompare(b.name));
 
     return filtered;
-  }, [products, deferredSearchQuery, selectedCategory]);
+  }, [products, deferredSearchQuery, selectedCategory, selectedCategoryItemIds]);
 
   // Pagination calculations
   const totalPages = Math.ceil(filteredProducts.length / PRODUCTS_PER_PAGE);
@@ -449,7 +455,10 @@ export function PublicProductsContent({
               <Badge
                 variant="gold"
                 className="gap-2 cursor-pointer hover:bg-gold/20"
-                onClick={() => setSelectedCategory("")}
+                onClick={() => {
+                  setSelectedCategory("");
+                  setSelectedCategoryItemIds([]);
+                }}
               >
                 {selectedCategory}
                 <span className="ml-1">&times;</span>

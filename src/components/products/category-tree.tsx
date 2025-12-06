@@ -49,14 +49,18 @@ const renderCustomNode = ({
   const hasChildren = nodeDatum.children && nodeDatum.children.length > 0;
   const isRoot = nodeDatum.attributes?.id === "root";
 
+  // Larger node dimensions for better readability
+  const nodeWidth = 220;
+  const nodeHeight = 60;
+
   return (
     <g>
       {/* Node background */}
       <motion.rect
-        x={isRTL ? -180 : -20}
-        y="-25"
-        width="200"
-        height="50"
+        x={isRTL ? -nodeWidth + 20 : -20}
+        y={-nodeHeight / 2}
+        width={nodeWidth}
+        height={nodeHeight}
         rx="12"
         className={cn(
           "fill-card stroke-border transition-all duration-200",
@@ -80,10 +84,11 @@ const renderCustomNode = ({
       {/* Icon */}
       {nodeDatum.attributes?.icon && (
         <text
-          x={isRTL ? 150 : 0}
+          x={isRTL ? -nodeWidth + 45 : 5}
           y="6"
           textAnchor="middle"
-          className="text-xl select-none pointer-events-none"
+          className="select-none pointer-events-none"
+          style={{ fontSize: "22px" }}
         >
           {nodeDatum.attributes.icon}
         </text>
@@ -91,27 +96,28 @@ const renderCustomNode = ({
 
       {/* Category name */}
       <text
-        x={isRTL ? 70 : 85}
-        y="-2"
+        x={isRTL ? -nodeWidth / 2 + 10 : nodeWidth / 2 - 10}
+        y="-4"
         textAnchor="middle"
         className={cn(
-          "fill-foreground text-sm font-medium select-none pointer-events-none",
+          "fill-foreground font-semibold select-none pointer-events-none",
           isSelected && "fill-primary"
         )}
-        style={{ direction: isRTL ? "rtl" : "ltr" }}
+        style={{ fontSize: "14px", direction: isRTL ? "rtl" : "ltr" }}
       >
-        {nodeDatum.name.length > 18
-          ? nodeDatum.name.substring(0, 16) + "..."
+        {nodeDatum.name.length > 20
+          ? nodeDatum.name.substring(0, 18) + "..."
           : nodeDatum.name}
       </text>
 
       {/* Product count */}
       {nodeDatum.attributes?.count !== undefined && (
         <text
-          x={isRTL ? 70 : 85}
-          y="15"
+          x={isRTL ? -nodeWidth / 2 + 10 : nodeWidth / 2 - 10}
+          y="16"
           textAnchor="middle"
-          className="fill-muted-foreground text-xs select-none pointer-events-none"
+          className="fill-muted-foreground select-none pointer-events-none"
+          style={{ fontSize: "12px" }}
         >
           {nodeDatum.attributes.count}{" "}
           {nodeDatum.attributes.count === 1 ? "item" : "items"}
@@ -121,9 +127,9 @@ const renderCustomNode = ({
       {/* Expand/collapse indicator */}
       {hasChildren && (
         <motion.circle
-          cx={isRTL ? -10 : 170}
+          cx={isRTL ? -nodeWidth + 10 : nodeWidth - 10}
           cy="0"
-          r="8"
+          r="10"
           className="fill-muted stroke-border cursor-pointer hover:fill-primary/20"
           onClick={(e) => {
             e.stopPropagation();
@@ -147,13 +153,14 @@ export function CategoryTree({
   const locale = useLocale();
   const isRTL = locale === "ar";
 
-  const [zoom, setZoom] = useState(0.8);
-  const [translate, setTranslate] = useState({ x: 150, y: 250 });
+  const [zoom, setZoom] = useState(0.7);
+  // For RTL, start from the right side; for LTR, start from left
+  const [translate, setTranslate] = useState({ x: isRTL ? 900 : 150, y: 250 });
 
   // Reset view handler
   const handleReset = useCallback(() => {
-    setZoom(0.8);
-    setTranslate({ x: isRTL ? 700 : 150, y: 250 });
+    setZoom(0.7);
+    setTranslate({ x: isRTL ? 900 : 150, y: 250 });
   }, [isRTL]);
 
   // Zoom handlers
@@ -240,8 +247,8 @@ export function CategoryTree({
           pathFunc="step"
           translate={translate}
           zoom={zoom}
-          nodeSize={{ x: 250, y: 100 }}
-          separation={{ siblings: 1.5, nonSiblings: 2 }}
+          nodeSize={{ x: 280, y: 120 }}
+          separation={{ siblings: 1.2, nonSiblings: 1.8 }}
           renderCustomNodeElement={renderNode}
           pathClassFunc={() =>
             "stroke-border stroke-2 fill-none transition-all duration-300"
