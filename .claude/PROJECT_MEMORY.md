@@ -54,9 +54,9 @@ If broken → All prices show "Contact for price"
 
 ### 5. Deployment
 ```
-Command: vercel --prod --yes
-Target: Direct to production
-URL: https://www.tsh.sale
+Staging: Push to `preview` branch → staging.tsh.sale
+Production: Push to `main` branch → www.tsh.sale (ONLY when user requests)
+Method: GitHub Actions (NOT Vercel CLI)
 ```
 
 ---

@@ -62,10 +62,7 @@ All pages now fetch data primarily from **Zoho Books API** (higher rate limits):
 │       │                                    │                    │
 │       │              User verifies         │                    │
 │       ↓                   ↓                ↓                    │
-│  main branch ──→ NO AUTO-DEPLOY ──→ Manual via Vercel Dashboard │
-│                                           │                    │
-│                                           ↓                    │
-│                                    www.tsh.sale (PRODUCTION)   │
+│  main branch ──→ GitHub Actions ──→ www.tsh.sale (PRODUCTION)  │
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -73,46 +70,40 @@ All pages now fetch data primarily from **Zoho Books API** (higher rate limits):
 | Branch | Purpose | Auto-Deploy | Target |
 |--------|---------|-------------|--------|
 | `preview` | Development & staging | Yes (GitHub Actions) | staging.tsh.sale |
-| `main` | Production-ready code | **NO** | Manual only via Vercel Dashboard |
+| `main` | Production-ready code | Yes (GitHub Actions) | www.tsh.sale |
 
-### CRITICAL: Claude Code Deployment Rules
+### Claude Code Deployment Rules
 
 ```yaml
-⛔ PRODUCTION DEPLOYMENT IS STRICTLY FORBIDDEN FOR CLAUDE CODE ⛔
+STAGING DEPLOYMENT (Automatic):
+  ✅ Push to `preview` branch anytime
+  ✅ GitHub Actions deploys to staging.tsh.sale
+  ✅ No user approval needed
 
-ALLOWED:
-  ✅ Push to `preview` branch
-  ✅ Verify staging.tsh.sale after deployment
-  ✅ Report deployment status to user
+PRODUCTION DEPLOYMENT (On User Request Only):
+  ✅ Push to `main` branch ONLY when user explicitly requests
+  ✅ GitHub Actions deploys to www.tsh.sale
+  ⚠️ NEVER deploy to production automatically
+  ⚠️ NEVER deploy to production without explicit user request
 
 FORBIDDEN:
-  ❌ Push to `main` branch
-  ❌ Run `vercel --prod` or `vercel --prod --yes`
-  ❌ Deploy directly to production in ANY way
-  ❌ Promote preview deployments to production
-  ❌ Merge `preview` to `main` without explicit user approval
-  ❌ Use any command that deploys to www.tsh.sale
-  ❌ Use `vercel` CLI for deployment (use GitHub Actions instead)
-
-ONLY the user can:
-  - Push to `main` branch (for production-ready code)
-  - Deploy to production via Vercel Dashboard
+  ❌ Push to `main` without user explicitly saying "deploy to production"
+  ❌ Run `vercel --prod` or any direct Vercel CLI production commands
+  ❌ Deploy to production automatically after staging
 ```
 
-### GitHub Actions Workflow
+### GitHub Actions Workflows
 
 ```yaml
-WORKFLOW:
-  1. Claude Code works on `preview` branch
-  2. Claude Code pushes to `preview` branch
-  3. GitHub Actions automatically deploys to staging.tsh.sale
-  4. User verifies changes on staging
-  5. When ready: User pushes/merges to `main` (NO auto-deploy)
-  6. User MANUALLY deploys to production via Vercel Dashboard
+STAGING WORKFLOW (.github/workflows/preview.yml):
+  Trigger: Push to `preview` branch
+  Target: staging.tsh.sale
+  Auto-deploy: YES
 
-GitHub Actions File: .github/workflows/preview.yml
-Trigger: Push to `preview` branch ONLY
-Target: Preview environment ONLY (staging.tsh.sale)
+PRODUCTION WORKFLOW (.github/workflows/production.yml):
+  Trigger: Push to `main` branch
+  Target: www.tsh.sale
+  Auto-deploy: YES (but Claude only pushes when user requests)
 
 GitHub Secrets (configured):
   - VERCEL_TOKEN: Vercel API token
@@ -122,6 +113,7 @@ GitHub Secrets (configured):
 
 ### Deployment Steps for Claude Code
 
+**Staging Deployment:**
 ```bash
 # 1. Ensure you're on preview branch
 git checkout preview
@@ -135,17 +127,35 @@ git commit -m "feat: description of changes"
 # 4. Push to preview branch (triggers staging deployment)
 git push origin preview
 
-# 5. Tell user: "Changes pushed to preview branch."
-# 6. Tell user: "GitHub Actions is deploying to staging.tsh.sale"
-# 7. Tell user: "After verification, you can deploy to production via Vercel Dashboard."
+# 5. Tell user: "Deployed to staging.tsh.sale"
+```
+
+**Production Deployment (ONLY when user explicitly requests):**
+```bash
+# 1. Ensure preview is up to date
+git checkout preview
+git pull origin preview
+
+# 2. Switch to main and merge preview
+git checkout main
+git pull origin main
+git merge preview
+
+# 3. Push to main (triggers production deployment)
+git push origin main
+
+# 4. Tell user: "Deployed to www.tsh.sale (production)"
+
+# 5. Switch back to preview for future work
+git checkout preview
 ```
 
 ### URLs
 
 | Environment | URL | Deployed By | Trigger |
 |-------------|-----|-------------|---------|
-| Staging | staging.tsh.sale | GitHub Actions (automatic) | Push to `preview` branch |
-| Production | www.tsh.sale | User (manual via Vercel Dashboard) | Manual only |
+| Staging | staging.tsh.sale | GitHub Actions | Push to `preview` branch |
+| Production | www.tsh.sale | GitHub Actions | Push to `main` branch (user request only) |
 
 ### Vercel Configuration (User Must Configure)
 
