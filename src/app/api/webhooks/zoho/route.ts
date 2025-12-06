@@ -3,6 +3,7 @@ import { revalidateTag } from "next/cache";
 import { CACHE_TAGS, getAccessToken } from "@/lib/zoho/client";
 import { syncSingleImage } from "@/lib/blob/image-cache";
 import { quickSyncStock } from "@/lib/zoho/stock-cache";
+import { classifyProduct } from "@/lib/ai/classifier";
 
 // Webhook secret for verification
 const WEBHOOK_SECRET = process.env.ZOHO_WEBHOOK_SECRET;
@@ -277,6 +278,32 @@ async function syncProductImage(itemId: string, reason: string) {
   }
 }
 
+// AI classify a new product (fire-and-forget)
+async function classifyNewProduct(
+  itemId: string,
+  name: string,
+  description?: string,
+  imageUrl?: string,
+  categoryId?: string,
+  categoryName?: string
+) {
+  try {
+    console.log(`[Webhook] 🤖 AI classifying product ${itemId}: "${name}"`);
+    const classification = await classifyProduct(
+      itemId,
+      name,
+      description,
+      imageUrl,
+      { id: categoryId, name: categoryName }
+    );
+    console.log(
+      `[Webhook] ✅ Product classified: ${classification.primary_category} > ${classification.sub_category} (${classification.confidence}%)`
+    );
+  } catch (error) {
+    console.error(`[Webhook] ❌ Failed to classify product ${itemId}:`, error);
+  }
+}
+
 export async function POST(request: NextRequest) {
   // Verify webhook authenticity
   if (WEBHOOK_SECRET && !verifyWebhook(request)) {
@@ -342,6 +369,17 @@ export async function POST(request: NextRequest) {
         const itemId = (data.item_id as string) || (data.id as string);
         if (itemId) {
           syncProductImage(itemId, eventType).catch(() => {});
+
+          // AI classify new/updated products (fire-and-forget)
+          const itemName = (data.name as string) || (data.item_name as string) || "";
+          const itemDesc = (data.description as string) || "";
+          const itemImage = (data.image_url as string) || (data.image_name as string) || "";
+          const catId = (data.category_id as string) || "";
+          const catName = (data.category_name as string) || "";
+
+          if (itemName) {
+            classifyNewProduct(itemId, itemName, itemDesc, itemImage, catId, catName).catch(() => {});
+          }
         }
         break;
 
