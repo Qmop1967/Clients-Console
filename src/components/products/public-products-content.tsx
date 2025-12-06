@@ -1,15 +1,17 @@
 "use client";
 
-import { useState, useMemo, useEffect, useCallback, memo, useRef, useTransition, useDeferredValue } from "react";
+import { useState, useMemo, useEffect, useCallback, memo, useRef, useDeferredValue } from "react";
 import { useTranslations, useLocale } from "next-intl";
 import { useSearchParams, usePathname } from "next/navigation";
 import Link from "next/link";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ProductImage } from "./product-image";
+import { CategoryTab } from "./category-tab";
 import { useCart } from "@/components/providers/cart-provider";
-import { Search, ShoppingCart, Plus, Minus, Check, Eye, ChevronRight } from "lucide-react";
+import { Search, ShoppingCart, Plus, Minus, Check, Eye, ChevronRight, Sparkles, LayoutGrid } from "lucide-react";
 import { NumberedPagination } from "@/components/ui/pagination";
 import { cn } from "@/lib/utils/cn";
 import { formatCurrency } from "@/lib/utils/format";
@@ -299,9 +301,12 @@ export function PublicProductsContent({
   // Get page from URL params, default to 1
   const pageFromUrl = parseInt(searchParams.get("page") || "1", 10);
   const searchFromUrl = searchParams.get("q") || "";
+  const tabFromUrl = searchParams.get("tab") || "all";
 
   const [searchQuery, setSearchQuery] = useState(searchFromUrl);
   const [currentPage, setCurrentPage] = useState(pageFromUrl);
+  const [activeTab, setActiveTab] = useState<"all" | "categories">(tabFromUrl as "all" | "categories");
+  const [selectedCategory, setSelectedCategory] = useState<string>("");
 
   // Use deferred value for search to keep input responsive (improves INP)
   const deferredSearchQuery = useDeferredValue(searchQuery);
@@ -323,15 +328,26 @@ export function PublicProductsContent({
     }
   }, []);
 
-  // Update URL when page or search changes (without full navigation)
+  // Update URL when page, search, or tab changes (without full navigation)
   useEffect(() => {
     const params = new URLSearchParams();
     if (currentPage > 1) params.set("page", String(currentPage));
     if (searchQuery) params.set("q", searchQuery);
+    if (activeTab !== "all") params.set("tab", activeTab);
 
     const newUrl = params.toString() ? `${pathname}?${params.toString()}` : pathname;
     window.history.replaceState(null, "", newUrl);
-  }, [currentPage, searchQuery, pathname]);
+  }, [currentPage, searchQuery, activeTab, pathname]);
+
+  // Handle category selection from CategoryTab
+  const handleCategorySelect = useCallback((categoryName: string) => {
+    setSelectedCategory(categoryName);
+    setCurrentPage(1);
+    // Switch to all tab to show filtered products
+    if (categoryName) {
+      setActiveTab("all");
+    }
+  }, []);
 
   // Reset to page 1 when search changes
   useEffect(() => {
@@ -345,6 +361,16 @@ export function PublicProductsContent({
   const filteredProducts = useMemo(() => {
     // First filter: ONLY products with stock > 0 (strict rule)
     let filtered = products.filter((p) => p.available_stock > 0);
+
+    // Category filter - filter by AI category or Zoho category
+    if (selectedCategory) {
+      const categoryLower = selectedCategory.toLowerCase();
+      filtered = filtered.filter(
+        (p) =>
+          p.category_name?.toLowerCase().includes(categoryLower) ||
+          p.category_name?.toLowerCase() === categoryLower
+      );
+    }
 
     // Search filter - uses deferred value for responsiveness
     if (deferredSearchQuery) {
@@ -362,7 +388,7 @@ export function PublicProductsContent({
     filtered.sort((a, b) => a.name.localeCompare(b.name));
 
     return filtered;
-  }, [products, deferredSearchQuery]);
+  }, [products, deferredSearchQuery, selectedCategory]);
 
   // Pagination calculations
   const totalPages = Math.ceil(filteredProducts.length / PRODUCTS_PER_PAGE);
@@ -379,71 +405,120 @@ export function PublicProductsContent({
 
   return (
     <div className="space-y-6">
-      {/* Header with Search */}
+      {/* Header with Title */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <h2 className="text-2xl font-bold">{t("title")}</h2>
-
-        {/* Search Bar - optimized with deferred value for INP */}
-        <div className="relative w-full sm:w-80">
-          <Search className={cn(
-            "absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground transition-opacity",
-            isSearching && "animate-pulse"
-          )} />
-          <Input
-            placeholder={t("searchPlaceholder")}
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10"
-          />
-        </div>
       </div>
 
-      {/* Products Section */}
-      {filteredProducts.length === 0 ? (
-        <div className="py-12 text-center text-muted-foreground">
-          {t("noProducts")}
-        </div>
-      ) : (
-        <>
-          {/* Results Count & Pagination ABOVE products */}
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div className="text-sm text-muted-foreground">
-              {t("showing", {
-                from: startIndex + 1,
-                to: Math.min(endIndex, filteredProducts.length),
-                total: filteredProducts.length,
-              })}
+      {/* Tabs Navigation */}
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "all" | "categories")} className="w-full">
+        <TabsList className="grid w-full grid-cols-2 mb-6">
+          <TabsTrigger value="all" className="gap-2">
+            <LayoutGrid className="h-4 w-4" />
+            {t("allProducts")}
+            <Badge variant="secondary" className="ml-1">
+              {filteredProducts.length}
+            </Badge>
+          </TabsTrigger>
+          <TabsTrigger value="categories" className="gap-2">
+            <Sparkles className="h-4 w-4" />
+            {t("categories")}
+          </TabsTrigger>
+        </TabsList>
+
+        {/* All Products Tab */}
+        <TabsContent value="all" className="space-y-6">
+          {/* Search Bar and Category Filter */}
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+            {/* Search Bar - optimized with deferred value for INP */}
+            <div className="relative w-full sm:w-80">
+              <Search className={cn(
+                "absolute left-3 rtl:left-auto rtl:right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground transition-opacity",
+                isSearching && "animate-pulse"
+              )} />
+              <Input
+                placeholder={t("searchPlaceholder")}
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10 rtl:pl-4 rtl:pr-10"
+              />
             </div>
 
-            {/* Pagination Above Products */}
-            <NumberedPagination
-              currentPage={currentPage}
-              totalPages={totalPages}
-              onPageChange={goToPage}
-            />
+            {/* Category Filter Badge */}
+            {selectedCategory && (
+              <Badge
+                variant="gold"
+                className="gap-2 cursor-pointer hover:bg-gold/20"
+                onClick={() => setSelectedCategory("")}
+              >
+                {selectedCategory}
+                <span className="ml-1">&times;</span>
+              </Badge>
+            )}
           </div>
 
-          {/* Product Grid */}
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {paginatedProducts.map((product) => (
-              <ProductCardWithCart
-                key={product.item_id}
-                product={product}
-                currencyCode={currencyCode}
-                locale={locale}
+          {/* Products Section */}
+          {filteredProducts.length === 0 ? (
+            <div className="py-12 text-center text-muted-foreground">
+              {selectedCategory ? t("noProductsInCategory") : t("noProducts")}
+            </div>
+          ) : (
+            <>
+              {/* Results Count & Pagination ABOVE products */}
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div className="text-sm text-muted-foreground">
+                  {t("showing", {
+                    from: startIndex + 1,
+                    to: Math.min(endIndex, filteredProducts.length),
+                    total: filteredProducts.length,
+                  })}
+                </div>
+
+                {/* Pagination Above Products */}
+                <NumberedPagination
+                  currentPage={currentPage}
+                  totalPages={totalPages}
+                  onPageChange={goToPage}
+                />
+              </div>
+
+              {/* Product Grid */}
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                {paginatedProducts.map((product) => (
+                  <ProductCardWithCart
+                    key={product.item_id}
+                    product={product}
+                    currencyCode={currencyCode}
+                    locale={locale}
+                  />
+                ))}
+              </div>
+
+              {/* Pagination BELOW products */}
+              <NumberedPagination
+                currentPage={currentPage}
+                totalPages={totalPages}
+                onPageChange={goToPage}
+                className="mt-8"
               />
-            ))}
-          </div>
+            </>
+          )}
+        </TabsContent>
 
-          {/* Pagination BELOW products */}
-          <NumberedPagination
-            currentPage={currentPage}
-            totalPages={totalPages}
-            onPageChange={goToPage}
-            className="mt-8"
+        {/* Categories Tab */}
+        <TabsContent value="categories">
+          <CategoryTab
+            products={products.map(p => ({
+              item_id: p.item_id,
+              name: p.name,
+              category_id: p.category_id,
+              category_name: p.category_name,
+            }))}
+            onCategorySelect={handleCategorySelect}
+            selectedCategory={selectedCategory}
           />
-        </>
-      )}
+        </TabsContent>
+      </Tabs>
 
       {/* Login CTA - Only show for non-authenticated users */}
       {!isAuthenticated && (
