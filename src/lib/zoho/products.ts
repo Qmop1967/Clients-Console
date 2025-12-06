@@ -545,15 +545,18 @@ async function fetchAllProductsFromBooks(): Promise<ZohoItem[]> {
 
 /**
  * Get all products METADATA only (cached for 24 hours)
- * IMPORTANT: Does NOT include stock data - stock must be fetched separately
- * This ensures stock is always fresh from Redis, not cached with product data
+ * Stock is fetched separately from Redis for freshness in getAllProductsComplete()
+ *
+ * IMPORTANT: We keep original Zoho Books stock as fallback
+ * This ensures products are visible even when Redis cache is incomplete
+ * (Zoho Books stock is item-level, Redis provides warehouse-specific stock)
  */
 export const getAllProductsMetadata = unstable_cache(
   async (): Promise<ZohoItem[]> => {
     const products = await fetchAllProductsFromBooks();
-    // Return products with available_stock set to 0 (placeholder)
-    // Stock will be merged separately from Redis for freshness
-    return products.map(p => ({ ...p, available_stock: 0 }));
+    // Keep original Zoho Books stock as fallback when Redis cache is incomplete
+    // Redis stock will override this in getAllProductsComplete() when available
+    return products;
   },
   ['all-products-metadata-books'],
   {
@@ -584,25 +587,36 @@ export async function getAllProductsComplete(): Promise<ZohoItem[]> {
     const cacheStatus = await getStockCacheStatus();
 
     // Log stock cache status with warnings for low cache
+    const cacheCompleteness = products.length > 0 ? (cachedStock.size / products.length) * 100 : 0;
+
     if (cachedStock.size > 0) {
-      if (process.env.NODE_ENV === 'development') console.log(`[Products] Fresh Redis stock: ${cachedStock.size}/${products.length} items (cache age: ${cacheStatus.ageSeconds}s)`);
-      if (cachedStock.size < 100) {
-        console.warn(`[getAllProductsComplete] Stock cache has only ${cachedStock.size} items - may need full sync`);
-        console.warn('[getAllProductsComplete] Run /api/sync/stock?action=sync&secret=<STOCK_SYNC_SECRET>&force=true');
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`[Products] Redis stock: ${cachedStock.size}/${products.length} items (${cacheCompleteness.toFixed(1)}%, age: ${cacheStatus.ageSeconds}s)`);
+      }
+
+      // Critical warning when cache is severely incomplete (< 10%)
+      if (cacheCompleteness < 10) {
+        console.error(`[CRITICAL] Stock cache severely incomplete: ${cachedStock.size}/${products.length} items (${cacheCompleteness.toFixed(1)}%)`);
+        console.error('[CRITICAL] Products will show Zoho Books stock (item-level, not warehouse-specific)');
+        console.error('[CRITICAL] Run /api/sync/stock?action=sync&secret=<STOCK_SYNC_SECRET>&force=true');
+      } else if (cachedStock.size < 100) {
+        console.warn(`[getAllProductsComplete] Stock cache low: ${cachedStock.size} items - consider running full sync`);
       }
     } else {
       console.warn('[getAllProductsComplete] Stock cache EMPTY - using Zoho Books stock as fallback');
       console.warn('[getAllProductsComplete] Run /api/sync/stock?action=sync&secret=<STOCK_SYNC_SECRET> to populate cache');
     }
 
-    // Step 3: Merge FRESH stock with cached products
-    // Items in Redis cache use cached stock, otherwise fallback to Zoho Books stock
-    const productsWithStock = products.map((item) => ({
-      ...item,
-      available_stock: cachedStock.has(item.item_id)
-        ? cachedStock.get(item.item_id)!
-        : (item.available_stock ?? item.stock_on_hand ?? 0), // Fallback to Zoho Books stock
-    }));
+    // Step 3: Merge stock - Redis cache takes priority, Zoho Books stock as fallback
+    // This ensures products are visible even when Redis cache is incomplete
+    const productsWithStock = products.map((item) => {
+      // If in Redis cache, use cached stock (most accurate, warehouse-specific)
+      if (cachedStock.has(item.item_id)) {
+        return { ...item, available_stock: cachedStock.get(item.item_id)! };
+      }
+      // Fallback: Use original Zoho Books stock (item-level, but better than hiding products)
+      return item;
+    });
 
     return productsWithStock;
   } catch (error) {

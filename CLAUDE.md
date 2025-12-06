@@ -347,6 +347,43 @@ Technical Implementation:
     - The warehouse_id parameter filters items but doesn't change stock values
 ```
 
+#### Stock Cache Architecture (CRITICAL)
+```yaml
+Stock Data Flow:
+  1. Product metadata cached 24h (Zoho Books API) - includes item-level stock
+  2. Warehouse-specific stock cached in Redis (30 min TTL)
+  3. getAllProductsComplete() merges: Redis stock (priority) OR Zoho Books stock (fallback)
+  4. Shop page filters: available_stock > 0
+
+CRITICAL Rules:
+  1. NEVER force available_stock: 0 in cached product metadata
+     - This breaks fallback when Redis cache is incomplete
+     - Bug: Only products in Redis cache appear (e.g., 18 instead of 400+)
+
+  2. ALWAYS keep Zoho Books stock as fallback
+     - Redis provides warehouse-specific stock (most accurate)
+     - Zoho Books provides item-level stock (less accurate but shows products)
+     - Better to show all products with approximate stock than hide 99% of catalog
+
+  3. ALWAYS check cache completeness before relying on it
+     - Warning at < 100 items
+     - Critical error at < 10% completeness
+
+  4. ALWAYS test shop page product count after stock-related changes
+     - Should show 400+ products, not 18
+
+Quick Diagnostics:
+  Check cache: curl "https://www.tsh.sale/api/sync/stock?action=status"
+  - If itemCount < 100: Cache needs sync
+  - Force sync: curl "https://www.tsh.sale/api/sync/stock?action=sync&secret=<SECRET>&force=true"
+
+Code Locations:
+  - getAllProductsMetadata(): src/lib/zoho/products.ts:554-560
+  - getAllProductsComplete(): src/lib/zoho/products.ts:572-625
+  - Stock cache: src/lib/zoho/stock-cache.ts
+  - Shop page filter: src/app/[locale]/(public)/shop/page.tsx:56-58
+```
+
 #### Pricing Rules (CRITICAL)
 ```yaml
 IMPORTANT: NEVER display the base "rate" field from items API.
