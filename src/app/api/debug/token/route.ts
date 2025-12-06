@@ -1,11 +1,16 @@
 // DEBUG: Test Zoho token refresh
-// Remove this file after debugging
+// Protected by DEBUG_API_SECRET
 
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
+import { validateDebugAuth } from '@/lib/auth/debug-auth';
 
 const ZOHO_ACCOUNTS_URL = 'https://accounts.zoho.com';
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  // Require authentication
+  const authError = validateDebugAuth(request);
+  if (authError) return authError;
+
   try {
     // Check environment variables
     const envCheck = {

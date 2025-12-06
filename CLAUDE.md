@@ -679,22 +679,145 @@ Body (Content):
 
 ---
 
-## Session Checklist
+## Session Protocol
 
-At the start of EVERY session:
-- [ ] Read this CLAUDE.md file
-- [ ] Read `.claude/PROJECT_MEMORY.md` for critical IDs and rules
-- [ ] Check current git branch (MUST be `preview`)
-- [ ] If on `main`, switch to `preview`: `git checkout preview`
-- [ ] Review recent changes: `git log --oneline -5`
-- [ ] Understand the task before coding
+### At the START of Every Session
+```bash
+# 1. Read documentation
+Read CLAUDE.md (this file)
+Read .claude/PROJECT_MEMORY.md for critical IDs
 
-At the end of changes:
-- [ ] Ensure you're on `preview` branch
-- [ ] Commit and push to `preview` branch (triggers staging deployment)
-- [ ] Notify user: "Deployed to staging.tsh.sale"
-- [ ] User verifies on staging.tsh.sale
-- [ ] User manually deploys to production via Vercel Dashboard
+# 2. Verify git state
+git branch --show-current  # Must be on 'preview'
+git status                  # Check for uncommitted changes
+
+# 3. If not on preview, switch
+git checkout preview
+git pull origin preview
+
+# 4. Review recent changes
+git log --oneline -5
+```
+
+### At the END of Changes
+```bash
+# 1. Verify branch
+git branch --show-current  # Must be 'preview'
+
+# 2. Run checks before commit
+npm run typecheck
+npm run lint
+
+# 3. Commit and push
+git add -A
+git commit -m "feat: description"
+git push origin preview
+
+# 4. Inform user
+"Deployed to staging.tsh.sale - please verify before production deployment"
+```
+
+---
+
+## Code Quality Rules
+
+### Console Logging
+```yaml
+RULE: NEVER use emoji-prefixed console.log in production code
+
+BAD:
+  console.log(`🚀 fetchShopData: Starting...`);
+  console.log(`📦 Got ${products.length} products`);
+
+GOOD:
+  # Option 1: Remove entirely
+  # Option 2: Wrap in development check
+  if (process.env.NODE_ENV === 'development') {
+    console.log('[fetchShopData] Starting with priceListId:', priceListId);
+  }
+```
+
+### Error Handling
+```yaml
+RULE: NEVER silently return empty arrays/null on errors
+RULE: ALWAYS log the actual error before returning fallback
+RULE: Differentiate error types (RateLimit, Auth, Validation)
+
+BAD:
+  catch (error) {
+    return [];  # Silent failure - loses error context
+  }
+
+GOOD:
+  catch (error) {
+    console.error('[getProducts] Error:', error);
+    if (isRateLimitError(error)) {
+      return { products: [], error: 'rate_limit' };
+    }
+    throw error;  # Let caller handle unexpected errors
+  }
+```
+
+### API Security
+```yaml
+RULES:
+  - NEVER expose debug endpoints without authentication
+  - ALWAYS validate webhook signatures cryptographically
+  - NEVER hardcode secrets in source code (use env vars)
+  - ALWAYS use rateLimitedFetch() for Zoho API calls
+```
+
+---
+
+## Performance Checklist
+
+Before deploying shop page changes:
+```bash
+# 1. Check TTFB (should be <1s for cached)
+curl -w "TTFB: %{time_starttransfer}s\n" -o /dev/null -s "https://www.tsh.sale/ar/shop"
+
+# 2. Verify cached response (2nd request faster)
+curl -w "TTFB: %{time_starttransfer}s\n" -o /dev/null -s "https://www.tsh.sale/ar/shop"
+
+# 3. Test build locally
+npm run build
+
+# 4. Run type check
+npm run typecheck
+```
+
+---
+
+## Stock Sync Health Check
+
+If products show 0 stock unexpectedly:
+```bash
+# 1. Check Redis cache status
+curl "https://www.tsh.sale/api/sync/stock?action=status&secret=tsh-stock-sync-2024"
+# Should show itemCount: 400+
+
+# 2. If itemCount < 100, trigger full sync
+curl "https://www.tsh.sale/api/sync/stock?action=sync&secret=tsh-stock-sync-2024&force=true"
+# Wait 3-5 minutes for completion
+
+# 3. Revalidate caches after sync
+curl "https://www.tsh.sale/api/revalidate?tag=all&secret=tsh-revalidate-2024"
+```
+
+---
+
+## Common Mistakes to Avoid
+
+| Mistake | Why It's Bad | Correct Approach |
+|---------|--------------|------------------|
+| Using `force-dynamic` | Kills ISR/caching benefits | Use `revalidate = 300` or remove |
+| Fetching prices without caching | 15+ API calls per request | Use `getProductsWithPrices()` |
+| Ignoring rate limits | API blocks all requests | Use `rateLimitedFetch()` wrapper |
+| Hardcoding price list IDs | Breaks when IDs change | Use `PRICE_LIST_IDS` constants |
+| Using `warehouses` array | Zoho uses different field | Use `locations` array for stock |
+| Deploying without typecheck | TypeScript errors in prod | Run `npm run typecheck` first |
+| Using emoji console.log | Clutters production logs | Wrap in `NODE_ENV` check or remove |
+| Silent error returns | Hides real issues | Log error, return typed error object |
 
 ---
 

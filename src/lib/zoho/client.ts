@@ -57,12 +57,12 @@ async function getTokenFromUpstash(): Promise<CachedToken | null> {
     const data = await response.json();
     if (data.result) {
       const token = JSON.parse(data.result) as CachedToken;
-      console.log('🔑 Using token from Upstash Redis');
+      if (process.env.NODE_ENV === 'development') console.log('[Zoho] Token from Upstash Redis');
       return token;
     }
     return null;
   } catch (error) {
-    console.warn('⚠️ Failed to get token from Upstash:', error);
+    console.warn('[Zoho] Failed to get token from Upstash:', error);
     return null;
   }
 }
@@ -83,10 +83,10 @@ async function saveTokenToUpstash(token: CachedToken): Promise<void> {
     );
 
     if (response.ok) {
-      console.log('💾 Token saved to Upstash Redis');
+      if (process.env.NODE_ENV === 'development') console.log('[Zoho] Token saved to Upstash');
     }
   } catch (error) {
-    console.warn('⚠️ Failed to save token to Upstash:', error);
+    console.warn('[Zoho] Failed to save token to Upstash:', error);
   }
 }
 
@@ -122,12 +122,12 @@ async function getTokenFromVercelKv(): Promise<CachedToken | null> {
       const token = typeof data.result === 'string'
         ? JSON.parse(data.result)
         : data.result;
-      console.log('🔑 Using token from Vercel KV');
+      if (process.env.NODE_ENV === 'development') console.log('[Zoho] Token from Vercel KV');
       return token as CachedToken;
     }
     return null;
   } catch (error) {
-    console.warn('⚠️ Failed to get token from Vercel KV:', error);
+    console.warn('[Zoho] Failed to get token from Vercel KV:', error);
     return null;
   }
 }
@@ -150,10 +150,10 @@ async function saveTokenToVercelKv(token: CachedToken): Promise<void> {
     );
 
     if (response.ok) {
-      console.log('💾 Token saved to Vercel KV');
+      if (process.env.NODE_ENV === 'development') console.log('[Zoho] Token saved to Vercel KV');
     }
   } catch (error) {
-    console.warn('⚠️ Failed to save token to Vercel KV:', error);
+    console.warn('[Zoho] Failed to save token to Vercel KV:', error);
   }
 }
 
@@ -198,13 +198,13 @@ export async function getAccessToken(): Promise<string> {
   const now = Date.now();
   if (now - lastRefreshAttempt < MIN_REFRESH_INTERVAL) {
     const waitTime = MIN_REFRESH_INTERVAL - (now - lastRefreshAttempt);
-    console.log(`⏳ Rate limit guard: waiting ${waitTime}ms before token refresh...`);
+    if (process.env.NODE_ENV === 'development') console.log(`[Zoho] Rate limit guard: waiting ${waitTime}ms...`);
     await new Promise((resolve) => setTimeout(resolve, waitTime));
   }
   lastRefreshAttempt = Date.now();
 
   // Step 4: Refresh the token from Zoho
-  console.log('🔄 Refreshing Zoho access token...');
+  if (process.env.NODE_ENV === 'development') console.log('[Zoho] Refreshing access token...');
 
   // Log cache status for debugging
   const cacheStatus = {
@@ -243,11 +243,11 @@ export async function getAccessToken(): Promise<string> {
   const responseText = await response.text();
 
   if (!response.ok) {
-    console.error('❌ Token refresh failed:', response.status, responseText);
+    console.error('[Zoho] Token refresh failed:', response.status, responseText);
 
     // If rate limited, wait longer and retry once
     if (response.status === 400 && responseText.includes('too many requests')) {
-      console.log('⏳ Rate limited by Zoho, waiting 10 seconds before retry...');
+      console.log('[Zoho] Rate limited, waiting 10 seconds before retry...');
       await new Promise((resolve) => setTimeout(resolve, 10000));
 
       const retryResponse = await fetch(`${ZOHO_ACCOUNTS_URL}/oauth/v2/token?${params}`, {
@@ -268,7 +268,7 @@ export async function getAccessToken(): Promise<string> {
         };
         memoryCache = token;
         await saveTokenToCache(token);
-        console.log('✅ Token refreshed after retry and cached');
+        if (process.env.NODE_ENV === 'development') console.log('[Zoho] Token refreshed after retry');
         return token.access_token;
       }
     }
@@ -297,7 +297,7 @@ export async function getAccessToken(): Promise<string> {
   memoryCache = token;
   await saveTokenToCache(token);
 
-  console.log('✅ Zoho access token refreshed and cached');
+  if (process.env.NODE_ENV === 'development') console.log('[Zoho] Access token refreshed and cached');
   return token.access_token;
 }
 
@@ -392,7 +392,7 @@ export async function rateLimitedFetch<T>(
       if (isRateLimit) {
         // Exponential backoff: 2s, 4s, 8s
         const waitTime = Math.pow(2, attempt + 1) * 1000;
-        console.log(`⏳ Rate limited, retrying in ${waitTime/1000}s (attempt ${attempt + 1}/${maxRetries})`);
+        console.log(`[Zoho] Rate limited, retrying in ${waitTime/1000}s (attempt ${attempt + 1}/${maxRetries})`);
         await new Promise((resolve) => setTimeout(resolve, waitTime));
         continue; // Try again
       } else {
@@ -403,7 +403,7 @@ export async function rateLimitedFetch<T>(
   }
 
   // All retries exhausted
-  console.log(`❌ Rate limit retries exhausted after ${maxRetries} attempts`);
+  console.error(`[Zoho] Rate limit retries exhausted after ${maxRetries} attempts`);
   throw lastError;
 }
 

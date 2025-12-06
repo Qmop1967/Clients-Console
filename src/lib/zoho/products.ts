@@ -504,7 +504,7 @@ async function fetchAllProductsFromBooks(): Promise<ZohoItem[]> {
   let hasMorePages = true;
 
   try {
-    console.log('🔄 Fetching all products using Zoho Books API...');
+    if (process.env.NODE_ENV === 'development') console.log('[Products] Fetching all from Zoho Books API...');
 
     while (hasMorePages) {
       const data = await rateLimitedFetch(() =>
@@ -523,7 +523,7 @@ async function fetchAllProductsFromBooks(): Promise<ZohoItem[]> {
       if (data.items && data.items.length > 0) {
         const items = data.items.map(booksItemToZohoItem);
         allProducts.push(...items);
-        console.log(`📦 Page ${currentPage}: Fetched ${data.items.length} items (total: ${allProducts.length})`);
+        if (process.env.NODE_ENV === 'development') console.log(`[Products] Page ${currentPage}: ${data.items.length} items (total: ${allProducts.length})`);
       }
 
       hasMorePages = data.page_context?.has_more_page ?? false;
@@ -535,7 +535,7 @@ async function fetchAllProductsFromBooks(): Promise<ZohoItem[]> {
       }
     }
 
-    console.log(`✅ Fetched ${allProducts.length} total products from Zoho Books API`);
+    if (process.env.NODE_ENV === 'development') console.log(`[Products] Fetched ${allProducts.length} total products from Zoho Books API`);
     return allProducts;
   } catch (error) {
     console.error('Error fetching all products:', error);
@@ -585,14 +585,14 @@ export async function getAllProductsComplete(): Promise<ZohoItem[]> {
 
     // Log stock cache status with warnings for low cache
     if (cachedStock.size > 0) {
-      console.log(`📦 [getAllProductsComplete] Fresh Redis stock: ${cachedStock.size}/${products.length} items (cache age: ${cacheStatus.ageSeconds}s)`);
+      if (process.env.NODE_ENV === 'development') console.log(`[Products] Fresh Redis stock: ${cachedStock.size}/${products.length} items (cache age: ${cacheStatus.ageSeconds}s)`);
       if (cachedStock.size < 100) {
-        console.warn(`⚠️ Stock cache has only ${cachedStock.size} items - may need full sync`);
-        console.warn('💡 Run /api/sync/stock?action=sync&secret=tsh-stock-sync-2024&force=true');
+        console.warn(`[getAllProductsComplete] Stock cache has only ${cachedStock.size} items - may need full sync`);
+        console.warn('[getAllProductsComplete] Run /api/sync/stock?action=sync&secret=<STOCK_SYNC_SECRET>&force=true');
       }
     } else {
-      console.warn('⚠️ [getAllProductsComplete] Stock cache EMPTY - using Zoho Books stock as fallback');
-      console.warn('💡 Run /api/sync/stock?action=sync&secret=tsh-stock-sync-2024 to populate cache');
+      console.warn('[getAllProductsComplete] Stock cache EMPTY - using Zoho Books stock as fallback');
+      console.warn('[getAllProductsComplete] Run /api/sync/stock?action=sync&secret=<STOCK_SYNC_SECRET> to populate cache');
     }
 
     // Step 3: Merge FRESH stock with cached products
@@ -822,11 +822,11 @@ export const getProductsWithPrices = unstable_cache(
       const products = await getAllProductsComplete();
 
       if (!products.length) {
-        console.warn('⚠️ No products found');
+        console.warn('[Products] No products found');
         return { products: [], currency: 'IQD', priceListName: 'Unknown' };
       }
 
-      console.log(`📦 Got ${products.length} products, now fetching prices...`);
+      if (process.env.NODE_ENV === 'development') console.log(`[Products] Got ${products.length} products, now fetching prices...`);
 
       // Fetch prices for all product IDs
       const itemIds = products.map(p => p.item_id);
@@ -852,7 +852,7 @@ export const getProductsWithPrices = unstable_cache(
         in_price_list: priceMap.has(product.item_id),
       }));
 
-      console.log(`✅ getProductsWithPrices: Returning ${productsWithPrices.length} products with prices`);
+      if (process.env.NODE_ENV === 'development') console.log(`[Products] Returning ${productsWithPrices.length} products with prices`);
 
       return {
         products: productsWithPrices,

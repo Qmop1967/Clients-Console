@@ -1,12 +1,21 @@
-import { NextResponse } from 'next/server';
+// Debug endpoint to check balance fetching
+// Protected by DEBUG_API_SECRET
+import { NextRequest, NextResponse } from 'next/server';
 import { zohoFetch } from '@/lib/zoho/client';
 import { getCustomerBalance } from '@/lib/zoho/customers';
+import { validateDebugAuth } from '@/lib/auth/debug-auth';
 
-// Debug endpoint to check balance fetching
-// Contact ID from the user's session
-const TEST_CONTACT_ID = '2646610000049962565';
+// Test Contact ID (can be overridden via query param)
+const DEFAULT_TEST_CONTACT_ID = '2646610000049962565';
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  // Require authentication
+  const authError = validateDebugAuth(request);
+  if (authError) return authError;
+
+  const { searchParams } = new URL(request.url);
+  const TEST_CONTACT_ID = searchParams.get('contact_id') || DEFAULT_TEST_CONTACT_ID;
+
   try {
     // Method 1: Direct Zoho API call
     const directData = await zohoFetch<{ contact: Record<string, unknown> }>(

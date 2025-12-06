@@ -1,8 +1,15 @@
-import { NextResponse } from 'next/server';
+// Debug endpoint for customer data testing
+// Protected by DEBUG_API_SECRET
+import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth/auth';
 import { zohoFetch } from '@/lib/zoho/client';
+import { validateDebugAuth } from '@/lib/auth/debug-auth';
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  // Require authentication
+  const authError = validateDebugAuth(request);
+  if (authError) return authError;
+
   try {
     const session = await auth();
 

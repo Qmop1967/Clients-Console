@@ -1,11 +1,17 @@
 // Debug endpoint to check Zoho stock data
-import { NextResponse } from "next/server";
+// Protected by DEBUG_API_SECRET
+import { NextRequest, NextResponse } from "next/server";
 import { zohoFetch } from "@/lib/zoho/client";
+import { validateDebugAuth } from "@/lib/auth/debug-auth";
 
 const WHOLESALE_WAREHOUSE_NAME = "WholeSale WareHouse (Warehouse)";
 const WHOLESALE_WAREHOUSE_ID = "2646610000000077024"; // From Zoho
 
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
+  // Require authentication
+  const authError = validateDebugAuth(request);
+  if (authError) return authError;
+
   const { searchParams } = new URL(request.url);
   const itemId = searchParams.get("item_id");
   const search = searchParams.get("search");

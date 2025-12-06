@@ -9,7 +9,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { syncWholesaleStock, getStockCacheStatus, isStockCacheStale } from '@/lib/zoho/stock-cache';
 
-const SYNC_SECRET = 'tsh-stock-sync-2024';
+// Use environment variable for secret, with fallback for local development
+const SYNC_SECRET = process.env.STOCK_SYNC_SECRET || 'tsh-stock-sync-2024';
 
 // Maximum execution time for Vercel serverless functions
 // Hobby: 10s, Pro: 60s, Enterprise: 900s

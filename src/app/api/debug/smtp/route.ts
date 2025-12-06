@@ -1,8 +1,15 @@
-import { NextResponse } from 'next/server';
+// Debug endpoint for SMTP testing
+// Protected by DEBUG_API_SECRET
+import { NextRequest, NextResponse } from 'next/server';
 import { createTransport } from 'nodemailer';
 import { Redis } from '@upstash/redis';
+import { validateDebugAuth } from '@/lib/auth/debug-auth';
 
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
+  // Require authentication
+  const authError = validateDebugAuth(request);
+  if (authError) return authError;
+
   const { searchParams } = new URL(request.url);
   const testEmail = searchParams.get('email');
   const testRedis = searchParams.get('redis') === 'true';

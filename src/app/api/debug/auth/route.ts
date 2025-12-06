@@ -1,7 +1,14 @@
-import { NextResponse } from 'next/server';
+// Debug endpoint for auth/Redis testing
+// Protected by DEBUG_API_SECRET
+import { NextRequest, NextResponse } from 'next/server';
 import { Redis } from '@upstash/redis';
+import { validateDebugAuth } from '@/lib/auth/debug-auth';
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  // Require authentication
+  const authError = validateDebugAuth(request);
+  if (authError) return authError;
+
   try {
     const redis = new Redis({
       url: process.env.UPSTASH_REDIS_REST_URL!,

@@ -8,8 +8,12 @@ Stack: Next.js 15 + TypeScript + TailwindCSS + shadcn/ui
 i18n: English + Arabic (RTL)
 Auth: Magic Link via Resend
 API: Zoho Books + Zoho Inventory
-Deployment: Vercel (DIRECT TO PRODUCTION)
-Domain: www.tsh.sale
+Deployment: GitHub Actions → Vercel
+  Staging: Push to 'preview' branch (auto-deploy)
+  Production: Manual via Vercel Dashboard
+Domains:
+  - staging.tsh.sale (preview branch)
+  - www.tsh.sale (production)
 ```
 
 ---
@@ -48,17 +52,22 @@ Domain: www.tsh.sale
 # Development
 npm run dev          # Start dev server
 npm run build        # Build for production
+npm run typecheck    # Check TypeScript
 
-# Deployment (DIRECT TO PRODUCTION)
-vercel --prod --yes
+# Git Workflow (GitHub Actions handles deployment)
+git checkout preview                    # Ensure you're on preview branch
+git add -A && git commit -m "feat: ..."  # Commit changes
+git push origin preview                  # Triggers staging deploy
+
+# ⛔ FORBIDDEN (Claude Code cannot deploy to production)
+# git push origin main
+# vercel --prod --yes
 
 # Cache Revalidation
 curl "https://www.tsh.sale/api/revalidate?tag=all&secret=tsh-revalidate-2024"
 
-# Debug Endpoints
-curl "https://www.tsh.sale/api/debug/token"
-curl "https://www.tsh.sale/api/debug/prices"
-curl "https://www.tsh.sale/api/debug/stock"
+# Stock Sync Health Check
+curl "https://www.tsh.sale/api/sync/stock?action=status&secret=tsh-stock-sync-2024"
 ```
 
 ---
@@ -94,9 +103,10 @@ curl "https://www.tsh.sale/api/debug/stock"
 
 1. **Prices**: NEVER use `item.rate` → ALWAYS use pricebook price
 2. **Stock**: Use `location_available_for_sale_stock` from `locations` array
-3. **Deploy**: `vercel --prod --yes` (direct to production)
-4. **i18n**: Always add both EN + AR translations
-5. **Token**: Cached in Upstash Redis (prevents rate limiting)
+3. **Deploy**: Push to `preview` branch → GitHub Actions → staging.tsh.sale
+4. **Production**: User manually deploys via Vercel Dashboard (Claude Code FORBIDDEN)
+5. **i18n**: Always add both EN + AR translations
+6. **Token**: Cached in Upstash Redis (prevents rate limiting)
 
 ---
 
@@ -124,6 +134,7 @@ curl "https://www.tsh.sale/api/revalidate?tag=all&secret=tsh-revalidate-2024"
 
 | Purpose | URL |
 |---------|-----|
+| Staging | https://staging.tsh.sale |
 | Production | https://www.tsh.sale |
 | Vercel Dashboard | https://vercel.com/tsh-03790822/tsh-clients-console |
 | Upstash Console | https://console.upstash.com |

@@ -1,10 +1,11 @@
 // DEBUG: Test Zoho price list fetching
-// Remove this file after debugging
+// Protected by DEBUG_API_SECRET
 
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { zohoFetch, rateLimitedFetch } from '@/lib/zoho/client';
 import { getAllProductsComplete } from '@/lib/zoho/products';
 import { getCustomerPriceList, PRICE_LIST_IDS, getPriceListWithItems } from '@/lib/zoho/price-lists';
+import { validateDebugAuth } from '@/lib/auth/debug-auth';
 
 // Direct Zoho API call to test the pricebookrate endpoint
 async function directApiTest(itemIds: string[]) {
@@ -31,7 +32,11 @@ async function directApiTest(itemIds: string[]) {
   }
 }
 
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
+  // Require authentication
+  const authError = validateDebugAuth(request);
+  if (authError) return authError;
+
   const { searchParams } = new URL(request.url);
   const testMode = searchParams.get('mode') || 'full';
 

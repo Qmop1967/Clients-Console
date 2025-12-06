@@ -27,7 +27,7 @@ export async function generateMetadata() {
  */
 async function fetchShopData(priceListId: string, isPublicVisitor: boolean) {
   try {
-    console.log(`🚀 fetchShopData: priceListId=${priceListId}, isPublic=${isPublicVisitor}`);
+    if (process.env.NODE_ENV === 'development') console.log(`[Shop] priceListId=${priceListId}, isPublic=${isPublicVisitor}`);
 
     // Use cached data - products + prices cached together for 24h
     // Stock is always fresh from Redis
@@ -35,7 +35,7 @@ async function fetchShopData(priceListId: string, isPublicVisitor: boolean) {
       ? await getProductsWithConsumerPrices()  // Optimized for public visitors
       : await getProductsWithPrices(priceListId);
 
-    console.log(`📦 Got ${allProducts.length} products with prices (${priceListName})`);
+    if (process.env.NODE_ENV === 'development') console.log(`[Shop] Got ${allProducts.length} products with prices (${priceListName})`);
 
     // Map to display format
     const productsWithPrices = allProducts.map((product) => ({
@@ -55,7 +55,7 @@ async function fetchShopData(priceListId: string, isPublicVisitor: boolean) {
 
     // Filter to only in-stock products
     const inStockProducts = productsWithPrices.filter(p => p.available_stock > 0);
-    console.log(`📦 ${inStockProducts.length}/${productsWithPrices.length} products in stock`);
+    if (process.env.NODE_ENV === 'development') console.log(`[Shop] ${inStockProducts.length}/${productsWithPrices.length} products in stock`);
 
     return {
       products: inStockProducts,
