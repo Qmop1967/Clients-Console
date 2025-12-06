@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect, useCallback, memo, useRef } from "react";
+import { useState, useMemo, useEffect, useCallback, memo, useRef, useTransition, useDeferredValue } from "react";
 import { useTranslations, useLocale } from "next-intl";
 import { useSearchParams, usePathname } from "next/navigation";
 import Link from "next/link";
@@ -303,6 +303,10 @@ export function PublicProductsContent({
   const [searchQuery, setSearchQuery] = useState(searchFromUrl);
   const [currentPage, setCurrentPage] = useState(pageFromUrl);
 
+  // Use deferred value for search to keep input responsive (improves INP)
+  const deferredSearchQuery = useDeferredValue(searchQuery);
+  const isSearching = searchQuery !== deferredSearchQuery;
+
   // Restore scroll position on mount (when coming back from product page)
   useEffect(() => {
     if (isInitialMount.current) {
@@ -337,14 +341,14 @@ export function PublicProductsContent({
   }, [searchQuery, searchFromUrl]);
 
   // STRICT RULE: Only show products with WholeSale warehouse stock > 0
-  // This is a safety net - server already filters, but we double-check here
+  // Uses deferred search query for responsive input (improves INP)
   const filteredProducts = useMemo(() => {
     // First filter: ONLY products with stock > 0 (strict rule)
     let filtered = products.filter((p) => p.available_stock > 0);
 
-    // Search filter
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase();
+    // Search filter - uses deferred value for responsiveness
+    if (deferredSearchQuery) {
+      const query = deferredSearchQuery.toLowerCase();
       filtered = filtered.filter(
         (p) =>
           p.name.toLowerCase().includes(query) ||
@@ -358,7 +362,7 @@ export function PublicProductsContent({
     filtered.sort((a, b) => a.name.localeCompare(b.name));
 
     return filtered;
-  }, [products, searchQuery]);
+  }, [products, deferredSearchQuery]);
 
   // Pagination calculations
   const totalPages = Math.ceil(filteredProducts.length / PRODUCTS_PER_PAGE);
@@ -379,9 +383,12 @@ export function PublicProductsContent({
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <h2 className="text-2xl font-bold">{t("title")}</h2>
 
-        {/* Search Bar */}
+        {/* Search Bar - optimized with deferred value for INP */}
         <div className="relative w-full sm:w-80">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Search className={cn(
+            "absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground transition-opacity",
+            isSearching && "animate-pulse"
+          )} />
           <Input
             placeholder={t("searchPlaceholder")}
             value={searchQuery}

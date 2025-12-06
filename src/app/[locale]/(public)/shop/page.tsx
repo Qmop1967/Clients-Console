@@ -2,14 +2,14 @@ import { Suspense } from "react";
 import { getTranslations } from "next-intl/server";
 import { PublicProductsContent } from "@/components/products/public-products-content";
 import { ProductsSkeleton } from "@/components/products/products-skeleton";
-import { getAllProductsComplete, getCategories, getProductImageUrl } from "@/lib/zoho/products";
-import { getCustomerPriceList, getItemPriceFromList, PRICE_LIST_IDS } from "@/lib/zoho/price-lists";
+import { getProductsWithPrices, getProductsWithConsumerPrices, getProductImageUrl } from "@/lib/zoho/products";
+import { PRICE_LIST_IDS } from "@/lib/zoho/price-lists";
 import { auth } from "@/lib/auth/auth";
 import { getZohoCustomer } from "@/lib/zoho/customers";
 
-// Force dynamic rendering to ensure auth check runs on every request
-export const dynamic = 'force-dynamic';
-export const revalidate = 0;
+// Enable ISR with 5-minute revalidation for public visitors
+// Auth check still runs but cached data is used
+export const revalidate = 300; // 5 minutes
 
 export async function generateMetadata() {
   const t = await getTranslations("products");
@@ -20,97 +20,56 @@ export async function generateMetadata() {
 }
 
 /**
- * Fetch shop data with appropriate pricing
- * - Authenticated users: Use their assigned price list
- * - Public visitors: Use Consumer price list (IQD)
- * IMPORTANT: Uses Zoho Books API /items/pricebookrate to fetch item prices
+ * OPTIMIZED: Fetch shop data using cached products with prices
+ * - Uses cached getProductsWithPrices (24h cache)
+ * - Stock is fresh from Redis on every call
+ * - Reduces API calls from ~15 to ~1-2 per request
  */
-async function fetchShopData(priceListId: string) {
+async function fetchShopData(priceListId: string, isPublicVisitor: boolean) {
   try {
-    console.log(`🚀 fetchShopData: Starting with priceListId=${priceListId}`);
+    console.log(`🚀 fetchShopData: priceListId=${priceListId}, isPublic=${isPublicVisitor}`);
 
-    // First fetch ALL products and categories in parallel
-    const [allProducts, categories] = await Promise.all([
-      getAllProductsComplete(), // Fetches ALL products with pagination
-      getCategories(),
-    ]);
+    // Use cached data - products + prices cached together for 24h
+    // Stock is always fresh from Redis
+    const { products: allProducts, currency, priceListName } = isPublicVisitor
+      ? await getProductsWithConsumerPrices()  // Optimized for public visitors
+      : await getProductsWithPrices(priceListId);
 
-    console.log(`📦 fetchShopData: Got ${allProducts.length} products and ${categories.length} categories`);
+    console.log(`📦 Got ${allProducts.length} products with prices (${priceListName})`);
 
-    // Extract all item IDs for price lookup
-    const itemIds = allProducts.map((p) => p.item_id);
-    console.log(`🔑 fetchShopData: Extracted ${itemIds.length} item IDs for price lookup`);
+    // Map to display format
+    const productsWithPrices = allProducts.map((product) => ({
+      item_id: product.item_id,
+      name: product.name,
+      sku: product.sku,
+      description: product.description,
+      rate: product.display_price || 0,
+      available_stock: product.available_stock ?? 0,
+      image_url: getProductImageUrl(product),
+      category_id: product.category_id,
+      category_name: product.category_name,
+      brand: product.brand,
+      unit: product.unit,
+      inPriceList: product.in_price_list ?? (product.display_price > 0),
+    }));
 
-    // Fetch price list WITH item prices (uses Books API endpoint)
-    console.log(`💵 fetchShopData: Fetching price list (${priceListId}) with ${itemIds.length} items...`);
-    const priceList = await getCustomerPriceList(priceListId, itemIds);
-
-    console.log(`📋 Price list result:`, {
-      name: priceList?.name,
-      currency: priceList?.currency_code,
-      pricebook_items_count: priceList?.pricebook_items?.length || 0,
-      item_prices_count: priceList?.item_prices?.length || 0,
-    });
-
-    console.log(`🛒 Processing ${allProducts.length} products with price list: ${priceList?.name || 'unknown'}`);
-
-    // Map products with prices from the customer's price list
-    // IMPORTANT: Uses prices from pricebook, NOT item.rate (sell price)
-    const productsWithPrices = allProducts.map((product) => {
-      const priceInfo = getItemPriceFromList(
-        product.item_id,
-        priceList
-      );
-
-      return {
-        item_id: product.item_id,
-        name: product.name,
-        sku: product.sku,
-        description: product.description,
-        rate: priceInfo.rate, // Price from Consumer price list (NOT item.rate)
-        available_stock: product.available_stock ?? product.stock_on_hand ?? 0,
-        image_url: getProductImageUrl(product), // Construct image URL from Zoho data
-        category_id: product.category_id,
-        category_name: product.category_name,
-        brand: product.brand,
-        unit: product.unit,
-        inPriceList: priceInfo.inPriceList, // Whether item has a price in the list
-      };
-    });
-
-    // Count items with prices vs without
-    const itemsWithPrices = productsWithPrices.filter(p => p.inPriceList).length;
-    console.log(`💰 ${itemsWithPrices}/${productsWithPrices.length} products have prices in ${priceList?.name || 'price list'}`);
-
-    // STRICT RULE: Only show products with WholeSale warehouse stock > 0
-    // This filters using the Redis-cached warehouse-specific stock
+    // Filter to only in-stock products
     const inStockProducts = productsWithPrices.filter(p => p.available_stock > 0);
-    console.log(`📦 ${inStockProducts.length}/${productsWithPrices.length} products have stock > 0 in WholeSale warehouse`);
+    console.log(`📦 ${inStockProducts.length}/${productsWithPrices.length} products in stock`);
 
     return {
       products: inStockProducts,
-      categories: categories.filter((c) => c.is_active),
-      currencyCode: priceList?.currency_code || "IQD",
-      currencySymbol: priceList?.currency_symbol || "IQD",
-      totalProducts: inStockProducts.length,
+      currencyCode: currency,
       error: null,
     };
   } catch (error) {
     console.error("Error fetching shop data:", error);
-
-    // Detect rate limit errors
     const errorMsg = error instanceof Error ? error.message : String(error);
-    const isRateLimit = errorMsg.includes('429') ||
-                        errorMsg.includes('rate') ||
-                        errorMsg.includes('exceeded') ||
-                        errorMsg.includes('blocked');
+    const isRateLimit = errorMsg.includes('429') || errorMsg.includes('rate');
 
     return {
       products: [],
-      categories: [],
       currencyCode: "IQD",
-      currencySymbol: "IQD",
-      totalProducts: 0,
       error: isRateLimit ? "rate_limit" : "general",
     };
   }
@@ -121,31 +80,30 @@ export default async function PublicShopPage() {
 
   // Check authentication - use customer's price list if authenticated
   const session = await auth();
-  let priceListId: string = PRICE_LIST_IDS.CONSUMER; // Default for public visitors
+  const isAuthenticated = !!session?.user?.zohoContactId;
+  const isPublicVisitor = !isAuthenticated;
 
-  if (session?.user?.zohoContactId) {
+  let priceListId: string = PRICE_LIST_IDS.CONSUMER;
+
+  if (isAuthenticated) {
     // Authenticated user - get their price list
     priceListId = session.user.priceListId || PRICE_LIST_IDS.CONSUMER;
-    console.log(`[Shop] Authenticated user: ${session.user.email}, priceListId: ${priceListId}`);
 
     // If no price list in session, try to fetch from Zoho
-    if (!session.user.priceListId) {
+    if (!session.user.priceListId && session.user.zohoContactId) {
       try {
         const customer = await getZohoCustomer(session.user.zohoContactId);
         if (customer) {
           priceListId = customer.pricebook_id || customer.price_list_id || PRICE_LIST_IDS.CONSUMER;
-          console.log(`[Shop] Fetched priceListId from Zoho: ${priceListId}`);
         }
       } catch (e) {
         console.error('[Shop] Failed to fetch customer price list:', e);
       }
     }
-  } else {
-    console.log(`[Shop] Public visitor - using Consumer price list (IQD)`);
   }
 
-  const { products, currencyCode, error } = await fetchShopData(priceListId);
-  const isAuthenticated = !!session?.user?.zohoContactId;
+  // Use optimized cached data fetching
+  const { products, currencyCode, error } = await fetchShopData(priceListId, isPublicVisitor);
 
   return (
     <div className="space-y-6">

@@ -64,7 +64,8 @@
       "WebFetch(domain:vercel.com)",
       "Bash(timeout 30 vercel logs:*)",
       "WebFetch(domain:staging.tsh.sale)",
-      "Bash(git merge:*)"
+      "Bash(git merge:*)",
+      "Bash(npm run typecheck:*)"
     ],
     "deny": [],
     "ask": []
