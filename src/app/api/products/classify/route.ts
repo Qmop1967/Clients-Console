@@ -16,6 +16,7 @@ import {
   convertToTreeData,
   CATEGORY_HIERARCHY,
 } from '@/lib/ai/categories';
+import { getAllProductsComplete } from '@/lib/zoho/products';
 
 // Secret for protected endpoints
 const CLASSIFY_SECRET = process.env.CLASSIFY_SECRET || 'tsh-classify-2024';
@@ -177,8 +178,72 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    // Action: classify-all - Fetch products from Zoho and classify all
+    if (action === 'classify-all') {
+      const { limit = 50, skip = 0, batch_size = 5, delay_ms = 1500 } = body || {};
+
+      console.log(`[Classify API] Starting classify-all: limit=${limit}, skip=${skip}`);
+
+      // Fetch all products from Zoho
+      const allProducts = await getAllProductsComplete();
+      console.log(`[Classify API] Fetched ${allProducts.length} products from Zoho`);
+
+      // Get already classified items
+      const existingClassifications = await getAllCachedClassifications();
+      const classifiedIds = new Set(existingClassifications.map(c => c.item_id));
+
+      // Filter to unclassified products, apply skip/limit
+      const unclassifiedProducts = allProducts
+        .filter(p => !classifiedIds.has(p.item_id))
+        .slice(skip, skip + limit);
+
+      console.log(`[Classify API] ${unclassifiedProducts.length} products to classify (skipped ${skip}, already classified: ${classifiedIds.size})`);
+
+      if (unclassifiedProducts.length === 0) {
+        return NextResponse.json({
+          success: true,
+          message: 'All products are already classified',
+          stats: {
+            total_products: allProducts.length,
+            already_classified: classifiedIds.size,
+            classified_now: 0,
+          },
+        });
+      }
+
+      // Classify products
+      const startTime = Date.now();
+      const productsToClassify = unclassifiedProducts.map(p => ({
+        item_id: p.item_id,
+        name: p.name,
+        description: p.description,
+        image_url: p.image_name ? `https://staging.tsh.sale/api/zoho/images/${p.item_id}` : undefined,
+        category_id: p.category_id,
+        category_name: p.category_name,
+      }));
+
+      const classifications = await classifyProducts(productsToClassify, {
+        batchSize: batch_size,
+        delayMs: delay_ms,
+      });
+
+      const duration_ms = Date.now() - startTime;
+
+      return NextResponse.json({
+        success: true,
+        stats: {
+          total_products: allProducts.length,
+          already_classified: classifiedIds.size,
+          classified_now: classifications.length,
+          remaining: allProducts.length - classifiedIds.size - classifications.length,
+          duration_ms,
+        },
+        message: `Classified ${classifications.length} products in ${(duration_ms / 1000).toFixed(1)}s`,
+      });
+    }
+
     return NextResponse.json(
-      { error: 'Invalid action. Use: single, batch' },
+      { error: 'Invalid action. Use: single, batch, classify-all' },
       { status: 400 }
     );
   } catch (error) {
