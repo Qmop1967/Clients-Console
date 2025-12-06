@@ -583,21 +583,25 @@ export async function getAllProductsComplete(): Promise<ZohoItem[]> {
     const cachedStock = await getCachedStockBulk(itemIds);
     const cacheStatus = await getStockCacheStatus();
 
-    // Log stock cache status
+    // Log stock cache status with warnings for low cache
     if (cachedStock.size > 0) {
       console.log(`📦 [getAllProductsComplete] Fresh Redis stock: ${cachedStock.size}/${products.length} items (cache age: ${cacheStatus.ageSeconds}s)`);
+      if (cachedStock.size < 100) {
+        console.warn(`⚠️ Stock cache has only ${cachedStock.size} items - may need full sync`);
+        console.warn('💡 Run /api/sync/stock?action=sync&secret=tsh-stock-sync-2024&force=true');
+      }
     } else {
-      console.warn('⚠️ [getAllProductsComplete] Stock cache EMPTY - all products will show 0 stock');
+      console.warn('⚠️ [getAllProductsComplete] Stock cache EMPTY - using Zoho Books stock as fallback');
       console.warn('💡 Run /api/sync/stock?action=sync&secret=tsh-stock-sync-2024 to populate cache');
     }
 
     // Step 3: Merge FRESH stock with cached products
-    // CRITICAL: Items NOT in cache get 0 stock (not Books API stock)
+    // Items in Redis cache use cached stock, otherwise fallback to Zoho Books stock
     const productsWithStock = products.map((item) => ({
       ...item,
       available_stock: cachedStock.has(item.item_id)
         ? cachedStock.get(item.item_id)!
-        : 0, // NOT in cache = 0 stock (strict rule)
+        : (item.available_stock ?? item.stock_on_hand ?? 0), // Fallback to Zoho Books stock
     }));
 
     return productsWithStock;
