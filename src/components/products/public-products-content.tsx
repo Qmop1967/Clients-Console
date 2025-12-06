@@ -48,6 +48,7 @@ interface PublicProductsContentProps {
   products: PublicProduct[];
   categories: PublicCategory[];
   currencyCode: string;
+  isAuthenticated?: boolean; // Hide login CTA for authenticated users
 }
 
 // Memoized Product Card Component with Add to Cart - Enhanced Design
@@ -287,6 +288,7 @@ const ProductCardWithCart = memo(function ProductCardWithCart({
 export function PublicProductsContent({
   products,
   currencyCode,
+  isAuthenticated = false,
 }: Omit<PublicProductsContentProps, 'categories'>) {
   const t = useTranslations("products");
   const locale = useLocale();
@@ -436,39 +438,41 @@ export function PublicProductsContent({
         </>
       )}
 
-      {/* Login CTA - Enhanced */}
-      <div className="mt-12 relative overflow-hidden rounded-2xl gradient-hero border border-primary/20">
-        {/* Decorative elements */}
-        <div className="absolute inset-0">
-          <div className="absolute top-0 left-1/4 w-48 h-48 bg-primary/10 rounded-full blur-3xl" />
-          <div className="absolute bottom-0 right-1/4 w-64 h-64 bg-accent/10 rounded-full blur-3xl" />
-        </div>
-
-        <div className="relative p-8 md:p-12 text-center">
-          <div className="inline-flex items-center gap-2 px-3 py-1 mb-4 rounded-full bg-primary/10 border border-primary/20 text-xs font-medium text-primary">
-            <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
-            {t("wholesaleCta")}
+      {/* Login CTA - Only show for non-authenticated users */}
+      {!isAuthenticated && (
+        <div className="mt-12 relative overflow-hidden rounded-2xl gradient-hero border border-primary/20">
+          {/* Decorative elements */}
+          <div className="absolute inset-0">
+            <div className="absolute top-0 left-1/4 w-48 h-48 bg-primary/10 rounded-full blur-3xl" />
+            <div className="absolute bottom-0 right-1/4 w-64 h-64 bg-accent/10 rounded-full blur-3xl" />
           </div>
 
-          <h3 className="text-2xl md:text-3xl font-bold mb-3">
-            <span className="text-gradient">{t("wholesaleCta")}</span>
-          </h3>
+          <div className="relative p-8 md:p-12 text-center">
+            <div className="inline-flex items-center gap-2 px-3 py-1 mb-4 rounded-full bg-primary/10 border border-primary/20 text-xs font-medium text-primary">
+              <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+              {t("wholesaleCta")}
+            </div>
 
-          <p className="text-muted-foreground max-w-lg mx-auto mb-6">
-            {t("wholesaleCtaDescription")}
-          </p>
+            <h3 className="text-2xl md:text-3xl font-bold mb-3">
+              <span className="text-gradient">{t("wholesaleCta")}</span>
+            </h3>
 
-          <Button
-            className="gradient-primary text-white hover:opacity-90 btn-press px-8 py-6 text-base font-medium"
-            asChild
-          >
-            <Link href={`/${locale}/login`} className="flex items-center gap-2">
-              {t("loginToAccount")}
-              <ChevronRight className="h-4 w-4 rtl:rotate-180" />
-            </Link>
-          </Button>
+            <p className="text-muted-foreground max-w-lg mx-auto mb-6">
+              {t("wholesaleCtaDescription")}
+            </p>
+
+            <Button
+              className="gradient-primary text-white hover:opacity-90 btn-press px-8 py-6 text-base font-medium"
+              asChild
+            >
+              <Link href={`/${locale}/login`} className="flex items-center gap-2">
+                {t("loginToAccount")}
+                <ChevronRight className="h-4 w-4 rtl:rotate-180" />
+              </Link>
+            </Button>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

@@ -145,6 +145,7 @@ export default async function PublicShopPage() {
   }
 
   const { products, currencyCode, error } = await fetchShopData(priceListId);
+  const isAuthenticated = !!session?.user?.zohoContactId;
 
   return (
     <div className="space-y-6">
@@ -181,6 +182,7 @@ export default async function PublicShopPage() {
         <PublicProductsContent
           products={products}
           currencyCode={currencyCode}
+          isAuthenticated={isAuthenticated}
         />
       </Suspense>
     </div>
