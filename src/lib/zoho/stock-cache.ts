@@ -726,3 +726,145 @@ export async function getUnifiedStockBulk(
 
   return stockMap;
 }
+
+// ============================================
+// FAST SYNC USING ZOHO BOOKS API
+// ============================================
+// Books API has ~100 requests/minute vs Inventory's ~3,750/day
+// This function uses Books API for faster sync without rate limits
+// ============================================
+
+interface ZohoBooksItemStock {
+  item_id: string;
+  name: string;
+  sku: string;
+  available_stock?: number;
+  stock_on_hand?: number;
+  actual_available_stock?: number;
+}
+
+interface ZohoBooksItemsResponse {
+  items: ZohoBooksItemStock[];
+  page_context: {
+    page: number;
+    per_page: number;
+    has_more_page: boolean;
+    total: number;
+  };
+}
+
+/**
+ * FAST SYNC using Zoho Books API (higher rate limits)
+ *
+ * Uses Books API which has ~100 requests/minute vs Inventory's ~3,750/day
+ * Stock from Books is item-level (total across all warehouses) but is
+ * sufficient for most use cases and much faster to sync.
+ *
+ * Options:
+ * - maxItems: Maximum items to process per call (default: unlimited)
+ * - offset: Starting offset for chunked sync (default: 0)
+ */
+export async function syncStockFromBooks(options: {
+  maxItems?: number;
+  offset?: number;
+} = {}): Promise<{
+  success: boolean;
+  itemsProcessed: number;
+  itemsWithStock: number;
+  durationMs: number;
+  totalItems?: number;
+  nextOffset?: number;
+}> {
+  const { maxItems = 500, offset = 0 } = options;
+  const startTime = Date.now();
+
+  console.log(`🚀 [syncStockFromBooks] Starting FAST sync using Books API (offset=${offset}, maxItems=${maxItems})...`);
+
+  try {
+    // Fetch products from Books API (much higher rate limits)
+    const allItems: ZohoBooksItemStock[] = [];
+    let currentPage = Math.floor(offset / 200) + 1;
+    const perPage = 200;
+    let hasMorePages = true;
+    let totalFetched = 0;
+
+    while (hasMorePages && totalFetched < maxItems) {
+      const data = await rateLimitedFetch(() =>
+        zohoFetch<ZohoBooksItemsResponse>('/items', {
+          api: 'books', // Using Books API - higher rate limits!
+          params: {
+            page: currentPage,
+            per_page: perPage,
+            filter_by: 'Status.Active',
+            sort_column: 'name',
+            sort_order: 'A',
+          },
+        })
+      );
+
+      if (data.items && data.items.length > 0) {
+        allItems.push(...data.items);
+        totalFetched += data.items.length;
+        console.log(`📦 [syncStockFromBooks] Page ${currentPage}: ${data.items.length} items (total: ${totalFetched})`);
+      }
+
+      hasMorePages = data.page_context?.has_more_page ?? false;
+      currentPage++;
+
+      // Safety limit
+      if (currentPage > 20) break;
+    }
+
+    console.log(`📊 [syncStockFromBooks] Fetched ${allItems.length} products from Books API`);
+
+    // Get existing cache to merge
+    const existingCache = await getStockCache();
+    const stockMap: StockMap = existingCache?.stock || {};
+
+    // Process items and update stock map
+    let itemsWithStock = 0;
+    for (const item of allItems) {
+      const stock = item.available_stock ?? item.actual_available_stock ?? item.stock_on_hand ?? 0;
+      stockMap[item.item_id] = stock;
+      if (stock > 0) itemsWithStock++;
+    }
+
+    // Save to Redis
+    const cacheData: StockCacheData = {
+      stock: stockMap,
+      updatedAt: Date.now(),
+      itemCount: Object.keys(stockMap).length,
+    };
+
+    const saved = await redisSet(STOCK_CACHE_KEY, cacheData, STOCK_CACHE_TTL);
+    const durationMs = Date.now() - startTime;
+
+    // Calculate next offset
+    const nextOffset = hasMorePages ? offset + totalFetched : undefined;
+
+    if (saved) {
+      console.log(`✅ [syncStockFromBooks] Complete: ${allItems.length} items synced (${itemsWithStock} with stock), total cached: ${cacheData.itemCount}, took ${Math.round(durationMs / 1000)}s`);
+    } else {
+      console.error('❌ [syncStockFromBooks] Failed to save to Redis');
+    }
+
+    return {
+      success: saved,
+      itemsProcessed: allItems.length,
+      itemsWithStock,
+      durationMs,
+      totalItems: existingCache?.itemCount || allItems.length,
+      nextOffset,
+    };
+
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    console.error(`❌ [syncStockFromBooks] Error: ${errorMsg}`);
+    return {
+      success: false,
+      itemsProcessed: 0,
+      itemsWithStock: 0,
+      durationMs: Date.now() - startTime,
+    };
+  }
+}

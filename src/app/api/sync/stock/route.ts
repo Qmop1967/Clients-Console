@@ -7,7 +7,7 @@
 // ============================================
 
 import { NextRequest, NextResponse } from 'next/server';
-import { syncWholesaleStock, getStockCacheStatus, isStockCacheStale } from '@/lib/zoho/stock-cache';
+import { syncWholesaleStock, syncStockFromBooks, getStockCacheStatus, isStockCacheStale } from '@/lib/zoho/stock-cache';
 
 // Use environment variable for secret, with fallback for local development
 const SYNC_SECRET = process.env.STOCK_SYNC_SECRET || 'tsh-stock-sync-2024';
@@ -46,9 +46,10 @@ export async function GET(request: NextRequest) {
 
     // Action: sync - Trigger stock sync (supports chunked sync)
     if (action === 'sync') {
-      // Get chunked sync parameters
+      // Get sync parameters
       const offset = parseInt(searchParams.get('offset') || '0', 10);
-      const limit = parseInt(searchParams.get('limit') || '100', 10); // Default 100 items per chunk
+      const limit = parseInt(searchParams.get('limit') || '100', 10);
+      const source = searchParams.get('source') || 'inventory'; // 'books' for faster sync
 
       // Check if sync is needed (unless force=true or doing chunked sync)
       const isChunkedSync = offset > 0;
@@ -65,21 +66,50 @@ export async function GET(request: NextRequest) {
         }
       }
 
-      console.log(`📦 Starting stock sync via API (offset=${offset}, limit=${limit})...`);
+      // Use Books API for FAST sync (higher rate limits: ~100 req/min vs ~3750/day)
+      if (source === 'books') {
+        console.log(`🚀 Starting FAST stock sync via Books API (offset=${offset}, limit=${limit})...`);
 
-      // Run sync with chunked settings to avoid timeout
+        const result = await syncStockFromBooks({
+          maxItems: limit,
+          offset: offset,
+        });
+
+        const status = await getStockCacheStatus();
+
+        return NextResponse.json({
+          success: result.success,
+          source: 'books',
+          result: {
+            itemsProcessed: result.itemsProcessed,
+            itemsWithStock: result.itemsWithStock,
+            durationSeconds: Math.round(result.durationMs / 1000),
+            totalItems: result.totalItems,
+            nextOffset: result.nextOffset,
+          },
+          cacheStatus: status,
+          nextSyncUrl: result.nextOffset
+            ? `/api/sync/stock?action=sync&secret=${SYNC_SECRET}&source=books&offset=${result.nextOffset}&limit=${limit}`
+            : null,
+        });
+      }
+
+      // Default: Use Inventory API (slower but warehouse-specific stock)
+      console.log(`📦 Starting stock sync via Inventory API (offset=${offset}, limit=${limit})...`);
+
       const result = await syncWholesaleStock({
-        batchSize: 5,       // 5 items per batch (reduced for reliability)
-        delayMs: 500,       // 0.5s between batches
-        maxItems: limit,    // Process chunk of items
-        offset: offset,     // Starting position
-        skipLock: isChunkedSync, // Skip lock for chunked sync
+        batchSize: 5,
+        delayMs: 500,
+        maxItems: limit,
+        offset: offset,
+        skipLock: isChunkedSync,
       });
 
       const status = await getStockCacheStatus();
 
       return NextResponse.json({
         success: result.success,
+        source: 'inventory',
         result: {
           itemsProcessed: result.itemsProcessed,
           errors: result.errors,
@@ -88,7 +118,6 @@ export async function GET(request: NextRequest) {
           nextOffset: result.nextOffset,
         },
         cacheStatus: status,
-        // Include next URL for easy continuation
         nextSyncUrl: result.nextOffset
           ? `/api/sync/stock?action=sync&secret=${SYNC_SECRET}&offset=${result.nextOffset}&limit=${limit}`
           : null,
