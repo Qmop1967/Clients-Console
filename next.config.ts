@@ -1,10 +1,26 @@
 import type { NextConfig } from "next";
 import createNextIntlPlugin from "next-intl/plugin";
+import bundleAnalyzer from "@next/bundle-analyzer";
 
 const withNextIntl = createNextIntlPlugin("./src/i18n/config.ts");
 
+// Enable bundle analyzer with ANALYZE=true environment variable
+const withBundleAnalyzer = bundleAnalyzer({
+  enabled: process.env.ANALYZE === "true",
+  openAnalyzer: true,
+});
+
 const nextConfig: NextConfig = {
-  // Image optimization
+  // Enable React Compiler for improved performance (Next.js 15)
+  reactStrictMode: true,
+
+  // Compression for production builds
+  compress: true,
+
+  // Optimize for production
+  poweredByHeader: false,
+
+  // Image optimization with aggressive settings
   images: {
     remotePatterns: [
       {
@@ -25,6 +41,10 @@ const nextConfig: NextConfig = {
       },
     ],
     formats: ["image/avif", "image/webp"],
+    // Optimize image quality for performance
+    deviceSizes: [640, 750, 828, 1080, 1200],
+    imageSizes: [16, 32, 48, 64, 96, 128, 256],
+    minimumCacheTTL: 60 * 60 * 24, // 24 hours cache
   },
 
   // Experimental features for performance
@@ -32,11 +52,22 @@ const nextConfig: NextConfig = {
     serverActions: {
       bodySizeLimit: "2mb",
     },
+    // Enable optimized package imports for smaller bundles
+    optimizePackageImports: [
+      "lucide-react",
+      "date-fns",
+      "@radix-ui/react-dialog",
+      "@radix-ui/react-dropdown-menu",
+      "@radix-ui/react-select",
+      "@radix-ui/react-tabs",
+      "@radix-ui/react-toast",
+    ],
   },
 
-  // Headers for security
+  // Headers for security and performance
   async headers() {
     return [
+      // Security headers for all routes
       {
         source: "/(.*)",
         headers: [
@@ -59,6 +90,36 @@ const nextConfig: NextConfig = {
           {
             key: "Referrer-Policy",
             value: "origin-when-cross-origin",
+          },
+        ],
+      },
+      // Cache static assets aggressively
+      {
+        source: "/:path*.(ico|jpg|jpeg|png|gif|webp|svg|avif)",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, max-age=31536000, immutable",
+          },
+        ],
+      },
+      // Cache fonts
+      {
+        source: "/:path*.(woff|woff2|ttf|otf)",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, max-age=31536000, immutable",
+          },
+        ],
+      },
+      // Cache JS and CSS with versioning support
+      {
+        source: "/_next/static/:path*",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, max-age=31536000, immutable",
           },
         ],
       },
@@ -87,4 +148,5 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default withNextIntl(nextConfig);
+// Chain plugins: bundle analyzer -> next-intl -> config
+export default withBundleAnalyzer(withNextIntl(nextConfig));

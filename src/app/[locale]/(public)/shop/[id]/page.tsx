@@ -10,9 +10,10 @@ import { Link } from "@/i18n/navigation";
 import { Button } from "@/components/ui/button";
 import { AlertCircle, RefreshCw } from "lucide-react";
 
-// Force dynamic rendering to ensure auth check runs on every request
-export const dynamic = 'force-dynamic';
-export const revalidate = 0;
+// PERFORMANCE: Use ISR with 2-minute revalidation instead of force-dynamic
+// Auth check still runs on each request, but product data is cached
+// This dramatically improves TTFB for product pages
+export const revalidate = 120; // 2 minutes - balance between freshness and performance
 
 interface ProductPageProps {
   params: Promise<{ locale: string; id: string }>;
@@ -74,14 +75,18 @@ async function fetchProductData(productId: string, priceListId?: string): Promis
       context: 'product-detail',
     });
 
-    console.log(`[ProductDetail] ${product.sku}: stock=${availableStock} (source: ${stockSource})`);
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`[ProductDetail] ${product.sku}: stock=${availableStock} (source: ${stockSource})`);
+    }
 
     // Fetch price list - use customer's if provided, otherwise Consumer
     const effectivePriceListId = priceListId || PRICE_LIST_IDS.CONSUMER;
     const priceList = await getCustomerPriceList(effectivePriceListId, [product.item_id]);
     const priceInfo = getItemPriceFromList(product.item_id, priceList);
 
-    console.log(`[ProductDetail] ${product.sku}: Final stock=${availableStock}, price=${priceInfo.rate} ${priceList?.currency_code}`);
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`[ProductDetail] ${product.sku}: Final stock=${availableStock}, price=${priceInfo.rate} ${priceList?.currency_code}`);
+    }
 
     return {
       success: true,
@@ -118,13 +123,9 @@ export default async function ProductPage({ params }: ProductPageProps) {
   const session = await auth();
   let priceListId: string | undefined;
 
-  // Debug: Log session state
-  console.log(`[ProductDetail] Auth check - Session exists: ${!!session}, User: ${session?.user?.email || 'none'}, ZohoContactId: ${session?.user?.zohoContactId || 'none'}`);
-
   if (session?.user?.zohoContactId) {
     // Try to get customer's price list
     priceListId = session.user.priceListId;
-    console.log(`[ProductDetail] Authenticated user - priceListId from session: ${priceListId}`);
 
     // If not in session, fetch from Zoho
     if (!priceListId) {
@@ -132,7 +133,6 @@ export default async function ProductPage({ params }: ProductPageProps) {
         const customer = await getZohoCustomer(session.user.zohoContactId);
         if (customer) {
           priceListId = customer.pricebook_id || customer.price_list_id || undefined;
-          console.log(`[ProductDetail] Fetched priceListId from Zoho: ${priceListId}`);
         }
       } catch (e) {
         console.error('[ProductDetail] Failed to fetch customer price list:', e);
@@ -144,10 +144,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
       priceListId = session.user.currencyCode === 'USD'
         ? PRICE_LIST_IDS.RETAILOR
         : PRICE_LIST_IDS.CONSUMER;
-      console.log(`[ProductDetail] Using default priceListId based on currency: ${priceListId}`);
     }
-  } else {
-    console.log(`[ProductDetail] Not authenticated - using Consumer price list (IQD)`);
   }
 
   const result = await fetchProductData(id, priceListId);

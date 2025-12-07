@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect, useCallback, memo, useRef, useTransition, useDeferredValue } from "react";
+import { useState, useMemo, useEffect, useCallback, memo, useRef, useDeferredValue } from "react";
 import { useTranslations, useLocale } from "next-intl";
 import { useSearchParams, usePathname } from "next/navigation";
 import Link from "next/link";

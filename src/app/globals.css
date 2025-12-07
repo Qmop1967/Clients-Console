@@ -3,10 +3,10 @@
  * Aesthetic: Luxury B2B Wholesale Portal
  * Typography: Cormorant Garamond (display) + Plus Jakarta Sans (body)
  * Arabic: Cairo (display) + IBM Plex Sans Arabic (body)
+ *
+ * PERFORMANCE NOTE: Fonts are now loaded via next/font in layout.tsx
+ * This prevents render-blocking and improves FCP/LCP
  */
-
-/* Google Fonts - Must be first @import */
-@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400;1,500&family=Cairo:wght@400;500;600;700&family=IBM+Plex+Sans+Arabic:wght@300;400;500;600;700&display=swap');
 
 @import "tailwindcss";
 
@@ -171,7 +171,7 @@
 
   body {
     @apply bg-background text-foreground;
-    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    font-family: var(--font-jakarta), 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
     font-feature-settings: "rlig" 1, "calt" 1;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
@@ -187,7 +187,7 @@
 
   /* Display typography - Elegant Serif */
   h1, h2, h3, h4, h5, h6 {
-    font-family: 'Cormorant Garamond', Georgia, 'Times New Roman', serif;
+    font-family: var(--font-cormorant), 'Cormorant Garamond', Georgia, 'Times New Roman', serif;
     font-weight: 600;
     letter-spacing: -0.01em;
     line-height: 1.2;
@@ -228,11 +228,11 @@
      ======================================== */
   [dir="rtl"] {
     text-align: right;
-    font-family: 'IBM Plex Sans Arabic', 'Plus Jakarta Sans', system-ui, sans-serif;
+    font-family: var(--font-ibm-arabic), 'IBM Plex Sans Arabic', 'Plus Jakarta Sans', system-ui, sans-serif;
   }
 
   [dir="rtl"] body {
-    font-family: 'IBM Plex Sans Arabic', system-ui, sans-serif;
+    font-family: var(--font-ibm-arabic), 'IBM Plex Sans Arabic', system-ui, sans-serif;
     font-weight: 400;
     line-height: 1.7; /* Slightly taller for Arabic readability */
   }
@@ -243,7 +243,7 @@
   [dir="rtl"] h4,
   [dir="rtl"] h5,
   [dir="rtl"] h6 {
-    font-family: 'Cairo', Georgia, serif;
+    font-family: var(--font-cairo), 'Cairo', Georgia, serif;
     letter-spacing: 0;
     font-weight: 700; /* Bolder for Arabic display */
   }
@@ -268,7 +268,7 @@
   [dir="rtl"] .price-display,
   [dir="rtl"] .stat-number,
   [dir="rtl"] .font-display {
-    font-family: 'Cairo', system-ui, sans-serif;
+    font-family: var(--font-cairo), 'Cairo', system-ui, sans-serif;
     font-weight: 700;
     font-feature-settings: "tnum" 1;
   }
@@ -350,11 +350,11 @@
   --radius-2xl: calc(var(--radius) + 12px);
   --radius-full: 9999px;
 
-  /* Font Families */
-  --font-display: 'Cormorant Garamond', Georgia, 'Times New Roman', serif;
-  --font-body: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
-  --font-arabic-display: 'Cairo', 'Cormorant Garamond', Georgia, serif;
-  --font-arabic-body: 'IBM Plex Sans Arabic', 'Plus Jakarta Sans', system-ui, sans-serif;
+  /* Font Families - Using CSS variables from next/font with fallbacks */
+  --font-display: var(--font-cormorant), 'Cormorant Garamond', Georgia, 'Times New Roman', serif;
+  --font-body: var(--font-jakarta), 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  --font-arabic-display: var(--font-cairo), 'Cairo', 'Cormorant Garamond', Georgia, serif;
+  --font-arabic-body: var(--font-ibm-arabic), 'IBM Plex Sans Arabic', 'Plus Jakarta Sans', system-ui, sans-serif;
 }
 
 /* Custom utilities */
@@ -888,7 +888,7 @@
 
 /* Price tag - Used for product prices */
 .price-tag {
-  font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+  font-family: var(--font-jakarta), 'Plus Jakarta Sans', system-ui, sans-serif;
   font-weight: 700;
   letter-spacing: -0.01em;
   font-feature-settings: "tnum" 1;
@@ -896,13 +896,13 @@
 
 /* RTL price styling - Same weight and style */
 [dir="rtl"] .price-tag {
-  font-family: 'Cairo', system-ui, sans-serif;
+  font-family: var(--font-cairo), 'Cairo', system-ui, sans-serif;
   font-weight: 700;
 }
 
 /* Large price display for hero sections */
 .price-display {
-  font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+  font-family: var(--font-jakarta), 'Plus Jakarta Sans', system-ui, sans-serif;
   font-weight: 700;
   font-size: 1.875rem;
   letter-spacing: -0.02em;
@@ -911,7 +911,7 @@
 }
 
 [dir="rtl"] .price-display {
-  font-family: 'Cairo', system-ui, sans-serif;
+  font-family: var(--font-cairo), 'Cairo', system-ui, sans-serif;
   font-size: 2rem;
   font-weight: 700;
 }
@@ -920,7 +920,7 @@
    Stat Numbers - Large & Clear
    ======================================== */
 .stat-number {
-  font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+  font-family: var(--font-jakarta), 'Plus Jakarta Sans', system-ui, sans-serif;
   font-weight: 700;
   font-size: 2.5rem;
   line-height: 1.1;
@@ -929,14 +929,14 @@
 }
 
 [dir="rtl"] .stat-number {
-  font-family: 'Cairo', system-ui, sans-serif;
+  font-family: var(--font-cairo), 'Cairo', system-ui, sans-serif;
   font-size: 2.75rem;
   font-weight: 700;
 }
 
 /* Stat number with currency */
 .stat-currency {
-  font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+  font-family: var(--font-jakarta), 'Plus Jakarta Sans', system-ui, sans-serif;
   font-weight: 700;
   font-size: 2rem;
   line-height: 1.1;
@@ -944,32 +944,32 @@
 }
 
 [dir="rtl"] .stat-currency {
-  font-family: 'Cairo', system-ui, sans-serif;
+  font-family: var(--font-cairo), 'Cairo', system-ui, sans-serif;
   font-size: 2.25rem;
   font-weight: 700;
 }
 
 /* Stock number - Bold and clear for inventory display */
 .stock-number {
-  font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+  font-family: var(--font-jakarta), 'Plus Jakarta Sans', system-ui, sans-serif;
   font-weight: 600;
   font-feature-settings: "tnum" 1;
 }
 
 [dir="rtl"] .stock-number {
-  font-family: 'Cairo', system-ui, sans-serif;
+  font-family: var(--font-cairo), 'Cairo', system-ui, sans-serif;
   font-weight: 600;
 }
 
 /* Number text utility - For any inline numbers that need consistent styling */
 .number-text {
-  font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+  font-family: var(--font-jakarta), 'Plus Jakarta Sans', system-ui, sans-serif;
   font-weight: 600;
   font-feature-settings: "tnum" 1;
 }
 
 [dir="rtl"] .number-text {
-  font-family: 'Cairo', system-ui, sans-serif;
+  font-family: var(--font-cairo), 'Cairo', system-ui, sans-serif;
   font-weight: 600;
 }
 

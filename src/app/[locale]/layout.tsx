@@ -9,11 +9,46 @@ import { Toaster } from "@/components/ui/toaster";
 import { locales, localeDirection, type Locale } from "@/i18n/config";
 import "../globals.css";
 
-// Fonts are loaded via CSS @import in globals.css:
-// - Display: Cormorant Garamond (serif) - for headings, prices, hero text
-// - Body: Plus Jakarta Sans (sans-serif) - for body text, labels
-// - Arabic Display: Cairo (serif) - for Arabic headings
-// - Arabic Body: IBM Plex Sans Arabic (sans-serif) - for Arabic body text
+// Performance-optimized fonts using next/font/google
+// This prevents render-blocking and enables automatic font subsetting
+import { Plus_Jakarta_Sans, Cormorant_Garamond, Cairo, IBM_Plex_Sans_Arabic } from "next/font/google";
+
+// Body font - Latin (used for most UI text)
+const plusJakartaSans = Plus_Jakarta_Sans({
+  subsets: ["latin"],
+  weight: ["300", "400", "500", "600", "700"],
+  variable: "--font-jakarta",
+  display: "swap",
+  preload: true,
+});
+
+// Display font - Latin (used for headings, prices)
+const cormorantGaramond = Cormorant_Garamond({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  style: ["normal", "italic"],
+  variable: "--font-cormorant",
+  display: "swap",
+  preload: false, // Don't preload display font - body is more critical
+});
+
+// Arabic display font
+const cairo = Cairo({
+  subsets: ["arabic", "latin"],
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-cairo",
+  display: "swap",
+  preload: false, // Preloaded only for Arabic locale
+});
+
+// Arabic body font
+const ibmPlexSansArabic = IBM_Plex_Sans_Arabic({
+  subsets: ["arabic", "latin"],
+  weight: ["300", "400", "500", "600", "700"],
+  variable: "--font-ibm-arabic",
+  display: "swap",
+  preload: false, // Preloaded only for Arabic locale
+});
 
 export const metadata: Metadata = {
   title: {
@@ -72,15 +107,16 @@ export default async function RootLayout({
   const messages = await getMessages();
   const dir = localeDirection[locale as Locale];
 
+  // Combine all font CSS variables
+  const fontVariables = `${plusJakartaSans.variable} ${cormorantGaramond.variable} ${cairo.variable} ${ibmPlexSansArabic.variable}`;
+
   return (
-    <html lang={locale} dir={dir} suppressHydrationWarning>
+    <html lang={locale} dir={dir} suppressHydrationWarning className={fontVariables}>
       <head>
         {/* Preconnect to Zoho CDN for faster image loading */}
         <link rel="preconnect" href="https://www.zohoapis.com" />
         <link rel="dns-prefetch" href="https://www.zohoapis.com" />
-        {/* Preconnect to font CDNs */}
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        {/* Note: Font preconnects handled automatically by next/font */}
       </head>
       <body className="font-body antialiased">
         <SessionProvider>
