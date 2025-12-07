@@ -261,9 +261,9 @@ export function NumberedPagination({
 
   return (
     <div className={cn("flex flex-col items-center justify-center gap-4 w-full", className)}>
-      {/* Main pagination row - centered */}
-      <div className="flex items-center justify-center gap-2">
-        {/* Previous Arrow - Left side (Right in RTL) */}
+      {/* Main pagination row - centered, force LTR for consistent arrow direction */}
+      <div className="flex items-center justify-center gap-2" dir="ltr">
+        {/* Previous Arrow - Always on LEFT */}
         <button
           onClick={() => hasPrevious && onPageChange(currentPage - 1)}
           disabled={!hasPrevious}
@@ -275,7 +275,7 @@ export function NumberedPagination({
           )}
           aria-label={t("previous")}
         >
-          <ChevronLeft className="h-5 w-5 rtl:rotate-180" strokeWidth={1.5} />
+          <ChevronLeft className="h-5 w-5" strokeWidth={1} />
         </button>
 
         {/* Page Numbers */}
@@ -307,7 +307,7 @@ export function NumberedPagination({
           )}
         </div>
 
-        {/* Next Arrow - Right side (Left in RTL) */}
+        {/* Next Arrow - Always on RIGHT */}
         <button
           onClick={() => hasNext && onPageChange(currentPage + 1)}
           disabled={!hasNext}
@@ -319,7 +319,7 @@ export function NumberedPagination({
           )}
           aria-label={t("next")}
         >
-          <ChevronRight className="h-5 w-5 rtl:rotate-180" strokeWidth={1.5} />
+          <ChevronRight className="h-5 w-5" strokeWidth={1} />
         </button>
       </div>
 
