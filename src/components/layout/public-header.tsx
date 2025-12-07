@@ -7,6 +7,7 @@ import { ShoppingCart, User, Globe, LayoutDashboard } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useCart } from "@/components/providers/cart-provider";
+import { AnimatedLogo } from "@/components/ui/animated-logo";
 
 interface PublicHeaderProps {
   locale: string;
@@ -27,15 +28,12 @@ export function PublicHeader({ locale }: PublicHeaderProps) {
   return (
     <header className="sticky top-0 z-50 border-b border-border/50 bg-background/95 backdrop-blur-xl supports-[backdrop-filter]:bg-background/80 safe-area-inset-top">
       <div className="container mx-auto flex h-14 items-center justify-between px-4">
-        {/* Logo - Luxury styling with serif font */}
+        {/* Logo - Animated computer → TSH logo */}
         <Link
           href={logoHref}
           className="group flex items-center gap-2 transition-opacity hover:opacity-80"
         >
-          {/* Gold accent square */}
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-amber-500 to-amber-600 shadow-sm">
-            <span className="font-display text-lg font-bold text-white">T</span>
-          </div>
+          <AnimatedLogo />
           <div className="flex flex-col">
             <span className="font-display text-xl font-semibold tracking-tight">
               TSH

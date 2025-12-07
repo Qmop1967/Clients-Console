@@ -3,6 +3,7 @@
 import { ShoppingCart, Bell } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { AnimatedLogo } from "@/components/ui/animated-logo";
 
 interface HeaderProps {
   title?: string;
@@ -17,10 +18,7 @@ export function Header({ title, cartCount = 0, onCartClick }: HeaderProps) {
         {/* Logo / Title */}
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2.5">
-            {/* Gold accent logo */}
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-amber-500 to-amber-600 shadow-sm">
-              <span className="font-display text-lg font-bold text-white">T</span>
-            </div>
+            <AnimatedLogo />
             <div className="flex flex-col">
               <h1 className="font-display text-lg font-semibold tracking-tight">
                 {title || "TSH"}
