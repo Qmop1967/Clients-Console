@@ -5,6 +5,11 @@
 // 1. Check Redis for cached Blob URL
 // 2. If found, redirect to CDN (fast, no Zoho API call)
 // 3. If not found, fetch from Zoho (fallback)
+//
+// Cache Strategy:
+// - Blob URLs: 1 hour browser cache, 24 hour CDN with revalidation
+// - This allows image updates to reflect within ~1 hour
+// - On-demand invalidation via webhook triggers immediate re-sync
 // ============================================
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -15,12 +20,16 @@ import { getCachedImageUrl, syncSingleImage } from '@/lib/blob/image-cache';
 const ZOHO_INVENTORY_URL = 'https://www.zohoapis.com/inventory/v1';
 
 // Cache headers for images
+// UPDATED: Reduced from 1 year to allow image updates to propagate faster
 const CDN_CACHE_HEADERS = {
-  'Cache-Control': 'public, max-age=31536000, immutable', // 1 year for CDN URLs
+  'Cache-Control': 'public, max-age=3600, s-maxage=86400, stale-while-revalidate=86400',
+  // 1 hour browser cache, 24 hour CDN cache with stale-while-revalidate
+  // This ensures image updates reflect within 1 hour while maintaining good performance
 };
 
 const PROXY_CACHE_HEADERS = {
-  'Cache-Control': 'public, max-age=3600, s-maxage=3600, stale-while-revalidate=86400', // 1 hour for proxied images
+  'Cache-Control': 'public, max-age=1800, s-maxage=3600, stale-while-revalidate=86400',
+  // 30 min browser cache for proxied images (Zoho API fallback)
 };
 
 export async function GET(

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { revalidateTag } from "next/cache";
 import { CACHE_TAGS, getAccessToken } from "@/lib/zoho/client";
-import { syncSingleImage } from "@/lib/blob/image-cache";
+import { syncSingleImage, hasImageChanged } from "@/lib/blob/image-cache";
 import { quickSyncStock } from "@/lib/zoho/stock-cache";
 
 // Webhook secret for verification
@@ -261,16 +261,42 @@ async function fetchInvoiceLineItems(invoiceId: string): Promise<string[]> {
   return itemIds;
 }
 
-// Sync product image to Vercel Blob (fire-and-forget)
-async function syncProductImage(itemId: string, reason: string) {
+// Sync product image to Vercel Blob with change detection
+// If imageDocId is provided, checks if image actually changed before re-syncing
+async function syncProductImage(
+  itemId: string,
+  reason: string,
+  imageDocId?: string | null
+) {
   try {
-    console.log(`[Webhook] 🖼️ Syncing image for ${itemId}: ${reason}`);
+    console.log(`[Webhook] 🖼️ Checking image for ${itemId}: ${reason}`);
+
+    // Check if image actually changed using document ID
+    if (imageDocId) {
+      const changed = await hasImageChanged(itemId, imageDocId);
+      if (!changed) {
+        console.log(`[Webhook] ⏭️ Image unchanged for ${itemId} (docId: ${imageDocId})`);
+        return;
+      }
+      console.log(`[Webhook] 🔄 Image changed for ${itemId}, forcing re-sync`);
+    }
+
     const token = await getAccessToken();
-    const result = await syncSingleImage(itemId, token);
+
+    // Force re-sync if we detected a change or no docId available
+    const result = await syncSingleImage(itemId, token, {
+      force: !!imageDocId, // Force if we have docId (indicates intentional update check)
+      imageDocId: imageDocId || undefined,
+    });
+
     if (result.success) {
-      console.log(`[Webhook] ✅ Image synced for ${itemId}: ${result.url}`);
+      if (result.unchanged) {
+        console.log(`[Webhook] ⏭️ Image unchanged for ${itemId} (cached)`);
+      } else {
+        console.log(`[Webhook] ✅ Image synced for ${itemId}: ${result.url}`);
+      }
     } else {
-      console.log(`[Webhook] ⚠️ Image sync skipped for ${itemId}: ${result.error}`);
+      console.log(`[Webhook] ⚠️ Image sync failed for ${itemId}: ${result.error}`);
     }
   } catch (error) {
     console.error(`[Webhook] ❌ Failed to sync image for ${itemId}:`, error);
@@ -338,10 +364,12 @@ export async function POST(request: NextRequest) {
         await revalidateProducts(`item ${eventType}`);
         // Sync stock cache for this item
         syncStockForItems(affectedItemIds, `item: ${eventType}`);
-        // Sync image for item events
+        // Sync image for item events with change detection
         const itemId = (data.item_id as string) || (data.id as string);
+        const imageDocId = data.image_document_id as string | undefined;
         if (itemId) {
-          syncProductImage(itemId, eventType).catch(() => {});
+          // Pass imageDocId for change detection - only re-syncs if image actually changed
+          syncProductImage(itemId, eventType, imageDocId).catch(() => {});
         }
         break;
 

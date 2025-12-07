@@ -9,8 +9,9 @@
 
 import { put, del, list } from '@vercel/blob';
 
-// Redis key prefix for image URLs
+// Redis key prefixes for image data
 const IMAGE_URL_PREFIX = 'image:';
+const IMAGE_DOC_ID_PREFIX = 'image:docId:';
 const IMAGE_SYNC_STATUS_KEY = 'image:sync:status';
 
 // ============================================
@@ -29,6 +30,7 @@ interface ImageUploadResult {
   success: boolean;
   url?: string;
   error?: string;
+  unchanged?: boolean; // True if image was already cached and unchanged
 }
 
 // ============================================
@@ -196,16 +198,96 @@ export async function cacheImageUrls(urlMap: Map<string, string>): Promise<boole
 }
 
 // ============================================
+// IMAGE DOCUMENT ID TRACKING (Change Detection)
+// ============================================
+// Zoho provides image_document_id which changes when an image is updated.
+// We track this to detect image changes and trigger re-sync.
+// ============================================
+
+/**
+ * Get stored image_document_id for an item
+ */
+export async function getStoredImageDocId(itemId: string): Promise<string | null> {
+  const key = `${IMAGE_DOC_ID_PREFIX}${itemId}`;
+  return redisGet(key);
+}
+
+/**
+ * Store image_document_id for an item
+ */
+export async function setStoredImageDocId(itemId: string, docId: string): Promise<boolean> {
+  const key = `${IMAGE_DOC_ID_PREFIX}${itemId}`;
+  return redisSet(key, docId);
+}
+
+/**
+ * Check if image has changed by comparing document IDs
+ * Returns true if image has changed (docId is different or not stored)
+ */
+export async function hasImageChanged(itemId: string, newDocId: string | null | undefined): Promise<boolean> {
+  if (!newDocId) {
+    // No new docId provided, assume changed to be safe
+    return true;
+  }
+
+  const storedDocId = await getStoredImageDocId(itemId);
+
+  if (!storedDocId) {
+    // No stored docId, image is new
+    console.log(`[ImageCache] No stored docId for ${itemId}, treating as new`);
+    return true;
+  }
+
+  const changed = storedDocId !== newDocId;
+  if (changed) {
+    console.log(`[ImageCache] Image changed for ${itemId}: ${storedDocId} → ${newDocId}`);
+  }
+
+  return changed;
+}
+
+/**
+ * Clear image cache for an item (URL and docId)
+ * Used when forcing a re-sync
+ */
+export async function clearImageCache(itemId: string): Promise<boolean> {
+  try {
+    const urlKey = `${IMAGE_URL_PREFIX}${itemId}`;
+    const docIdKey = `${IMAGE_DOC_ID_PREFIX}${itemId}`;
+
+    // Delete both keys
+    await Promise.all([
+      fetch(`${process.env.UPSTASH_REDIS_REST_URL}/del/${urlKey}`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${process.env.UPSTASH_REDIS_REST_TOKEN}` },
+      }),
+      fetch(`${process.env.UPSTASH_REDIS_REST_URL}/del/${docIdKey}`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${process.env.UPSTASH_REDIS_REST_TOKEN}` },
+      }),
+    ]);
+
+    console.log(`[ImageCache] Cleared cache for ${itemId}`);
+    return true;
+  } catch (error) {
+    console.warn(`[ImageCache] Failed to clear cache for ${itemId}:`, error);
+    return false;
+  }
+}
+
+// ============================================
 // VERCEL BLOB OPERATIONS
 // ============================================
 
 /**
- * Upload an image to Vercel Blob
+ * Upload an image to Vercel Blob with timestamp for cache busting
+ * Uses timestamp in filename to ensure new uploads get new URLs
  */
 export async function uploadImageToBlob(
   itemId: string,
   imageBuffer: Buffer,
-  contentType: string
+  contentType: string,
+  options: { useTimestamp?: boolean } = {}
 ): Promise<ImageUploadResult> {
   try {
     // Determine file extension from content type
@@ -213,7 +295,9 @@ export async function uploadImageToBlob(
                 contentType.includes('gif') ? 'gif' :
                 contentType.includes('webp') ? 'webp' : 'jpg';
 
-    const filename = `products/${itemId}.${ext}`;
+    // Include timestamp in filename for cache busting when image changes
+    const timestamp = options.useTimestamp ? `_${Date.now()}` : '';
+    const filename = `products/${itemId}${timestamp}.${ext}`;
 
     const blob = await put(filename, imageBuffer, {
       access: 'public',
@@ -231,6 +315,22 @@ export async function uploadImageToBlob(
     const errorMsg = error instanceof Error ? error.message : String(error);
     console.error(`[ImageCache] Failed to upload ${itemId}:`, errorMsg);
     return { success: false, error: errorMsg };
+  }
+}
+
+/**
+ * Delete all blob versions for an item (cleanup old images)
+ */
+async function cleanupOldBlobVersions(itemId: string): Promise<void> {
+  try {
+    const { blobs } = await list({ prefix: `products/${itemId}` });
+
+    for (const blob of blobs) {
+      await del(blob.url);
+      console.log(`[ImageCache] Deleted old blob: ${blob.url}`);
+    }
+  } catch (error) {
+    console.warn(`[ImageCache] Failed to cleanup old blobs for ${itemId}:`, error);
   }
 }
 
@@ -405,25 +505,69 @@ interface SyncResult {
 
 /**
  * Sync a single product image to Vercel Blob
+ *
+ * Options:
+ * - force: Skip cache check and re-sync regardless of existing cache
+ * - imageDocId: Zoho's image_document_id for change detection
+ *
+ * When imageDocId is provided and matches stored value, sync is skipped.
+ * When force=true, always re-syncs and uses timestamp for cache busting.
  */
 export async function syncSingleImage(
   itemId: string,
-  accessToken: string
+  accessToken: string,
+  options: {
+    force?: boolean;
+    imageDocId?: string | null;
+  } = {}
 ): Promise<ImageUploadResult> {
-  // Check if already cached
-  const existingUrl = await getCachedImageUrl(itemId);
-  if (existingUrl) {
-    return { success: true, url: existingUrl };
+  const { force = false, imageDocId } = options;
+
+  // If not forcing, check if image actually changed via docId
+  if (!force && imageDocId) {
+    const changed = await hasImageChanged(itemId, imageDocId);
+    if (!changed) {
+      const existingUrl = await getCachedImageUrl(itemId);
+      if (existingUrl) {
+        console.log(`[ImageCache] Image unchanged for ${itemId}, using cached URL`);
+        return { success: true, url: existingUrl, unchanged: true };
+      }
+    }
   }
 
-  // Fetch from Zoho
+  // Check cache only if not forcing and no docId change detected
+  if (!force) {
+    const existingUrl = await getCachedImageUrl(itemId);
+    if (existingUrl) {
+      return { success: true, url: existingUrl, unchanged: true };
+    }
+  }
+
+  // Force re-sync: Delete old blobs first to avoid accumulation
+  if (force) {
+    console.log(`[ImageCache] Force re-sync for ${itemId}, cleaning up old blobs`);
+    await cleanupOldBlobVersions(itemId);
+    await clearImageCache(itemId);
+  }
+
+  // Fetch fresh image from Zoho
   const imageData = await fetchImageFromZoho(itemId, accessToken);
   if (!imageData) {
     return { success: false, error: 'No image found' };
   }
 
-  // Upload to Blob
-  return uploadImageToBlob(itemId, imageData.buffer, imageData.contentType);
+  // Upload to Blob with timestamp for cache busting when forcing
+  const result = await uploadImageToBlob(itemId, imageData.buffer, imageData.contentType, {
+    useTimestamp: force, // Use timestamp only when forcing to bust caches
+  });
+
+  // Store docId if provided and upload succeeded
+  if (result.success && imageDocId) {
+    await setStoredImageDocId(itemId, imageDocId);
+    console.log(`[ImageCache] Stored docId for ${itemId}: ${imageDocId}`);
+  }
+
+  return result;
 }
 
 /**
