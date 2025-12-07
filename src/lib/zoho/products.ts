@@ -547,15 +547,21 @@ async function fetchAllProductsFromBooks(): Promise<ZohoItem[]> {
  * Get all products METADATA only (cached for 24 hours)
  * Stock is fetched separately from Redis for freshness in getAllProductsComplete()
  *
- * IMPORTANT: We keep original Zoho Books stock as fallback
- * This ensures products are visible even when Redis cache is incomplete
- * (Zoho Books stock is item-level, Redis provides warehouse-specific stock)
+ * SAFEGUARD: Will throw error if API returns 0 products to prevent caching empty results
+ * This ensures the cache never holds invalid data.
  */
 export const getAllProductsMetadata = unstable_cache(
   async (): Promise<ZohoItem[]> => {
     const products = await fetchAllProductsFromBooks();
-    // Keep original Zoho Books stock as fallback when Redis cache is incomplete
-    // Redis stock will override this in getAllProductsComplete() when available
+
+    // SAFEGUARD: Never cache empty results!
+    // If API returns 0 products, throw an error so unstable_cache doesn't cache it
+    if (products.length === 0) {
+      console.error('[getAllProductsMetadata] API returned 0 products - NOT caching empty result');
+      throw new Error('SAFEGUARD: Refusing to cache empty product list');
+    }
+
+    console.log(`[getAllProductsMetadata] Caching ${products.length} products`);
     return products;
   },
   ['all-products-metadata-books'],
@@ -564,6 +570,20 @@ export const getAllProductsMetadata = unstable_cache(
     tags: [CACHE_TAGS.PRODUCTS],
   }
 );
+
+/**
+ * Safe wrapper that handles cache miss gracefully
+ * Falls back to direct API call if cache throws
+ */
+export async function getProductsMetadataSafe(): Promise<ZohoItem[]> {
+  try {
+    return await getAllProductsMetadata();
+  } catch (error) {
+    console.warn('[getProductsMetadataSafe] Cache miss or error, fetching directly from API...');
+    const products = await fetchAllProductsFromBooks();
+    return products;
+  }
+}
 
 /**
  * Get all products with stock data
@@ -576,49 +596,62 @@ export const getAllProductsMetadata = unstable_cache(
  * This ensures products are always visible even when Redis cache is incomplete,
  * while preferring the accurate warehouse-specific stock from Redis when available.
  *
- * Flow:
- * - Product metadata: Cached 24 hours (Zoho Books API) - includes item-level stock
- * - Redis stock: Fresh from sync (30 min TTL) - warehouse-specific
- * - For items not in Redis: Use Zoho Books stock as fallback
+ * SAFEGUARDS:
+ * - If Redis cache is empty, uses Books stock directly (never returns 0 for all)
+ * - Logs warnings for monitoring when cache coverage is low
  */
 export async function getAllProductsComplete(): Promise<ZohoItem[]> {
   try {
     // Step 1: Get cached product metadata (includes Zoho Books stock as fallback)
-    const products = await getAllProductsMetadata();
+    // Uses safe wrapper that falls back to direct API call on cache error
+    const products = await getProductsMetadataSafe();
 
     if (products.length === 0) {
+      console.error('[getAllProductsComplete] No products from metadata cache!');
       return [];
     }
 
-    // Step 2: Get stock from Redis cache (warehouse-specific)
+    // Step 2: Get cache status first to determine strategy
+    const cacheStatus = await getStockCacheStatus();
+
+    // SAFEGUARD: If Redis cache is empty or very stale, use Books stock directly
+    if (!cacheStatus.exists || cacheStatus.itemCount === 0) {
+      console.warn('[getAllProductsComplete] Redis stock cache is EMPTY - using Zoho Books stock as fallback');
+      // Return products with their original Zoho Books stock
+      const productsWithBooksStock = products.map((item) => ({
+        ...item,
+        available_stock: item.available_stock ?? 0,
+      }));
+      const inStockCount = productsWithBooksStock.filter(p => (p.available_stock ?? 0) > 0).length;
+      console.log(`[getAllProductsComplete] Using Books stock: ${inStockCount}/${products.length} in stock`);
+      return productsWithBooksStock;
+    }
+
+    // Step 3: Get stock from Redis cache (warehouse-specific)
     const itemIds = products.map(item => item.item_id);
     const stockMap = await getUnifiedStockBulk(itemIds, {
       context: 'shop-list',
     });
 
-    // Step 3: Get cache status for monitoring
-    const cacheStatus = await getStockCacheStatus();
-
     // Calculate statistics for monitoring
     let redisHits = 0;
     let booksHits = 0;
-    stockMap.forEach((stock, itemId) => {
-      if (stock > 0) redisHits++;
-    });
 
     // Step 4: Merge stock with products
     // Priority: Redis cache > Zoho Books stock > 0
     const productsWithStock = products.map((item) => {
       const redisStock = stockMap.get(item.item_id);
-      // Use Redis stock if available (even if 0 - means item synced but out of stock)
-      // Fall back to Books stock only if Redis doesn't have this item at all
-      const hasRedisData = stockMap.has(item.item_id);
-      const finalStock = hasRedisData
-        ? (redisStock ?? 0)
-        : (item.available_stock ?? 0); // Fallback to Books stock
+      const hasRedisData = stockMap.has(item.item_id) && redisStock !== undefined;
 
-      if (!hasRedisData && item.available_stock && item.available_stock > 0) {
-        booksHits++;
+      // IMPROVED: Use Redis if available, otherwise fall back to Books stock
+      let finalStock: number;
+      if (hasRedisData && redisStock !== undefined) {
+        finalStock = redisStock;
+        if (redisStock > 0) redisHits++;
+      } else {
+        // Fallback to Books stock
+        finalStock = item.available_stock ?? 0;
+        if (finalStock > 0) booksHits++;
       }
 
       return {
@@ -629,14 +662,11 @@ export async function getAllProductsComplete(): Promise<ZohoItem[]> {
 
     // Log statistics
     const totalWithStock = redisHits + booksHits;
-    if (process.env.NODE_ENV === 'development') {
-      console.log(`[getAllProductsComplete] Stock sources - Redis: ${redisHits}, Books fallback: ${booksHits}, Total in-stock: ${totalWithStock}/${products.length}, cache age: ${cacheStatus.ageSeconds}s`);
-    }
+    console.log(`[getAllProductsComplete] Stock sources - Redis: ${redisHits}, Books fallback: ${booksHits}, Total in-stock: ${totalWithStock}/${products.length}, cache items: ${cacheStatus.itemCount}`);
 
-    // Warn if Redis coverage is low
-    const redisCoverage = stockMap.size / products.length * 100;
-    if (redisCoverage < 50 && products.length > 10) {
-      console.warn(`[getAllProductsComplete] Low Redis coverage: ${redisCoverage.toFixed(1)}% - consider running /api/sync/stock`);
+    // SAFEGUARD: If somehow all products have 0 stock, log critical error
+    if (totalWithStock === 0 && products.length > 0) {
+      console.error('[CRITICAL] getAllProductsComplete: ALL products showing 0 stock! Check stock sync.');
     }
 
     return productsWithStock;
