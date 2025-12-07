@@ -5,6 +5,7 @@ import { getMessages } from "next-intl/server";
 import { ThemeProvider } from "@/components/providers/theme-provider";
 import { SessionProvider } from "@/components/providers/session-provider";
 import { CartSessionProvider } from "@/components/providers/cart-session-provider";
+import { SplashProvider } from "@/components/providers/splash-provider";
 import { Toaster } from "@/components/ui/toaster";
 import { locales, localeDirection, type Locale } from "@/i18n/config";
 import "../globals.css";
@@ -92,7 +93,9 @@ export default async function RootLayout({
           >
             <NextIntlClientProvider messages={messages}>
               <CartSessionProvider>
-                {children}
+                <SplashProvider>
+                  {children}
+                </SplashProvider>
                 <Toaster />
               </CartSessionProvider>
             </NextIntlClientProvider>
