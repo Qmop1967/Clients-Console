@@ -65,6 +65,8 @@ export function ProductImage({
         fill
         sizes={sizes}
         priority={priority}
+        loading={priority ? "eager" : "lazy"}
+        fetchPriority={priority ? "high" : "auto"}
         className={cn(
           "object-cover transition-opacity duration-300",
           isLoading ? "opacity-0" : "opacity-100"

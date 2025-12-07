@@ -17,8 +17,8 @@ import { formatCurrency } from "@/lib/utils/format";
 // Session storage key for scroll position
 const SCROLL_POSITION_KEY = "shop_scroll_position";
 
-// Pagination configuration
-const PRODUCTS_PER_PAGE = 24;
+// Pagination configuration - reduced from 24 to 16 for faster initial load
+const PRODUCTS_PER_PAGE = 16;
 
 // Product type from server
 interface PublicProduct {
@@ -51,15 +51,20 @@ interface PublicProductsContentProps {
   isAuthenticated?: boolean; // Hide login CTA for authenticated users
 }
 
+// Number of products to load with priority (above-the-fold)
+const PRIORITY_PRODUCTS_COUNT = 8;
+
 // Memoized Product Card Component with Add to Cart - Enhanced Design
 const ProductCardWithCart = memo(function ProductCardWithCart({
   product,
   currencyCode,
   locale,
+  priority = false,
 }: {
   product: PublicProduct;
   currencyCode: string;
   locale: string;
+  priority?: boolean;
 }) {
   const t = useTranslations("products");
   const { addItem, getItemQuantity } = useCart();
@@ -126,7 +131,8 @@ const ProductCardWithCart = memo(function ProductCardWithCart({
           src={product.image_url}
           alt={product.name}
           className="aspect-square"
-          priority={false}
+          priority={priority}
+          sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, (max-width: 1280px) 33vw, 25vw"
         />
 
         {/* Gradient overlay on hover */}
@@ -425,12 +431,13 @@ export function PublicProductsContent({
 
           {/* Product Grid */}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {paginatedProducts.map((product) => (
+            {paginatedProducts.map((product, index) => (
               <ProductCardWithCart
                 key={product.item_id}
                 product={product}
                 currencyCode={currencyCode}
                 locale={locale}
+                priority={currentPage === 1 && index < PRIORITY_PRODUCTS_COUNT}
               />
             ))}
           </div>
