@@ -350,27 +350,29 @@ Technical Implementation:
 #### Stock Cache Architecture (CRITICAL)
 ```yaml
 Stock Data Flow:
-  1. Product metadata cached 24h (Zoho Books API) - includes item-level stock
+  1. Product metadata cached 24h (Zoho Books API) - NO stock from Books used
   2. Warehouse-specific stock cached in Redis (30 min TTL)
-  3. getAllProductsComplete() merges: Redis stock (priority) OR Zoho Books stock (fallback)
+  3. UNIFIED stock functions ensure consistency between pages
   4. Shop page filters: available_stock > 0
 
-CRITICAL Rules:
-  1. NEVER force available_stock: 0 in cached product metadata
-     - This breaks fallback when Redis cache is incomplete
-     - Bug: Only products in Redis cache appear (e.g., 18 instead of 400+)
+CRITICAL: Single Source of Truth
+  Both shop list and product detail pages use UNIFIED stock functions:
+  - getUnifiedStock(itemId) - For single item (detail page)
+  - getUnifiedStockBulk(itemIds) - For list (shop page)
 
-  2. ALWAYS keep Zoho Books stock as fallback
-     - Redis provides warehouse-specific stock (most accurate)
-     - Zoho Books provides item-level stock (less accurate but shows products)
-     - Better to show all products with approximate stock than hide 99% of catalog
+  These functions ONLY use Redis cache as the stock source.
+  They do NOT fall back to Zoho Books item-level stock.
+  This prevents stock discrepancy between list and detail views.
 
-  3. ALWAYS check cache completeness before relying on it
-     - Warning at < 100 items
-     - Critical error at < 10% completeness
+  Why no Books fallback:
+  - Books API `available_stock` = Total across ALL warehouses
+  - Inventory API `location_available_for_sale_stock` = Only WholeSale WareHouse
+  - These values are DIFFERENT, causing user-visible inconsistency
 
-  4. ALWAYS test shop page product count after stock-related changes
-     - Should show 400+ products, not 18
+Stock Resolution Priority:
+  1. Redis cache (warehouse-specific, most accurate)
+  2. Fetch from Inventory API + cache result (on-demand, detail page only)
+  3. Return 0 if unavailable (NOT Books fallback)
 
 Quick Diagnostics:
   Check cache: curl "https://www.tsh.sale/api/sync/stock?action=status"
@@ -378,10 +380,52 @@ Quick Diagnostics:
   - Force sync: curl "https://www.tsh.sale/api/sync/stock?action=sync&secret=<SECRET>&force=true"
 
 Code Locations:
-  - getAllProductsMetadata(): src/lib/zoho/products.ts:554-560
-  - getAllProductsComplete(): src/lib/zoho/products.ts:572-625
-  - Stock cache: src/lib/zoho/stock-cache.ts
-  - Shop page filter: src/app/[locale]/(public)/shop/page.tsx:56-58
+  - getUnifiedStock(): src/lib/zoho/stock-cache.ts:594-646
+  - getUnifiedStockBulk(): src/lib/zoho/stock-cache.ts:683-728
+  - getAllProductsComplete(): src/lib/zoho/products.ts:585-633
+  - Product detail: src/app/[locale]/(public)/shop/[id]/page.tsx:61-112
+```
+
+#### Stock Consistency Rules (CRITICAL)
+```yaml
+PROBLEM SOLVED:
+  Stock displayed on shop list was DIFFERENT from product detail page.
+  Root cause: Different fallback sources when Redis cache missed.
+  - List: Fell back to Books API (total across all warehouses)
+  - Detail: Fell back to Inventory API (warehouse-specific)
+
+SOLUTION IMPLEMENTED:
+  Unified stock functions that BOTH pages use:
+  - getUnifiedStock(itemId) - Returns { stock, source: 'cache'|'api'|'unavailable' }
+  - getUnifiedStockBulk(itemIds) - Returns Map<itemId, stock>
+
+  On-demand caching:
+  - When detail page fetches fresh stock from Inventory API
+  - It automatically saves to Redis cache
+  - Next list page load sees the same value
+
+NEVER DO:
+  - Use `item.available_stock` from Books API as stock source
+  - Fall back to Books data when Redis cache misses
+  - Use getCachedStock()/getCachedStockBulk() directly (deprecated)
+  - Use different functions for list vs detail stock
+
+ALWAYS DO:
+  - Use getUnifiedStock() for single item stock
+  - Use getUnifiedStockBulk() for list stock
+  - Run stock sync before deploying stock-related changes
+  - Check that Redis cache has 400+ items after sync
+
+Verification Checklist (After Stock Changes):
+  1. Pick 3 random products from shop list
+  2. Note stock value shown on list
+  3. Click into detail page
+  4. Verify stock matches EXACTLY
+  5. If mismatch: check Redis cache completeness
+
+Deprecated Functions (DO NOT USE):
+  - getCachedStock() → Use getUnifiedStock() instead
+  - getCachedStockBulk() → Use getUnifiedStockBulk() instead
 ```
 
 #### Pricing Rules (CRITICAL)

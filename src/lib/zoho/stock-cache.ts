@@ -569,3 +569,160 @@ export async function getStockCacheStatus(): Promise<{
     isStale: ageSeconds > STOCK_CACHE_TTL,
   };
 }
+
+// ============================================
+// UNIFIED STOCK FUNCTIONS (SINGLE SOURCE OF TRUTH)
+// ============================================
+// These functions ensure BOTH list and detail pages use
+// the SAME stock source, preventing discrepancies.
+// ============================================
+
+/**
+ * SINGLE SOURCE OF TRUTH for stock retrieval
+ * Both list and detail pages MUST use this function
+ *
+ * Priority:
+ * 1. Redis cache (warehouse-specific, most accurate)
+ * 2. Fetch from Inventory API + cache result (on-demand caching)
+ *
+ * NEVER falls back to Books API item-level stock to avoid discrepancy
+ *
+ * @param itemId - The item ID to get stock for
+ * @param options.fetchOnMiss - If true, fetch from API when cache misses. If false, return null on miss
+ * @param options.context - Context for logging (e.g., 'product-detail', 'shop-list')
+ */
+export async function getUnifiedStock(
+  itemId: string,
+  options: {
+    fetchOnMiss?: boolean;
+    context?: string;
+  } = {}
+): Promise<{ stock: number; source: 'cache' | 'api' | 'unavailable' }> {
+  const { fetchOnMiss = true, context = 'unknown' } = options;
+
+  // Step 1: Check Redis cache
+  const cached = await getStockCache();
+  if (cached && cached.stock[itemId] !== undefined) {
+    const stock = cached.stock[itemId];
+    console.log(`[getUnifiedStock] ${itemId}: ${stock} from cache (${context})`);
+    return { stock, source: 'cache' };
+  }
+
+  // Step 2: Cache miss - decide whether to fetch
+  if (!fetchOnMiss) {
+    console.log(`[getUnifiedStock] ${itemId}: cache miss, fetchOnMiss=false (${context})`);
+    return { stock: 0, source: 'unavailable' };
+  }
+
+  // Step 3: Fetch from Inventory API (warehouse-specific)
+  console.log(`[getUnifiedStock] ${itemId}: cache miss, fetching from Inventory API (${context})`);
+
+  try {
+    const data = await rateLimitedFetch(() =>
+      zohoFetch<ZohoSingleItemResponse>(`/items/${itemId}`, {
+        api: 'inventory',
+      })
+    );
+
+    if (!data.item) {
+      console.warn(`[getUnifiedStock] ${itemId}: item not found in Inventory API (${context})`);
+      return { stock: 0, source: 'unavailable' };
+    }
+
+    // Extract warehouse-specific stock
+    const stock = getWholesaleAvailableStock(data.item);
+
+    // Step 4: ON-DEMAND CACHING - save to Redis for future consistency
+    await cacheStockOnDemand(itemId, stock);
+
+    console.log(`[getUnifiedStock] ${itemId}: ${stock} from API, cached (${context})`);
+    return { stock, source: 'api' };
+
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    console.error(`[getUnifiedStock] ${itemId}: API error (${context}) - ${errorMsg}`);
+    return { stock: 0, source: 'unavailable' };
+  }
+}
+
+/**
+ * Cache a single item's stock on-demand
+ * Used when detail page fetches fresh stock - ensures list page sees same value
+ */
+async function cacheStockOnDemand(itemId: string, stock: number): Promise<void> {
+  try {
+    const cached = await getStockCache();
+    const stockMap: StockMap = cached?.stock || {};
+
+    stockMap[itemId] = stock;
+
+    const cacheData: StockCacheData = {
+      stock: stockMap,
+      updatedAt: cached?.updatedAt || Date.now(), // Preserve original timestamp if cache exists
+      itemCount: Object.keys(stockMap).length,
+    };
+
+    await redisSet(STOCK_CACHE_KEY, cacheData, STOCK_CACHE_TTL);
+    console.log(`[cacheStockOnDemand] ${itemId}: stock ${stock} saved to Redis`);
+  } catch (error) {
+    // Non-critical - log but don't throw
+    console.warn(`[cacheStockOnDemand] ${itemId}: failed to cache -`, error);
+  }
+}
+
+/**
+ * Bulk version for list page - returns Map of itemId -> stock
+ * Items not in cache will have stock = 0 (no API fetch to avoid rate limits)
+ *
+ * IMPORTANT: This function ONLY uses Redis cache. It does NOT fall back to
+ * Books API item-level stock, which would cause discrepancies with the detail page.
+ *
+ * @param itemIds - Array of item IDs to get stock for
+ * @param options.context - Context for logging
+ */
+export async function getUnifiedStockBulk(
+  itemIds: string[],
+  options: {
+    context?: string;
+  } = {}
+): Promise<Map<string, number>> {
+  const { context = 'bulk' } = options;
+  const stockMap = new Map<string, number>();
+
+  const cached = await getStockCache();
+
+  if (!cached || cached.itemCount === 0) {
+    console.warn(`[getUnifiedStockBulk] Cache empty - all items will show 0 stock (${context})`);
+    // Return map with 0 for all items - caller should handle this
+    for (const itemId of itemIds) {
+      stockMap.set(itemId, 0);
+    }
+    return stockMap;
+  }
+
+  let hitCount = 0;
+  let missCount = 0;
+
+  for (const itemId of itemIds) {
+    const stock = cached.stock[itemId];
+    if (stock !== undefined) {
+      stockMap.set(itemId, stock);
+      hitCount++;
+    } else {
+      // Cache miss - return 0, do NOT use Books fallback
+      stockMap.set(itemId, 0);
+      missCount++;
+    }
+  }
+
+  // Log cache hit rate for monitoring
+  const hitRate = ((hitCount / itemIds.length) * 100).toFixed(1);
+  console.log(`[getUnifiedStockBulk] ${hitCount}/${itemIds.length} cache hits (${hitRate}%), ${missCount} misses (${context})`);
+
+  // Warn if hit rate is low - suggests cache needs syncing
+  if (missCount > hitCount && itemIds.length > 10) {
+    console.warn(`[getUnifiedStockBulk] LOW CACHE HIT RATE - consider running stock sync (${context})`);
+  }
+
+  return stockMap;
+}

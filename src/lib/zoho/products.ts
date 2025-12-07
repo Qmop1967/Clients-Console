@@ -9,7 +9,7 @@
 
 import { unstable_cache } from 'next/cache';
 import { zohoFetch, CACHE_TAGS, rateLimitedFetch } from './client';
-import { getCachedStockBulk, getStockCacheStatus } from './stock-cache';
+import { getUnifiedStockBulk, getStockCacheStatus } from './stock-cache';
 import type { ZohoItem, ZohoCategory, PaginatedResponse } from '@/types';
 
 // ============================================
@@ -566,11 +566,21 @@ export const getAllProductsMetadata = unstable_cache(
 );
 
 /**
- * Get all products WITH fresh stock from Redis
- * IMPORTANT: This function fetches fresh stock on EVERY call
- * - Product metadata is cached (24 hours)
- * - Stock is fetched fresh from Redis each time
- * This ensures stock updates are reflected immediately after webhook triggers
+ * Get all products with UNIFIED stock (SINGLE SOURCE OF TRUTH)
+ *
+ * IMPORTANT: This function uses getUnifiedStockBulk which ONLY uses Redis cache.
+ * It does NOT fall back to Zoho Books item-level stock.
+ *
+ * This ensures stock values are CONSISTENT with the product detail page,
+ * which uses getUnifiedStock from the same Redis source.
+ *
+ * Flow:
+ * - Product metadata: Cached 24 hours (Zoho Books API)
+ * - Stock: Fresh from Redis on every call (30 min TTL)
+ * - Items not in Redis cache: Show 0 stock (not Books fallback)
+ *
+ * To ensure products are visible, run stock sync regularly:
+ * curl "/api/sync/stock?action=sync&secret=<SECRET>&force=true"
  */
 export async function getAllProductsComplete(): Promise<ZohoItem[]> {
   try {
@@ -581,42 +591,39 @@ export async function getAllProductsComplete(): Promise<ZohoItem[]> {
       return [];
     }
 
-    // Step 2: Fetch FRESH stock from Redis (NOT cached with products)
+    // Step 2: Use UNIFIED stock retrieval - SAME source as product detail page
+    // This prevents stock discrepancy between list and detail views
     const itemIds = products.map(item => item.item_id);
-    const cachedStock = await getCachedStockBulk(itemIds);
+    const stockMap = await getUnifiedStockBulk(itemIds, {
+      context: 'shop-list',
+    });
+
+    // Step 3: Get cache status for monitoring
     const cacheStatus = await getStockCacheStatus();
 
-    // Log stock cache status with warnings for low cache
-    const cacheCompleteness = products.length > 0 ? (cachedStock.size / products.length) * 100 : 0;
+    // Calculate hit rate for monitoring (items with stock > 0)
+    let hitCount = 0;
+    stockMap.forEach((stock) => { if (stock > 0) hitCount++; });
+    const hitRate = products.length > 0 ? (hitCount / products.length) * 100 : 0;
 
-    if (cachedStock.size > 0) {
-      if (process.env.NODE_ENV === 'development') {
-        console.log(`[Products] Redis stock: ${cachedStock.size}/${products.length} items (${cacheCompleteness.toFixed(1)}%, age: ${cacheStatus.ageSeconds}s)`);
-      }
-
-      // Critical warning when cache is severely incomplete (< 10%)
-      if (cacheCompleteness < 10) {
-        console.error(`[CRITICAL] Stock cache severely incomplete: ${cachedStock.size}/${products.length} items (${cacheCompleteness.toFixed(1)}%)`);
-        console.error('[CRITICAL] Products will show Zoho Books stock (item-level, not warehouse-specific)');
-        console.error('[CRITICAL] Run /api/sync/stock?action=sync&secret=<STOCK_SYNC_SECRET>&force=true');
-      } else if (cachedStock.size < 100) {
-        console.warn(`[getAllProductsComplete] Stock cache low: ${cachedStock.size} items - consider running full sync`);
-      }
-    } else {
-      console.warn('[getAllProductsComplete] Stock cache EMPTY - using Zoho Books stock as fallback');
-      console.warn('[getAllProductsComplete] Run /api/sync/stock?action=sync&secret=<STOCK_SYNC_SECRET> to populate cache');
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`[getAllProductsComplete] ${hitCount}/${products.length} items with stock (${hitRate.toFixed(1)}%), cache age: ${cacheStatus.ageSeconds}s`);
     }
 
-    // Step 3: Merge stock - Redis cache takes priority, Zoho Books stock as fallback
-    // This ensures products are visible even when Redis cache is incomplete
-    const productsWithStock = products.map((item) => {
-      // If in Redis cache, use cached stock (most accurate, warehouse-specific)
-      if (cachedStock.has(item.item_id)) {
-        return { ...item, available_stock: cachedStock.get(item.item_id)! };
-      }
-      // Fallback: Use original Zoho Books stock (item-level, but better than hiding products)
-      return item;
-    });
+    // Warn if hit rate is very low - suggests sync is needed
+    if (hitRate < 10 && products.length > 10) {
+      console.error(`[CRITICAL] Very few products have stock in cache: ${hitCount}/${products.length} (${hitRate.toFixed(1)}%)`);
+      console.error('[CRITICAL] Run /api/sync/stock?action=sync&secret=<STOCK_SYNC_SECRET>&force=true');
+    } else if (hitRate < 50 && products.length > 10) {
+      console.warn(`[getAllProductsComplete] Low stock cache coverage: ${hitRate.toFixed(1)}% - consider running sync`);
+    }
+
+    // Step 4: Merge stock with products using ONLY Redis values
+    // Items not in cache will have stock = 0 (consistent with detail page behavior)
+    const productsWithStock = products.map((item) => ({
+      ...item,
+      available_stock: stockMap.get(item.item_id) ?? 0,
+    }));
 
     return productsWithStock;
   } catch (error) {

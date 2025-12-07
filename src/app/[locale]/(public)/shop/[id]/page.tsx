@@ -1,9 +1,9 @@
 import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { ProductDetailContent } from "@/components/products/product-detail-content";
-import { getProduct, getProductImageUrl, getProductWithInventoryStock } from "@/lib/zoho/products";
+import { getProduct, getProductImageUrl } from "@/lib/zoho/products";
 import { getCustomerPriceList, getItemPriceFromList, PRICE_LIST_IDS } from "@/lib/zoho/price-lists";
-import { getCachedStock } from "@/lib/zoho/stock-cache";
+import { getUnifiedStock } from "@/lib/zoho/stock-cache";
 import { getZohoCustomer } from "@/lib/zoho/customers";
 import { auth } from "@/lib/auth/auth";
 import { Link } from "@/i18n/navigation";
@@ -60,26 +60,21 @@ type FetchResult = {
 
 async function fetchProductData(productId: string, priceListId?: string): Promise<FetchResult> {
   try {
-    // Fetch product and cached stock in parallel
-    const [product, cachedStock] = await Promise.all([
-      getProduct(productId),
-      getCachedStock(productId),
-    ]);
+    // Fetch product metadata
+    const product = await getProduct(productId);
 
     if (!product) {
       return { success: false, error: "not_found" };
     }
 
-    // Get stock: prefer cache, then fetch from Inventory API for warehouse-specific stock
-    let availableStock: number;
-    if (cachedStock !== null) {
-      availableStock = cachedStock;
-      console.log(`[ProductDetail] ${product.sku}: Using cached stock = ${availableStock}`);
-    } else {
-      // No cache - fetch from Zoho Inventory API for accurate warehouse stock
-      availableStock = await getProductWithInventoryStock(productId);
-      console.log(`[ProductDetail] ${product.sku}: Fetched from Inventory API = ${availableStock}`);
-    }
+    // Use UNIFIED stock retrieval - SAME source as shop list page
+    // This ensures consistent stock between list and detail views
+    const { stock: availableStock, source: stockSource } = await getUnifiedStock(productId, {
+      fetchOnMiss: true, // Detail page can afford the API call for fresh stock
+      context: 'product-detail',
+    });
+
+    console.log(`[ProductDetail] ${product.sku}: stock=${availableStock} (source: ${stockSource})`);
 
     // Fetch price list - use customer's if provided, otherwise Consumer
     const effectivePriceListId = priceListId || PRICE_LIST_IDS.CONSUMER;
