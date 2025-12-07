@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useSession } from "next-auth/react";
-import { ShoppingCart, User, Globe, LayoutDashboard } from "lucide-react";
+import { useTheme } from "next-themes";
+import { ShoppingCart, User, Globe, LayoutDashboard, Sun, Moon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useCart } from "@/components/providers/cart-provider";
@@ -18,9 +19,14 @@ export function PublicHeader({ locale }: PublicHeaderProps) {
   const tNav = useTranslations("nav");
   const { data: session, status } = useSession();
   const { itemCount } = useCart();
+  const { theme, setTheme } = useTheme();
   const otherLocale = locale === "en" ? "ar" : "en";
 
   const isAuthenticated = status === "authenticated" && !!session?.user;
+
+  const toggleTheme = () => {
+    setTheme(theme === "dark" ? "light" : "dark");
+  };
 
   // Logo always links to /shop (unified shop page)
   const logoHref = `/${locale}/shop`;
@@ -46,13 +52,23 @@ export function PublicHeader({ locale }: PublicHeaderProps) {
 
         {/* Actions */}
         <div className="flex items-center gap-2">
+          {/* Theme Toggle - Ultra thin */}
+          <button
+            onClick={toggleTheme}
+            className="native-press flex h-10 w-10 items-center justify-center rounded-xl border border-border/50 bg-background/50 transition-all hover:border-primary/30 hover:bg-secondary"
+            aria-label="Toggle theme"
+          >
+            <Sun className="h-5 w-5 text-foreground/80 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" strokeWidth={1} />
+            <Moon className="absolute h-5 w-5 text-foreground/80 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" strokeWidth={1} />
+          </button>
+
           {/* Cart - Gold badge accent */}
           <Link
             href={`/${locale}/cart`}
             className="native-press relative flex h-10 w-10 items-center justify-center rounded-xl border border-border/50 bg-background/50 transition-all hover:border-amber-500/30 hover:bg-secondary"
             aria-label="Shopping cart"
           >
-            <ShoppingCart className="h-5 w-5 text-foreground/80" strokeWidth={1.5} />
+            <ShoppingCart className="h-5 w-5 text-foreground/80" strokeWidth={1} />
             {itemCount > 0 && (
               <Badge
                 variant="gold"
@@ -69,7 +85,7 @@ export function PublicHeader({ locale }: PublicHeaderProps) {
             className="native-press flex h-10 w-10 items-center justify-center rounded-xl border border-border/50 bg-background/50 transition-all hover:border-primary/30 hover:bg-secondary"
             aria-label={`Switch to ${otherLocale === "ar" ? "Arabic" : "English"}`}
           >
-            <Globe className="h-5 w-5 text-foreground/80" strokeWidth={1.5} />
+            <Globe className="h-5 w-5 text-foreground/80" strokeWidth={1} />
           </Link>
 
           {/* Auth Button - Premium styling */}
