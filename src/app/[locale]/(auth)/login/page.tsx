@@ -7,10 +7,14 @@ import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Mail, Loader2, CheckCircle, Lock, Shield, ArrowLeft, Sparkles, UserPlus, Link2 } from "lucide-react";
+import { Mail, Loader2, CheckCircle, Lock, Shield, ArrowLeft, Sparkles, UserPlus, Link2, Store, ChevronLeft } from "lucide-react";
+import Link from "next/link";
+import { useLocale } from "next-intl";
 
 export default function LoginPage() {
   const t = useTranslations("auth");
+  const tCommon = useTranslations("common");
+  const locale = useLocale();
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
@@ -44,7 +48,17 @@ export default function LoginPage() {
   // Success state - Email sent
   if (sent) {
     return (
-      <div className="flex min-h-screen items-center justify-center p-4">
+      <div className="relative flex min-h-screen items-center justify-center p-4">
+        {/* Back to Shop Button - Top Left */}
+        <Link
+          href={`/${locale}/shop`}
+          className="absolute top-4 start-4 sm:top-6 sm:start-6 z-10 group flex items-center gap-2 px-3 py-2 rounded-full border border-border/50 bg-background/80 backdrop-blur-sm text-sm text-muted-foreground hover:text-foreground hover:border-primary/30 hover:bg-background transition-all duration-300"
+        >
+          <ChevronLeft className="h-4 w-4 rtl:rotate-180 transition-transform group-hover:-translate-x-0.5 rtl:group-hover:translate-x-0.5" strokeWidth={1.5} />
+          <Store className="h-4 w-4" strokeWidth={1.5} />
+          <span className="hidden sm:inline">{tCommon("shop")}</span>
+        </Link>
+
         <div className="w-full max-w-md animate-fade-in-up">
           <Card className="glass-auth rounded-2xl overflow-hidden">
             <CardHeader className="text-center pt-8 pb-4">
@@ -86,7 +100,17 @@ export default function LoginPage() {
 
   // Login form
   return (
-    <div className="flex min-h-screen items-center justify-center p-4">
+    <div className="relative flex min-h-screen items-center justify-center p-4">
+      {/* Back to Shop Button - Top Left */}
+      <Link
+        href={`/${locale}/shop`}
+        className="absolute top-4 start-4 sm:top-6 sm:start-6 z-10 group flex items-center gap-2 px-3 py-2 rounded-full border border-border/50 bg-background/80 backdrop-blur-sm text-sm text-muted-foreground hover:text-foreground hover:border-primary/30 hover:bg-background transition-all duration-300"
+      >
+        <ChevronLeft className="h-4 w-4 rtl:rotate-180 transition-transform group-hover:-translate-x-0.5 rtl:group-hover:translate-x-0.5" strokeWidth={1.5} />
+        <Store className="h-4 w-4" strokeWidth={1.5} />
+        <span className="hidden sm:inline">{tCommon("shop")}</span>
+      </Link>
+
       <div className="w-full max-w-md">
         {/* Logo Section */}
         <div className="text-center mb-8 animate-fade-in-up">
