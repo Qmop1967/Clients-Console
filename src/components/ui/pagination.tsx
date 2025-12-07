@@ -260,68 +260,71 @@ export function NumberedPagination({
   const hasNext = currentPage < totalPages;
 
   return (
-    <div className={cn("flex flex-wrap items-center justify-center gap-2", className)}>
-      {/* Previous Arrow */}
-      <button
-        onClick={() => hasPrevious && onPageChange(currentPage - 1)}
-        disabled={!hasPrevious}
-        className={cn(
-          "flex h-10 w-10 items-center justify-center rounded-xl transition-all",
-          hasPrevious
-            ? "bg-white dark:bg-zinc-800 shadow-sm hover:shadow-md hover:bg-gray-50 dark:hover:bg-zinc-700 cursor-pointer"
-            : "bg-gray-100 dark:bg-zinc-900 text-gray-400 dark:text-zinc-600 cursor-not-allowed"
-        )}
-        aria-label={t("previous")}
-      >
-        <ChevronLeft className="h-5 w-5 rtl:rotate-180" />
-      </button>
+    <div className={cn("flex flex-col items-center justify-center gap-4 w-full", className)}>
+      {/* Main pagination row - centered */}
+      <div className="flex items-center justify-center gap-2">
+        {/* Previous Arrow - Left side (Right in RTL) */}
+        <button
+          onClick={() => hasPrevious && onPageChange(currentPage - 1)}
+          disabled={!hasPrevious}
+          className={cn(
+            "flex h-10 w-10 items-center justify-center rounded-full transition-all border",
+            hasPrevious
+              ? "border-border bg-background hover:bg-muted cursor-pointer text-foreground"
+              : "border-transparent bg-muted/50 text-muted-foreground/40 cursor-not-allowed"
+          )}
+          aria-label={t("previous")}
+        >
+          <ChevronLeft className="h-5 w-5 rtl:rotate-180" strokeWidth={1.5} />
+        </button>
 
-      {/* Page Numbers */}
-      <div className="flex items-center gap-1.5">
-        {pageNumbers.map((page, index) =>
-          page === "..." ? (
-            <span
-              key={`ellipsis-${index}`}
-              className="flex h-10 w-10 items-center justify-center text-muted-foreground"
-            >
-              ...
-            </span>
-          ) : (
-            <button
-              key={page}
-              onClick={() => onPageChange(page)}
-              aria-label={`${t("page")} ${page}`}
-              aria-current={currentPage === page ? "page" : undefined}
-              className={cn(
-                "flex h-10 min-w-10 px-3 items-center justify-center rounded-xl font-medium transition-all",
-                currentPage === page
-                  ? "bg-primary text-primary-foreground shadow-md"
-                  : "bg-white dark:bg-zinc-800 shadow-sm hover:shadow-md hover:bg-gray-50 dark:hover:bg-zinc-700"
-              )}
-            >
-              {page}
-            </button>
-          )
-        )}
+        {/* Page Numbers */}
+        <div className="flex items-center gap-1.5">
+          {pageNumbers.map((page, index) =>
+            page === "..." ? (
+              <span
+                key={`ellipsis-${index}`}
+                className="flex h-10 w-10 items-center justify-center text-muted-foreground"
+              >
+                ...
+              </span>
+            ) : (
+              <button
+                key={page}
+                onClick={() => onPageChange(page)}
+                aria-label={`${t("page")} ${page}`}
+                aria-current={currentPage === page ? "page" : undefined}
+                className={cn(
+                  "flex h-10 min-w-10 px-3 items-center justify-center rounded-full font-medium transition-all border",
+                  currentPage === page
+                    ? "bg-primary text-primary-foreground border-primary shadow-md"
+                    : "border-border bg-background hover:bg-muted text-foreground"
+                )}
+              >
+                {page}
+              </button>
+            )
+          )}
+        </div>
+
+        {/* Next Arrow - Right side (Left in RTL) */}
+        <button
+          onClick={() => hasNext && onPageChange(currentPage + 1)}
+          disabled={!hasNext}
+          className={cn(
+            "flex h-10 w-10 items-center justify-center rounded-full transition-all border",
+            hasNext
+              ? "border-border bg-background hover:bg-muted cursor-pointer text-foreground"
+              : "border-transparent bg-muted/50 text-muted-foreground/40 cursor-not-allowed"
+          )}
+          aria-label={t("next")}
+        >
+          <ChevronRight className="h-5 w-5 rtl:rotate-180" strokeWidth={1.5} />
+        </button>
       </div>
 
-      {/* Next Arrow */}
-      <button
-        onClick={() => hasNext && onPageChange(currentPage + 1)}
-        disabled={!hasNext}
-        className={cn(
-          "flex h-10 w-10 items-center justify-center rounded-xl transition-all",
-          hasNext
-            ? "bg-white dark:bg-zinc-800 shadow-sm hover:shadow-md hover:bg-gray-50 dark:hover:bg-zinc-700 cursor-pointer"
-            : "bg-gray-100 dark:bg-zinc-900 text-gray-400 dark:text-zinc-600 cursor-not-allowed"
-        )}
-        aria-label={t("next")}
-      >
-        <ChevronRight className="h-5 w-5 rtl:rotate-180" />
-      </button>
-
-      {/* Go to Page Input */}
-      <div className="flex items-center gap-2 ms-4">
+      {/* Go to Page Input - separate row for cleaner look */}
+      <div className="flex items-center gap-2">
         <span className="text-sm text-muted-foreground whitespace-nowrap">
           {t("goToPage")}
         </span>
@@ -332,7 +335,7 @@ export function NumberedPagination({
           value={goToPage}
           onChange={(e) => setGoToPage(e.target.value)}
           onKeyDown={handleKeyDown}
-          className="w-16 h-10 text-center rounded-xl"
+          className="w-16 h-9 text-center rounded-lg border-border"
           placeholder="..."
           aria-label={t("goToPage")}
         />
