@@ -7,9 +7,14 @@ import { PRICE_LIST_IDS } from "@/lib/zoho/price-lists";
 import { auth } from "@/lib/auth/auth";
 import { getZohoCustomer } from "@/lib/zoho/customers";
 
-// Enable ISR with 5-minute revalidation for public visitors
-// Auth check still runs but cached data is used
+// Enable ISR with 5-minute revalidation
+// Static generation with on-demand revalidation for better performance
 export const revalidate = 300; // 5 minutes
+
+// Generate static params for both locales to enable static generation
+export function generateStaticParams() {
+  return [{ locale: 'en' }, { locale: 'ar' }];
+}
 
 export async function generateMetadata() {
   const t = await getTranslations("products");
@@ -27,17 +32,13 @@ export async function generateMetadata() {
  */
 async function fetchShopData(priceListId: string, isPublicVisitor: boolean) {
   try {
-    if (process.env.NODE_ENV === 'development') console.log(`[Shop] priceListId=${priceListId}, isPublic=${isPublicVisitor}`);
-
     // Use cached data - products + prices cached together for 24h
     // Stock is always fresh from Redis
-    const { products: allProducts, currency, priceListName } = isPublicVisitor
-      ? await getProductsWithConsumerPrices()  // Optimized for public visitors
+    const { products: allProducts, currency } = isPublicVisitor
+      ? await getProductsWithConsumerPrices()
       : await getProductsWithPrices(priceListId);
 
-    if (process.env.NODE_ENV === 'development') console.log(`[Shop] Got ${allProducts.length} products with prices (${priceListName})`);
-
-    // Map to display format
+    // Map to display format - keep it minimal for faster serialization
     const productsWithPrices = allProducts.map((product) => ({
       item_id: product.item_id,
       name: product.name,
@@ -55,7 +56,6 @@ async function fetchShopData(priceListId: string, isPublicVisitor: boolean) {
 
     // Filter to only in-stock products
     const inStockProducts = productsWithPrices.filter(p => p.available_stock > 0);
-    if (process.env.NODE_ENV === 'development') console.log(`[Shop] ${inStockProducts.length}/${productsWithPrices.length} products in stock`);
 
     return {
       products: inStockProducts,
@@ -75,10 +75,61 @@ async function fetchShopData(priceListId: string, isPublicVisitor: boolean) {
   }
 }
 
-export default async function PublicShopPage() {
+// Separate async component for products - enables streaming
+async function ProductsLoader({
+  priceListId,
+  isPublicVisitor,
+  isAuthenticated,
+}: {
+  priceListId: string;
+  isPublicVisitor: boolean;
+  isAuthenticated: boolean;
+}) {
   const t = await getTranslations("products");
+  const { products, currencyCode, error } = await fetchShopData(priceListId, isPublicVisitor);
 
+  // Error State
+  if (error && products.length === 0) {
+    return (
+      <div className="rounded-lg border border-amber-500/50 bg-amber-500/10 p-8 text-center">
+        <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-amber-100 dark:bg-amber-900/30 mb-4">
+          <svg className="w-8 h-8 text-amber-600 dark:text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+        </div>
+        <h3 className="text-lg font-semibold text-amber-700 dark:text-amber-300 mb-2">
+          {error === "rate_limit" ? t("rateLimitError") : t("noProducts")}
+        </h3>
+        <p className="text-sm text-muted-foreground mb-4 max-w-md mx-auto">
+          {error === "rate_limit"
+            ? t("rateLimitDescription")
+            : "Our product catalog is being updated. Please check back soon."}
+        </p>
+        <a
+          href="?"
+          className="inline-flex items-center gap-2 px-6 py-3 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors font-medium"
+        >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg>
+          Try Again
+        </a>
+      </div>
+    );
+  }
+
+  return (
+    <PublicProductsContent
+      products={products}
+      currencyCode={currencyCode}
+      isAuthenticated={isAuthenticated}
+    />
+  );
+}
+
+export default async function PublicShopPage() {
   // Check authentication - use customer's price list if authenticated
+  // This is fast since it reads from session cookie
   const session = await auth();
   const isAuthenticated = !!session?.user?.zohoContactId;
   const isPublicVisitor = !isAuthenticated;
@@ -86,60 +137,29 @@ export default async function PublicShopPage() {
   let priceListId: string = PRICE_LIST_IDS.CONSUMER;
 
   if (isAuthenticated) {
-    // Authenticated user - get their price list
+    // Authenticated user - get their price list from session
     priceListId = session.user.priceListId || PRICE_LIST_IDS.CONSUMER;
 
-    // If no price list in session, try to fetch from Zoho
+    // If no price list in session, try to fetch from Zoho (cached)
     if (!session.user.priceListId && session.user.zohoContactId) {
       try {
         const customer = await getZohoCustomer(session.user.zohoContactId);
         if (customer) {
           priceListId = customer.pricebook_id || customer.price_list_id || PRICE_LIST_IDS.CONSUMER;
         }
-      } catch (e) {
-        console.error('[Shop] Failed to fetch customer price list:', e);
+      } catch {
+        // Silently fall back to consumer price list
       }
     }
   }
 
-  // Use optimized cached data fetching
-  const { products, currencyCode, error } = await fetchShopData(priceListId, isPublicVisitor);
-
   return (
     <div className="space-y-6">
-      {/* Error State */}
-      {error && products.length === 0 && (
-        <div className="rounded-lg border border-amber-500/50 bg-amber-500/10 p-8 text-center">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-amber-100 dark:bg-amber-900/30 mb-4">
-            <svg className="w-8 h-8 text-amber-600 dark:text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-            </svg>
-          </div>
-          <h3 className="text-lg font-semibold text-amber-700 dark:text-amber-300 mb-2">
-            {error === "rate_limit" ? t("rateLimitError") : t("noProducts")}
-          </h3>
-          <p className="text-sm text-muted-foreground mb-4 max-w-md mx-auto">
-            {error === "rate_limit"
-              ? t("rateLimitDescription")
-              : "Our product catalog is being updated. Please check back soon."}
-          </p>
-          <a
-            href="?"
-            className="inline-flex items-center gap-2 px-6 py-3 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors font-medium"
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-            </svg>
-            Try Again
-          </a>
-        </div>
-      )}
-
-      {/* Products */}
+      {/* Use Suspense to enable streaming - shows skeleton immediately */}
       <Suspense fallback={<ProductsSkeleton />}>
-        <PublicProductsContent
-          products={products}
-          currencyCode={currencyCode}
+        <ProductsLoader
+          priceListId={priceListId}
+          isPublicVisitor={isPublicVisitor}
           isAuthenticated={isAuthenticated}
         />
       </Suspense>

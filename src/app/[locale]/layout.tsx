@@ -113,9 +113,12 @@ export default async function RootLayout({
   return (
     <html lang={locale} dir={dir} suppressHydrationWarning className={fontVariables}>
       <head>
-        {/* Preconnect to Zoho CDN for faster image loading */}
-        <link rel="preconnect" href="https://www.zohoapis.com" />
+        {/* Preconnect to Zoho domains for faster API and image loading */}
+        <link rel="preconnect" href="https://www.zohoapis.com" crossOrigin="anonymous" />
+        <link rel="preconnect" href="https://books.zoho.com" crossOrigin="anonymous" />
         <link rel="dns-prefetch" href="https://www.zohoapis.com" />
+        <link rel="dns-prefetch" href="https://books.zoho.com" />
+        <link rel="dns-prefetch" href="https://inventory.zoho.com" />
         {/* Note: Font preconnects handled automatically by next/font */}
       </head>
       <body className="font-body antialiased">

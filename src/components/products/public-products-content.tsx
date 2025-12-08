@@ -17,8 +17,8 @@ import { formatCurrency } from "@/lib/utils/format";
 // Session storage key for scroll position
 const SCROLL_POSITION_KEY = "shop_scroll_position";
 
-// Pagination configuration - reduced from 24 to 16 for faster initial load
-const PRODUCTS_PER_PAGE = 16;
+// Pagination configuration - reduced to 12 for faster initial load & better LCP
+const PRODUCTS_PER_PAGE = 12;
 
 // Product type from server
 interface PublicProduct {
@@ -52,7 +52,8 @@ interface PublicProductsContentProps {
 }
 
 // Number of products to load with priority (above-the-fold)
-const PRIORITY_PRODUCTS_COUNT = 8;
+// Reduced to 4 for faster LCP - only first row on most screens
+const PRIORITY_PRODUCTS_COUNT = 4;
 
 // Memoized Product Card Component with Add to Cart - Enhanced Design
 const ProductCardWithCart = memo(function ProductCardWithCart({

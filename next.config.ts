@@ -20,7 +20,7 @@ const nextConfig: NextConfig = {
   // Optimize for production
   poweredByHeader: false,
 
-  // Image optimization with aggressive settings
+  // Image optimization with aggressive settings for better LCP
   images: {
     remotePatterns: [
       {
@@ -40,11 +40,16 @@ const nextConfig: NextConfig = {
         hostname: "books.zoho.com",
       },
     ],
-    formats: ["image/avif", "image/webp"],
-    // Optimize image quality for performance
-    deviceSizes: [640, 750, 828, 1080, 1200],
+    // Prefer WebP over AVIF for faster encoding (better LCP)
+    formats: ["image/webp"],
+    // Optimized device sizes for common viewports
+    deviceSizes: [640, 750, 828, 1080, 1200, 1920],
+    // Smaller image sizes for thumbnails
     imageSizes: [16, 32, 48, 64, 96, 128, 256],
-    minimumCacheTTL: 60 * 60 * 24, // 24 hours cache
+    // Aggressive caching for images
+    minimumCacheTTL: 60 * 60 * 24 * 7, // 7 days cache
+    // Disable static imports to reduce bundle size
+    disableStaticImages: false,
   },
 
   // Experimental features for performance

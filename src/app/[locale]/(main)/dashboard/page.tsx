@@ -15,18 +15,32 @@ export async function generateMetadata() {
   };
 }
 
-async function fetchDashboardData(zohoContactId: string | undefined) {
+// Separate async component for dashboard data - enables streaming
+async function DashboardDataLoader({
+  userId,
+  zohoContactId,
+  userName,
+  currencyCode,
+}: {
+  userId: string;
+  zohoContactId: string | undefined;
+  userName: string | null | undefined;
+  currencyCode: string;
+}) {
   if (!zohoContactId) {
-    console.log('[Dashboard] No zohoContactId provided');
-    return {
-      balance: null,
-      orderStats: { total: 0, pending: 0, confirmed: 0, shipped: 0, delivered: 0 },
-      recentOrders: [],
-      recentInvoices: [],
-    };
+    return (
+      <DashboardContent
+        userId={userId}
+        zohoContactId={zohoContactId}
+        userName={userName}
+        currencyCode={currencyCode}
+        balance={null}
+        orderStats={{ total: 0, pending: 0, confirmed: 0, shipped: 0, delivered: 0 }}
+        recentOrders={[]}
+        recentInvoices={[]}
+      />
+    );
   }
-
-  console.log(`[Dashboard] Fetching data for zohoContactId: ${zohoContactId}`);
 
   try {
     // Fetch all data in parallel for efficiency
@@ -37,22 +51,32 @@ async function fetchDashboardData(zohoContactId: string | undefined) {
       getRecentInvoices(zohoContactId, 5),
     ]);
 
-    console.log(`[Dashboard] Results - Balance: ${JSON.stringify(balance)}, Orders total: ${orderStats.total}, Recent orders: ${recentOrders.length}, Recent invoices: ${recentInvoices.length}`);
-
-    return {
-      balance,
-      orderStats,
-      recentOrders,
-      recentInvoices,
-    };
+    return (
+      <DashboardContent
+        userId={userId}
+        zohoContactId={zohoContactId}
+        userName={userName}
+        currencyCode={currencyCode}
+        balance={balance}
+        orderStats={orderStats}
+        recentOrders={recentOrders}
+        recentInvoices={recentInvoices}
+      />
+    );
   } catch (error) {
     console.error("[Dashboard] Error fetching dashboard data:", error);
-    return {
-      balance: null,
-      orderStats: { total: 0, pending: 0, confirmed: 0, shipped: 0, delivered: 0 },
-      recentOrders: [],
-      recentInvoices: [],
-    };
+    return (
+      <DashboardContent
+        userId={userId}
+        zohoContactId={zohoContactId}
+        userName={userName}
+        currencyCode={currencyCode}
+        balance={null}
+        orderStats={{ total: 0, pending: 0, confirmed: 0, shipped: 0, delivered: 0 }}
+        recentOrders={[]}
+        recentInvoices={[]}
+      />
+    );
   }
 }
 
@@ -63,20 +87,15 @@ export default async function DashboardPage() {
     redirect("/login");
   }
 
-  const dashboardData = await fetchDashboardData(session.user.zohoContactId);
-
   return (
     <div className="container mx-auto px-4 py-6">
+      {/* Suspense enables streaming - skeleton shows immediately while data loads */}
       <Suspense fallback={<DashboardSkeleton />}>
-        <DashboardContent
+        <DashboardDataLoader
           userId={session.user.id}
           zohoContactId={session.user.zohoContactId}
           userName={session.user.name}
           currencyCode={session.user.currencyCode || "IQD"}
-          balance={dashboardData.balance}
-          orderStats={dashboardData.orderStats}
-          recentOrders={dashboardData.recentOrders}
-          recentInvoices={dashboardData.recentInvoices}
         />
       </Suspense>
     </div>
