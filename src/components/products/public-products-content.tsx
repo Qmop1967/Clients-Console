@@ -17,8 +17,8 @@ import { formatCurrency } from "@/lib/utils/format";
 // Session storage key for scroll position
 const SCROLL_POSITION_KEY = "shop_scroll_position";
 
-// Pagination configuration - reduced to 12 for faster initial load & better LCP
-const PRODUCTS_PER_PAGE = 12;
+// Pagination configuration - 24 items per page (6 rows of 4 on desktop)
+const PRODUCTS_PER_PAGE = 24;
 
 // Product type from server
 interface PublicProduct {
