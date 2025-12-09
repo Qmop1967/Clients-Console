@@ -25,6 +25,14 @@ export async function GET(request: NextRequest) {
     const token = await getAccessToken();
     const orgId = process.env.ZOHO_ORGANIZATION_ID || '748369814';
 
+    // STEP 1: Get actual item IDs from products API first
+    const itemsResponse = await fetch(
+      `https://www.zohoapis.com/books/v3/items?organization_id=${orgId}&per_page=10`,
+      { headers: { Authorization: `Zoho-oauthtoken ${token}` } }
+    );
+    const itemsData = itemsResponse.ok ? await itemsResponse.json() : { items: [] };
+    const actualItemIds = (itemsData.items || []).slice(0, 5).map((i: { item_id: string }) => i.item_id);
+
     // Method 1: Get pricebook details (includes item count)
     const pricebookResponse = await fetch(
       `https://www.zohoapis.com/books/v3/pricebooks/${pricebookId}?organization_id=${orgId}`,
@@ -32,29 +40,30 @@ export async function GET(request: NextRequest) {
     );
     const pricebookData = pricebookResponse.ok ? await pricebookResponse.json() : { error: `Failed: ${pricebookResponse.status}` };
 
-    // Method 2: Get pricebook rates for a sample item
+    // Method 2: Get pricebook rates for sample item using ACTUAL item IDs
+    const actualSampleId = actualItemIds[0] || sampleItemId;
     const ratesResponse = await fetch(
-      `https://www.zohoapis.com/books/v3/items/pricebookrate?organization_id=${orgId}&pricebook_id=${pricebookId}&item_ids=${sampleItemId}&sales_or_purchase_type=sales`,
+      `https://www.zohoapis.com/books/v3/items/pricebookrate?organization_id=${orgId}&pricebook_id=${pricebookId}&item_ids=${actualSampleId}&sales_or_purchase_type=sales`,
       { headers: { Authorization: `Zoho-oauthtoken ${token}` } }
     );
     const ratesData = ratesResponse.ok ? await ratesResponse.json() : { error: `Failed: ${ratesResponse.status}` };
 
     // Method 3: Get item-specific price from pricebook
     const itemPriceResponse = await fetch(
-      `https://www.zohoapis.com/books/v3/items/${sampleItemId}?organization_id=${orgId}`,
+      `https://www.zohoapis.com/books/v3/items/${actualSampleId}?organization_id=${orgId}`,
       { headers: { Authorization: `Zoho-oauthtoken ${token}` } }
     );
     const itemData = itemPriceResponse.ok ? await itemPriceResponse.json() : { error: `Failed: ${itemPriceResponse.status}` };
 
-    // Get rates for multiple sample items (first 5)
-    const sampleItemIds = ['2646610000004140367', '2646610000004140377', '2646610000004140387', '2646610000004140397', '2646610000004140407'];
+    // Get rates for ACTUAL item IDs (not hardcoded)
+    const sampleItemIds = actualItemIds.length > 0 ? actualItemIds : ['2646610000004140367'];
     const multiRatesResponse = await fetch(
       `https://www.zohoapis.com/books/v3/items/pricebookrate?organization_id=${orgId}&pricebook_id=${pricebookId}&item_ids=${sampleItemIds.join(',')}&sales_or_purchase_type=sales`,
       { headers: { Authorization: `Zoho-oauthtoken ${token}` } }
     );
     const multiRatesData = multiRatesResponse.ok ? await multiRatesResponse.json() : { error: `Failed: ${multiRatesResponse.status}` };
 
-    // Compare with USD pricebook
+    // Compare with USD pricebook using same ACTUAL item IDs
     const usdPricebookId = PRICE_LIST_IDS.WHOLESALE_A_USD;
     const usdRatesResponse = await fetch(
       `https://www.zohoapis.com/books/v3/items/pricebookrate?organization_id=${orgId}&pricebook_id=${usdPricebookId}&item_ids=${sampleItemIds.join(',')}&sales_or_purchase_type=sales`,
@@ -68,6 +77,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
+      actualItemIdsUsed: sampleItemIds,
       pricebook: {
         id: pricebookId,
         name: pricebook.name,
