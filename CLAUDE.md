@@ -460,13 +460,13 @@ Implementation:
 |----|------|----------|------|-------------|
 | `2646610000049149103` | **Consumer** | IQD | Individual Items | المستهلك - Public visitors and individual consumers |
 | `2646610000004453985` | **Retailor** | USD | Individual Items | التجزئة - Retail shops and small quantity dealers |
-| `2646610000113426769` | **Retailor IQD** | USD | Individual Items | التجزئة (دينار) - Retail shops with IQD-equivalent pricing |
+| `2646610000113426769` | **Retailor IQD** | IQD | Individual Items | التجزئة (دينار) - Retail shops with IQD pricing |
 | `2646610000057419683` | **Technical IQD** | IQD | Individual Items | الفني (دينار) - Technicians with IQD pricing |
 | `2646610000045742089` | **Technical USD** | USD | Individual Items | الفني (دولار) - Technicians with USD pricing |
 | `2646610000004152175` | **Wholesale A** | USD | Individual Items | جملة أ - Cash wholesale, large quantities (نقدي) |
 | `2646610000113417534` | **Wholesale A IQD** | IQD | Individual Items | جملة أ (دينار) - Cash wholesale with IQD pricing |
 | `2646610000004453961` | **Wholesale B** | USD | Individual Items | جملة ب - Credit wholesale, large quantities (اجل) |
-| `2646610000113426003` | **Wholesale B IQD** | USD | Individual Items | جملة ب (دينار) - Credit wholesale with IQD-equivalent pricing |
+| `2646610000113426003` | **Wholesale B IQD** | IQD | Individual Items | جملة ب (دينار) - Credit wholesale with IQD pricing |
 
 ### Price List Assignment Logic
 

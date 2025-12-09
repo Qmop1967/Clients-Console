@@ -33,8 +33,8 @@ export const PRICE_LIST_IDS = {
   // Description: تجار الجملة او محلات المفرد بكميات بسيطة اجل او نقد
   RETAILOR: '2646610000004453985',
 
-  // Retailor IQD - For retail shop customers (IQD equivalent)
-  // Currency: USD (Note: Named IQD but set as USD in Zoho)
+  // Retailor IQD - For retail shop customers (IQD pricing)
+  // Currency: IQD - Iraqi Dinar
   RETAILOR_IQD: '2646610000113426769',
 
   // Technical IQD - For technicians (IQD pricing)
@@ -60,7 +60,7 @@ export const PRICE_LIST_IDS = {
   WHOLESALE_B: '2646610000004453961',
 
   // Wholesale B IQD - Credit wholesale (IQD pricing)
-  // Currency: USD (Note: Named IQD but set as USD in Zoho)
+  // Currency: IQD - Iraqi Dinar
   WHOLESALE_B_IQD: '2646610000113426003',
 } as const;
 
@@ -86,8 +86,8 @@ export const PRICE_LIST_INFO = {
   [PRICE_LIST_IDS.RETAILOR_IQD]: {
     name: 'Retailor IQD',
     nameAr: 'التجزئة (دينار)',
-    currency: 'USD', // Note: Set as USD in Zoho despite name
-    description: 'Retail shops with IQD-equivalent pricing',
+    currency: 'IQD',
+    description: 'Retail shops with IQD pricing',
   },
   [PRICE_LIST_IDS.TECHNICAL_IQD]: {
     name: 'Technical IQD',
@@ -122,8 +122,8 @@ export const PRICE_LIST_INFO = {
   [PRICE_LIST_IDS.WHOLESALE_B_IQD]: {
     name: 'Wholesale B IQD',
     nameAr: 'جملة ب (دينار)',
-    currency: 'USD', // Note: Set as USD in Zoho despite name
-    description: 'Credit wholesale with IQD-equivalent pricing',
+    currency: 'IQD',
+    description: 'Credit wholesale with IQD pricing',
   },
 } as const;
 
