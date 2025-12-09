@@ -111,35 +111,39 @@ export async function GET(request: NextRequest) {
         const token = await getAccessToken();
         const orgId = process.env.ZOHO_ORGANIZATION_ID || '748369814';
 
-        const response = await fetch(
-          `https://www.zohoapis.com/books/v3/items/${itemId}?organization_id=${orgId}`,
-          {
-            headers: {
-              Authorization: `Zoho-oauthtoken ${token}`,
-            },
-          }
-        );
+        // Try both Books and Inventory APIs
+        const [booksResponse, inventoryResponse] = await Promise.all([
+          fetch(
+            `https://www.zohoapis.com/books/v3/items/${itemId}?organization_id=${orgId}`,
+            { headers: { Authorization: `Zoho-oauthtoken ${token}` } }
+          ),
+          fetch(
+            `https://www.zohoapis.com/inventory/v1/items/${itemId}?organization_id=${orgId}`,
+            { headers: { Authorization: `Zoho-oauthtoken ${token}` } }
+          ),
+        ]);
 
-        if (!response.ok) {
-          return NextResponse.json({
-            success: false,
-            error: `Zoho API returned ${response.status}`,
-          });
-        }
+        const booksData = booksResponse.ok ? await booksResponse.json() : null;
+        const inventoryData = inventoryResponse.ok ? await inventoryResponse.json() : null;
 
-        const data = await response.json();
-        const item = data.item;
+        const booksItem = booksData?.item;
+        const inventoryItem = inventoryData?.item;
 
         return NextResponse.json({
           success: true,
           itemId,
-          zoho: {
-            name: item?.name,
-            sku: item?.sku,
-            image_document_id: item?.image_document_id,
-            image_name: item?.image_name,
-            has_image: !!(item?.image_document_id || item?.image_name),
-          },
+          books: booksItem ? {
+            name: booksItem.name,
+            sku: booksItem.sku,
+            image_document_id: booksItem.image_document_id,
+            image_name: booksItem.image_name,
+          } : null,
+          inventory: inventoryItem ? {
+            name: inventoryItem.name,
+            sku: inventoryItem.sku,
+            image_document_id: inventoryItem.image_document_id,
+            image_name: inventoryItem.image_name,
+          } : null,
         });
       }
 

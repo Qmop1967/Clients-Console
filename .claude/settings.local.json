@@ -51,7 +51,7 @@
       "Skill(example-skills:skill-creator)",
       "Skill(example-skills:frontend-design)",
       "Skill(example-skills:webapp-testing)",
-      "Bash(grep:*)"
+      "Skill(production-debugger)"
     ],
     "deny": [],
     "ask": []
