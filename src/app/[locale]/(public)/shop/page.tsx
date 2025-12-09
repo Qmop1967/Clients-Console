@@ -5,7 +5,7 @@ import { ProductsSkeleton } from "@/components/products/products-skeleton";
 import { getProductsWithPrices, getProductsWithConsumerPrices, getProductImageUrl } from "@/lib/zoho/products";
 import { PRICE_LIST_IDS } from "@/lib/zoho/price-lists";
 import { auth } from "@/lib/auth/auth";
-import { getZohoCustomer } from "@/lib/zoho/customers";
+import { getZohoCustomerFresh } from "@/lib/zoho/customers";
 
 // Enable ISR with 5-minute revalidation
 // Static generation with on-demand revalidation for better performance
@@ -136,20 +136,18 @@ export default async function PublicShopPage() {
 
   let priceListId: string = PRICE_LIST_IDS.CONSUMER;
 
-  if (isAuthenticated) {
-    // Authenticated user - get their price list from session
-    priceListId = session.user.priceListId || PRICE_LIST_IDS.CONSUMER;
-
-    // If no price list in session, try to fetch from Zoho (cached)
-    if (!session.user.priceListId && session.user.zohoContactId) {
-      try {
-        const customer = await getZohoCustomer(session.user.zohoContactId);
-        if (customer) {
-          priceListId = customer.pricebook_id || customer.price_list_id || PRICE_LIST_IDS.CONSUMER;
-        }
-      } catch {
-        // Silently fall back to consumer price list
+  if (isAuthenticated && session.user.zohoContactId) {
+    // ALWAYS fetch fresh customer data to get current price list
+    // This handles cases where customer's price list was changed in Zoho
+    // but session still has old cached data
+    try {
+      const customer = await getZohoCustomerFresh(session.user.zohoContactId);
+      if (customer) {
+        priceListId = customer.pricebook_id || customer.price_list_id || PRICE_LIST_IDS.CONSUMER;
       }
+    } catch {
+      // Fall back to session data, then consumer price list
+      priceListId = session.user.priceListId || PRICE_LIST_IDS.CONSUMER;
     }
   }
 
