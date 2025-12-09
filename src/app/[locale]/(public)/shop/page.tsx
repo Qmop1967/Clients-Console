@@ -7,14 +7,10 @@ import { PRICE_LIST_IDS } from "@/lib/zoho/price-lists";
 import { auth } from "@/lib/auth/auth";
 import { getZohoCustomerFresh } from "@/lib/zoho/customers";
 
-// Enable ISR with 5-minute revalidation
-// Static generation with on-demand revalidation for better performance
-export const revalidate = 300; // 5 minutes
-
-// Generate static params for both locales to enable static generation
-export function generateStaticParams() {
-  return [{ locale: 'en' }, { locale: 'ar' }];
-}
+// CRITICAL: Force dynamic rendering for authenticated users
+// This ensures the page fetches fresh customer data and correct price lists
+// ISR was causing authenticated users to see cached static pages with wrong prices
+export const dynamic = 'force-dynamic';
 
 export async function generateMetadata() {
   const t = await getTranslations("products");
