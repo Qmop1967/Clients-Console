@@ -504,6 +504,44 @@ interface SyncResult {
 }
 
 /**
+ * Fetch image_document_id from Zoho Books API
+ * This is used for change detection when syncing images
+ */
+async function fetchImageDocIdFromZoho(
+  itemId: string,
+  accessToken: string
+): Promise<string | null> {
+  try {
+    const ORGANIZATION_ID = process.env.ZOHO_ORGANIZATION_ID || '748369814';
+    const response = await fetch(
+      `https://www.zohoapis.com/books/v3/items/${itemId}?organization_id=${ORGANIZATION_ID}`,
+      {
+        headers: {
+          Authorization: `Zoho-oauthtoken ${accessToken}`,
+        },
+      }
+    );
+
+    if (!response.ok) {
+      console.warn(`[ImageCache] Failed to fetch item ${itemId} for docId: ${response.status}`);
+      return null;
+    }
+
+    const data = await response.json();
+    const docId = data.item?.image_document_id;
+
+    if (docId) {
+      console.log(`[ImageCache] Fetched docId for ${itemId}: ${docId}`);
+    }
+
+    return docId || null;
+  } catch (error) {
+    console.warn(`[ImageCache] Error fetching docId for ${itemId}:`, error);
+    return null;
+  }
+}
+
+/**
  * Sync a single product image to Vercel Blob
  *
  * Options:
@@ -521,7 +559,8 @@ export async function syncSingleImage(
     imageDocId?: string | null;
   } = {}
 ): Promise<ImageUploadResult> {
-  const { force = false, imageDocId } = options;
+  const { force = false } = options;
+  let { imageDocId } = options;
 
   // If not forcing, check if image actually changed via docId
   if (!force && imageDocId) {
@@ -561,7 +600,12 @@ export async function syncSingleImage(
     useTimestamp: force, // Use timestamp only when forcing to bust caches
   });
 
-  // Store docId if provided and upload succeeded
+  // If no imageDocId was provided, fetch it from Zoho for future change detection
+  if (result.success && !imageDocId) {
+    imageDocId = await fetchImageDocIdFromZoho(itemId, accessToken);
+  }
+
+  // Store docId if available and upload succeeded
   if (result.success && imageDocId) {
     await setStoredImageDocId(itemId, imageDocId);
     console.log(`[ImageCache] Stored docId for ${itemId}: ${imageDocId}`);
