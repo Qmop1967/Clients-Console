@@ -504,16 +504,41 @@ interface SyncResult {
 }
 
 /**
- * Fetch image_document_id from Zoho Books API
+ * Fetch image identifier from Zoho API for change detection
+ * Returns image_document_id if available, otherwise image_name
  * This is used for change detection when syncing images
  */
-async function fetchImageDocIdFromZoho(
+async function fetchImageIdentifierFromZoho(
   itemId: string,
   accessToken: string
 ): Promise<string | null> {
   try {
     const ORGANIZATION_ID = process.env.ZOHO_ORGANIZATION_ID || '748369814';
-    const response = await fetch(
+
+    // Try Inventory API first (more likely to have image_document_id)
+    const inventoryResponse = await fetch(
+      `https://www.zohoapis.com/inventory/v1/items/${itemId}?organization_id=${ORGANIZATION_ID}`,
+      {
+        headers: {
+          Authorization: `Zoho-oauthtoken ${accessToken}`,
+        },
+      }
+    );
+
+    if (inventoryResponse.ok) {
+      const data = await inventoryResponse.json();
+      const item = data.item;
+
+      // Prefer image_document_id, fall back to image_name
+      const identifier = item?.image_document_id || item?.image_name;
+      if (identifier) {
+        console.log(`[ImageCache] Fetched image identifier for ${itemId}: ${identifier} (from Inventory)`);
+        return identifier;
+      }
+    }
+
+    // Fall back to Books API
+    const booksResponse = await fetch(
       `https://www.zohoapis.com/books/v3/items/${itemId}?organization_id=${ORGANIZATION_ID}`,
       {
         headers: {
@@ -522,21 +547,21 @@ async function fetchImageDocIdFromZoho(
       }
     );
 
-    if (!response.ok) {
-      console.warn(`[ImageCache] Failed to fetch item ${itemId} for docId: ${response.status}`);
-      return null;
+    if (booksResponse.ok) {
+      const data = await booksResponse.json();
+      const item = data.item;
+
+      const identifier = item?.image_document_id || item?.image_name;
+      if (identifier) {
+        console.log(`[ImageCache] Fetched image identifier for ${itemId}: ${identifier} (from Books)`);
+        return identifier;
+      }
     }
 
-    const data = await response.json();
-    const docId = data.item?.image_document_id;
-
-    if (docId) {
-      console.log(`[ImageCache] Fetched docId for ${itemId}: ${docId}`);
-    }
-
-    return docId || null;
+    console.warn(`[ImageCache] No image identifier found for ${itemId}`);
+    return null;
   } catch (error) {
-    console.warn(`[ImageCache] Error fetching docId for ${itemId}:`, error);
+    console.warn(`[ImageCache] Error fetching image identifier for ${itemId}:`, error);
     return null;
   }
 }
@@ -602,7 +627,7 @@ export async function syncSingleImage(
 
   // If no imageDocId was provided, fetch it from Zoho for future change detection
   if (result.success && !imageDocId) {
-    imageDocId = await fetchImageDocIdFromZoho(itemId, accessToken);
+    imageDocId = await fetchImageIdentifierFromZoho(itemId, accessToken);
   }
 
   // Store docId if available and upload succeeded
