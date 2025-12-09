@@ -51,7 +51,8 @@
       "Skill(example-skills:skill-creator)",
       "Skill(example-skills:frontend-design)",
       "Skill(example-skills:webapp-testing)",
-      "Skill(production-debugger)"
+      "Skill(production-debugger)",
+      "Bash(xargs:*)"
     ],
     "deny": [],
     "ask": []

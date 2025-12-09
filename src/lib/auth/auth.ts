@@ -3,7 +3,7 @@ import { authConfig } from './auth.config';
 import Resend from 'next-auth/providers/resend';
 import { UpstashRedisAdapter } from '@auth/upstash-redis-adapter';
 import { Redis } from '@upstash/redis';
-import { getZohoCustomerByEmail, getZohoCustomer } from '@/lib/zoho/customers';
+import { getZohoCustomerByEmail, getZohoCustomerFresh } from '@/lib/zoho/customers';
 import { Resend as ResendClient } from 'resend';
 
 // Initialize Upstash Redis client for NextAuth adapter
@@ -216,7 +216,8 @@ export const {
 
         if (customerBasic) {
           // Fetch full customer details by ID (single endpoint - returns all fields)
-          const customerFull = await getZohoCustomer(customerBasic.contact_id);
+          // CRITICAL: Use uncached fetch to get fresh price list and currency data
+          const customerFull = await getZohoCustomerFresh(customerBasic.contact_id);
           const customer = customerFull || customerBasic;
 
           // Existing customer - attach Zoho data
