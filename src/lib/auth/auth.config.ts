@@ -66,20 +66,21 @@ export const authConfig: NextAuthConfig = {
           } else {
             // Fetch FRESH from Zoho (NO CACHE - always real-time for session data)
             // This ensures price list changes are immediately reflected
+            // CRITICAL: Always lookup by EMAIL first to get the CURRENT customer in Zoho
+            // The database's zohoContactId might be stale if the email was reassigned to a new customer
             try {
               const { getZohoCustomerByEmail, getZohoCustomerFresh } = await import('@/lib/zoho/customers');
 
-              // Use contactId from DB if available (faster), otherwise lookup by email
+              // ALWAYS lookup by email first - this is the source of truth
+              // The email might have been reassigned to a different Zoho contact
               let customer;
-              if (contactId) {
-                customer = await getZohoCustomerFresh(contactId);  // UNCACHED
+              const customerBasic = await getZohoCustomerByEmail(email);
+              if (customerBasic) {
+                customer = await getZohoCustomerFresh(customerBasic.contact_id) || customerBasic;
               }
-              // If no contactId or getZohoCustomerFresh failed, lookup by email
-              if (!customer) {
-                const customerBasic = await getZohoCustomerByEmail(email);
-                if (customerBasic) {
-                  customer = await getZohoCustomerFresh(customerBasic.contact_id) || customerBasic;  // UNCACHED
-                }
+              // Only fall back to DB contactId if email lookup fails
+              if (!customer && contactId) {
+                customer = await getZohoCustomerFresh(contactId);
               }
 
               if (customer) {
