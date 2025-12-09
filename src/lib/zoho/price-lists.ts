@@ -20,7 +20,7 @@ import type { ZohoPriceList, ZohoItemPrice } from '@/types';
 
 /**
  * TSH Price List IDs from Zoho Inventory
- * Updated: 2025-11-26
+ * Updated: 2025-12-09
  */
 export const PRICE_LIST_IDS = {
   // Consumer - For public visitors (not logged in)
@@ -28,10 +28,14 @@ export const PRICE_LIST_IDS = {
   // Description: المستهلك المقصود الشخص الذي يستهلك او يستخدم المنتج
   CONSUMER: '2646610000049149103',
 
-  // Retailor - For retail shop customers
+  // Retailor - For retail shop customers (USD)
   // Currency: USD - United States Dollar
   // Description: تجار الجملة او محلات المفرد بكميات بسيطة اجل او نقد
   RETAILOR: '2646610000004453985',
+
+  // Retailor IQD - For retail shop customers (IQD equivalent)
+  // Currency: USD (Note: Named IQD but set as USD in Zoho)
+  RETAILOR_IQD: '2646610000113426769',
 
   // Technical IQD - For technicians (IQD pricing)
   // Currency: IQD - Iraqi Dinar
@@ -46,10 +50,18 @@ export const PRICE_LIST_IDS = {
   // Description: k تجار الجملة بكميات كبيرة نقدي
   WHOLESALE_A: '2646610000004152175',
 
+  // Wholesale A IQD - Cash wholesale (IQD pricing)
+  // Currency: IQD - Iraqi Dinar
+  WHOLESALE_A_IQD: '2646610000113417534',
+
   // Wholesale B - Credit wholesale (large quantities, credit payment)
   // Currency: USD - United States Dollar
   // Description: هم تجار الجملة بكميات كبيرة اجل
   WHOLESALE_B: '2646610000004453961',
+
+  // Wholesale B IQD - Credit wholesale (IQD pricing)
+  // Currency: USD (Note: Named IQD but set as USD in Zoho)
+  WHOLESALE_B_IQD: '2646610000113426003',
 } as const;
 
 // Default price list for public visitors
@@ -71,6 +83,12 @@ export const PRICE_LIST_INFO = {
     currency: 'USD',
     description: 'Retail shops and small quantity dealers',
   },
+  [PRICE_LIST_IDS.RETAILOR_IQD]: {
+    name: 'Retailor IQD',
+    nameAr: 'التجزئة (دينار)',
+    currency: 'USD', // Note: Set as USD in Zoho despite name
+    description: 'Retail shops with IQD-equivalent pricing',
+  },
   [PRICE_LIST_IDS.TECHNICAL_IQD]: {
     name: 'Technical IQD',
     nameAr: 'الفني (دينار)',
@@ -89,11 +107,23 @@ export const PRICE_LIST_INFO = {
     currency: 'USD',
     description: 'Cash wholesale - large quantities',
   },
+  [PRICE_LIST_IDS.WHOLESALE_A_IQD]: {
+    name: 'Wholesale A IQD',
+    nameAr: 'جملة أ (دينار)',
+    currency: 'IQD',
+    description: 'Cash wholesale with IQD pricing',
+  },
   [PRICE_LIST_IDS.WHOLESALE_B]: {
     name: 'Wholesale B',
     nameAr: 'جملة ب',
     currency: 'USD',
     description: 'Credit wholesale - large quantities',
+  },
+  [PRICE_LIST_IDS.WHOLESALE_B_IQD]: {
+    name: 'Wholesale B IQD',
+    nameAr: 'جملة ب (دينار)',
+    currency: 'USD', // Note: Set as USD in Zoho despite name
+    description: 'Credit wholesale with IQD-equivalent pricing',
   },
 } as const;
 

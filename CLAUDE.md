@@ -454,16 +454,19 @@ Implementation:
   5. For items NOT in pricebook: inPriceList=false → show "Contact for price"
 ```
 
-### TSH Price Lists Reference (Updated: 2025-11-26)
+### TSH Price Lists Reference (Updated: 2025-12-09)
 
 | ID | Name | Currency | Type | Description |
 |----|------|----------|------|-------------|
 | `2646610000049149103` | **Consumer** | IQD | Individual Items | المستهلك - Public visitors and individual consumers |
 | `2646610000004453985` | **Retailor** | USD | Individual Items | التجزئة - Retail shops and small quantity dealers |
+| `2646610000113426769` | **Retailor IQD** | USD | Individual Items | التجزئة (دينار) - Retail shops with IQD-equivalent pricing |
 | `2646610000057419683` | **Technical IQD** | IQD | Individual Items | الفني (دينار) - Technicians with IQD pricing |
 | `2646610000045742089` | **Technical USD** | USD | Individual Items | الفني (دولار) - Technicians with USD pricing |
 | `2646610000004152175` | **Wholesale A** | USD | Individual Items | جملة أ - Cash wholesale, large quantities (نقدي) |
+| `2646610000113417534` | **Wholesale A IQD** | IQD | Individual Items | جملة أ (دينار) - Cash wholesale with IQD pricing |
 | `2646610000004453961` | **Wholesale B** | USD | Individual Items | جملة ب - Credit wholesale, large quantities (اجل) |
+| `2646610000113426003` | **Wholesale B IQD** | USD | Individual Items | جملة ب (دينار) - Credit wholesale with IQD-equivalent pricing |
 
 ### Price List Assignment Logic
 
@@ -474,11 +477,14 @@ import { PRICE_LIST_IDS, PRICE_LIST_INFO } from '@/lib/zoho/price-lists';
 // Get price list for any scenario:
 // 1. Public visitor → PRICE_LIST_IDS.CONSUMER
 // 2. Authenticated → customer.price_list_id || PRICE_LIST_IDS.CONSUMER
-// 3. Retail shop → PRICE_LIST_IDS.RETAILOR
-// 4. Technician (IQD) → PRICE_LIST_IDS.TECHNICAL_IQD
-// 5. Technician (USD) → PRICE_LIST_IDS.TECHNICAL_USD
-// 6. Wholesale cash → PRICE_LIST_IDS.WHOLESALE_A
-// 7. Wholesale credit → PRICE_LIST_IDS.WHOLESALE_B
+// 3. Retail shop (USD) → PRICE_LIST_IDS.RETAILOR
+// 4. Retail shop (IQD) → PRICE_LIST_IDS.RETAILOR_IQD
+// 5. Technician (IQD) → PRICE_LIST_IDS.TECHNICAL_IQD
+// 6. Technician (USD) → PRICE_LIST_IDS.TECHNICAL_USD
+// 7. Wholesale cash (USD) → PRICE_LIST_IDS.WHOLESALE_A
+// 8. Wholesale cash (IQD) → PRICE_LIST_IDS.WHOLESALE_A_IQD
+// 9. Wholesale credit (USD) → PRICE_LIST_IDS.WHOLESALE_B
+// 10. Wholesale credit (IQD) → PRICE_LIST_IDS.WHOLESALE_B_IQD
 ```
 
 ---
@@ -941,10 +947,13 @@ curl "https://www.tsh.sale/api/revalidate?tag=all&secret=tsh-revalidate-2024"
 | WholeSale Warehouse | `2646610000000077024` |
 | Consumer Price List | `2646610000049149103` |
 | Retailor Price List | `2646610000004453985` |
+| Retailor IQD Price List | `2646610000113426769` |
 | Technical IQD | `2646610000057419683` |
 | Technical USD | `2646610000045742089` |
 | Wholesale A | `2646610000004152175` |
+| Wholesale A IQD | `2646610000113417534` |
 | Wholesale B | `2646610000004453961` |
+| Wholesale B IQD | `2646610000113426003` |
 
 ---
 
