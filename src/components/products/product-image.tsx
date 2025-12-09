@@ -55,7 +55,7 @@ export const ProductImage = memo(function ProductImage({
         fetchPriority={priority ? "high" : "low"}
         quality={75}
         className={cn(
-          "object-cover transition-opacity duration-200",
+          "object-contain transition-opacity duration-200",
           isLoading ? "opacity-0" : "opacity-100"
         )}
         placeholder="blur"
@@ -103,7 +103,7 @@ export const ProductImageSmall = memo(function ProductImageSmall({
         sizes="80px"
         quality={60}
         loading="lazy"
-        className="object-cover"
+        className="object-contain"
         onError={() => setHasError(true)}
         unoptimized={isInternalProxy}
       />
