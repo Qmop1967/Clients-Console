@@ -4,9 +4,12 @@ import { auth } from "@/lib/auth/auth";
 import { redirect } from "next/navigation";
 import { DashboardContent } from "@/components/dashboard/dashboard-content";
 import { DashboardSkeleton } from "@/components/dashboard/dashboard-skeleton";
-import { getCustomerBalance } from "@/lib/zoho/customers";
+import { getCustomerBalance, getZohoCustomerFresh } from "@/lib/zoho/customers";
 import { getRecentOrders, getOrderStats } from "@/lib/zoho/orders";
 import { getRecentInvoices } from "@/lib/zoho/invoices";
+
+// Force dynamic rendering to always get fresh customer data
+export const dynamic = 'force-dynamic';
 
 export async function generateMetadata() {
   const t = await getTranslations("dashboard");
@@ -87,6 +90,21 @@ export default async function DashboardPage() {
     redirect("/login");
   }
 
+  // CRITICAL: Fetch fresh customer data to get current currency
+  // Session may have stale currency if customer's price list was changed in Zoho
+  let currencyCode = session.user.currencyCode || "IQD";
+
+  if (session.user.zohoContactId) {
+    try {
+      const freshCustomer = await getZohoCustomerFresh(session.user.zohoContactId);
+      if (freshCustomer?.currency_code) {
+        currencyCode = freshCustomer.currency_code;
+      }
+    } catch {
+      // Fall back to session data
+    }
+  }
+
   return (
     <div className="container mx-auto px-4 py-6">
       {/* Suspense enables streaming - skeleton shows immediately while data loads */}
@@ -95,7 +113,7 @@ export default async function DashboardPage() {
           userId={session.user.id}
           zohoContactId={session.user.zohoContactId}
           userName={session.user.name}
-          currencyCode={session.user.currencyCode || "IQD"}
+          currencyCode={currencyCode}
         />
       </Suspense>
     </div>
