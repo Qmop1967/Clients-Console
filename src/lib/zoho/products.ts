@@ -873,68 +873,86 @@ async function fetchPricesForItems(
  *
  * This eliminates ~13 API calls per shop page load by caching
  * products and prices together.
+ *
+ * IMPORTANT: Each price list gets its own cache entry via dynamic cache key.
+ * This ensures IQD customers see IQD prices and USD customers see USD prices.
  */
-export const getProductsWithPrices = unstable_cache(
-  async (priceListId: string): Promise<{
-    products: ZohoItemWithPrice[];
-    currency: string;
-    priceListName: string;
-  }> => {
-    console.log(`🛒 getProductsWithPrices: Fetching for price list ${priceListId}`);
+export async function getProductsWithPrices(priceListId: string): Promise<{
+  products: ZohoItemWithPrice[];
+  currency: string;
+  priceListName: string;
+}> {
+  // Create a cached function with DYNAMIC cache key per price list
+  // This is critical - without including priceListId in the cache key,
+  // all customers would see the same cached prices regardless of their price list!
+  const cachedFetch = unstable_cache(
+    async (): Promise<{
+      products: ZohoItemWithPrice[];
+      currency: string;
+      priceListName: string;
+    }> => {
+      console.log(`[getProductsWithPrices] Fetching for price list ${priceListId}`);
 
-    try {
-      // Get all products (uses its own cache)
-      const products = await getAllProductsComplete();
+      try {
+        // Get all products (uses its own cache)
+        const products = await getAllProductsComplete();
 
-      if (!products.length) {
-        console.warn('[Products] No products found');
+        if (!products.length) {
+          console.warn('[Products] No products found');
+          return { products: [], currency: 'IQD', priceListName: 'Unknown' };
+        }
+
+        if (process.env.NODE_ENV === 'development') {
+          console.log(`[Products] Got ${products.length} products, now fetching prices...`);
+        }
+
+        // Fetch prices for all product IDs
+        const itemIds = products.map(p => p.item_id);
+        const priceMap = await fetchPricesForItems(priceListId, itemIds);
+
+        console.log(`[getProductsWithPrices] Got prices for ${priceMap.size} items`);
+
+        // Get price list info for currency
+        const priceListInfo = await rateLimitedFetch(() =>
+          zohoFetch<{ pricebook: { name: string; currency_code: string } }>(`/pricebooks/${priceListId}`, {
+            api: 'books',
+          })
+        ).catch(() => ({ pricebook: { name: 'Unknown', currency_code: 'IQD' } }));
+
+        const currency = priceListInfo.pricebook?.currency_code || 'IQD';
+        const priceListName = priceListInfo.pricebook?.name || 'Unknown';
+
+        // Merge products with prices
+        const productsWithPrices: ZohoItemWithPrice[] = products.map(product => ({
+          ...product,
+          display_price: priceMap.get(product.item_id) || 0,
+          price_currency: currency,
+          in_price_list: priceMap.has(product.item_id),
+        }));
+
+        if (process.env.NODE_ENV === 'development') {
+          console.log(`[Products] Returning ${productsWithPrices.length} products with prices`);
+        }
+
+        return {
+          products: productsWithPrices,
+          currency,
+          priceListName,
+        };
+      } catch (error) {
+        console.error('[getProductsWithPrices] Error:', error);
         return { products: [], currency: 'IQD', priceListName: 'Unknown' };
       }
-
-      if (process.env.NODE_ENV === 'development') console.log(`[Products] Got ${products.length} products, now fetching prices...`);
-
-      // Fetch prices for all product IDs
-      const itemIds = products.map(p => p.item_id);
-      const priceMap = await fetchPricesForItems(priceListId, itemIds);
-
-      console.log(`💰 Got prices for ${priceMap.size} items`);
-
-      // Get price list info for currency
-      const priceListInfo = await rateLimitedFetch(() =>
-        zohoFetch<{ pricebook: { name: string; currency_code: string } }>(`/pricebooks/${priceListId}`, {
-          api: 'books',
-        })
-      ).catch(() => ({ pricebook: { name: 'Unknown', currency_code: 'IQD' } }));
-
-      const currency = priceListInfo.pricebook?.currency_code || 'IQD';
-      const priceListName = priceListInfo.pricebook?.name || 'Unknown';
-
-      // Merge products with prices
-      const productsWithPrices: ZohoItemWithPrice[] = products.map(product => ({
-        ...product,
-        display_price: priceMap.get(product.item_id) || 0,
-        price_currency: currency,
-        in_price_list: priceMap.has(product.item_id),
-      }));
-
-      if (process.env.NODE_ENV === 'development') console.log(`[Products] Returning ${productsWithPrices.length} products with prices`);
-
-      return {
-        products: productsWithPrices,
-        currency,
-        priceListName,
-      };
-    } catch (error) {
-      console.error('Error in getProductsWithPrices:', error);
-      return { products: [], currency: 'IQD', priceListName: 'Unknown' };
+    },
+    [`products-with-prices-${priceListId}`], // DYNAMIC cache key per price list!
+    {
+      revalidate: 86400, // 24 hours
+      tags: [CACHE_TAGS.PRODUCTS, CACHE_TAGS.PRICE_LISTS],
     }
-  },
-  ['products-with-prices'],
-  {
-    revalidate: 86400, // 24 hours
-    tags: [CACHE_TAGS.PRODUCTS, CACHE_TAGS.PRICE_LISTS],
-  }
-);
+  );
+
+  return cachedFetch();
+}
 
 /**
  * Get products with consumer prices (for public visitors)
