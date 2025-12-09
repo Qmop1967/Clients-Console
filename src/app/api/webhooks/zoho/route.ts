@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { revalidateTag } from "next/cache";
 import { CACHE_TAGS, getAccessToken } from "@/lib/zoho/client";
-import { syncSingleImage, hasImageChanged } from "@/lib/blob/image-cache";
+import {
+  syncSingleImage,
+  hasImageChanged,
+  getStoredImageDocId,
+  deleteImageFromBlob,
+  clearImageCache
+} from "@/lib/blob/image-cache";
 import { quickSyncStock } from "@/lib/zoho/stock-cache";
 
 // Webhook secret for verification
@@ -261,6 +267,79 @@ async function fetchInvoiceLineItems(invoiceId: string): Promise<string[]> {
   return itemIds;
 }
 
+// Fetch item image info from Zoho API when webhook doesn't include it
+// Returns { hasImage, imageDocId } or null on error
+async function fetchItemImageInfo(itemId: string): Promise<{
+  hasImage: boolean;
+  imageDocId: string | null;
+  imageName: string | null;
+} | null> {
+  try {
+    const token = await getAccessToken();
+    const orgId = process.env.ZOHO_ORGANIZATION_ID || '748369814';
+
+    console.log(`[Webhook] 📋 Fetching item ${itemId} image info from Zoho...`);
+
+    // Use Books API to get item details (includes image_document_id)
+    const response = await fetch(
+      `https://www.zohoapis.com/books/v3/items/${itemId}?organization_id=${orgId}`,
+      {
+        headers: {
+          Authorization: `Zoho-oauthtoken ${token}`,
+        },
+      }
+    );
+
+    if (!response.ok) {
+      console.error(`[Webhook] ❌ Failed to fetch item ${itemId}: ${response.status}`);
+      return null;
+    }
+
+    const data = await response.json();
+    const item = data.item;
+
+    if (!item) {
+      console.error(`[Webhook] ❌ No item data in response for ${itemId}`);
+      return null;
+    }
+
+    const hasImage = !!(item.image_document_id || item.image_name);
+
+    console.log(`[Webhook] ✅ Item ${itemId} image info: hasImage=${hasImage}, docId=${item.image_document_id || 'none'}`);
+
+    return {
+      hasImage,
+      imageDocId: item.image_document_id || null,
+      imageName: item.image_name || null,
+    };
+  } catch (error) {
+    console.error(`[Webhook] ❌ Error fetching item image info:`, error);
+    return null;
+  }
+}
+
+// Delete product image from Vercel Blob and clear Redis cache
+async function deleteProductImage(itemId: string, reason: string): Promise<boolean> {
+  try {
+    console.log(`[Webhook] 🗑️ Deleting image for ${itemId}: ${reason}`);
+
+    // Delete from Vercel Blob
+    const deleteResult = await deleteImageFromBlob(itemId);
+    if (!deleteResult) {
+      console.log(`[Webhook] ⚠️ No Blob image found to delete for ${itemId}`);
+    }
+
+    // Clear Redis cache
+    await clearImageCache(itemId);
+
+    console.log(`[Webhook] ✅ Image deleted for ${itemId}`);
+    return true;
+  } catch (error) {
+    console.error(`[Webhook] ❌ Failed to delete image for ${itemId}:`, error);
+    return false;
+  }
+}
+
 // Sync product image to Vercel Blob with change detection
 // If imageDocId is provided, checks if image actually changed before re-syncing
 async function syncProductImage(
@@ -360,18 +439,45 @@ export async function POST(request: NextRequest) {
       // ============================================
       // ITEM/PRODUCT EVENTS
       // ============================================
-      case "item":
+      case "item": {
         await revalidateProducts(`item ${eventType}`);
         // Sync stock cache for this item
         syncStockForItems(affectedItemIds, `item: ${eventType}`);
-        // Sync image for item events with change detection
+
+        // Handle image sync with deletion detection
         const itemId = (data.item_id as string) || (data.id as string);
-        const imageDocId = data.image_document_id as string | undefined;
         if (itemId) {
-          // Pass imageDocId for change detection - only re-syncs if image actually changed
-          syncProductImage(itemId, eventType, imageDocId).catch(() => {});
+          // Get image info from webhook payload
+          let imageDocId = data.image_document_id as string | null | undefined;
+          let imageName = data.image_name as string | null | undefined;
+
+          // If webhook doesn't include image info, fetch from Zoho API
+          if (imageDocId === undefined && imageName === undefined) {
+            console.log(`[Webhook] 🔍 Webhook missing image info for ${itemId}, fetching from API...`);
+            const itemInfo = await fetchItemImageInfo(itemId);
+            if (itemInfo) {
+              imageDocId = itemInfo.imageDocId;
+              imageName = itemInfo.imageName;
+            }
+          }
+
+          // Detect image deletion: we had a cached image but Zoho no longer has one
+          if (!imageDocId && !imageName) {
+            const storedDocId = await getStoredImageDocId(itemId);
+            if (storedDocId) {
+              console.log(`[Webhook] 🗑️ Image deleted in Zoho for ${itemId} (had docId: ${storedDocId})`);
+              // Image was deleted - clear Blob and Redis
+              await deleteProductImage(itemId, "image deleted in Zoho");
+            } else {
+              console.log(`[Webhook] ℹ️ No image for ${itemId} (and no cached image)`);
+            }
+          } else if (imageDocId) {
+            // Image exists - sync with change detection
+            syncProductImage(itemId, eventType, imageDocId).catch(() => {});
+          }
         }
         break;
+      }
 
       // ============================================
       // STOCK/INVENTORY CHANGE EVENTS

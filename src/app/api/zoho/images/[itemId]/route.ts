@@ -20,16 +20,17 @@ import { getCachedImageUrl, syncSingleImage } from '@/lib/blob/image-cache';
 const ZOHO_INVENTORY_URL = 'https://www.zohoapis.com/inventory/v1';
 
 // Cache headers for images
-// UPDATED: Reduced from 1 year to allow image updates to propagate faster
+// OPTIMIZED: Short browser cache for fast updates, longer CDN cache for performance
 const CDN_CACHE_HEADERS = {
-  'Cache-Control': 'public, max-age=3600, s-maxage=86400, stale-while-revalidate=86400',
-  // 1 hour browser cache, 24 hour CDN cache with stale-while-revalidate
-  // This ensures image updates reflect within 1 hour while maintaining good performance
+  'Cache-Control': 'public, max-age=300, s-maxage=3600, stale-while-revalidate=60',
+  // 5 min browser cache, 1 hour CDN cache with 60s stale-while-revalidate
+  // This ensures image updates reflect within 5 minutes while maintaining performance
 };
 
 const PROXY_CACHE_HEADERS = {
-  'Cache-Control': 'public, max-age=1800, s-maxage=3600, stale-while-revalidate=86400',
-  // 30 min browser cache for proxied images (Zoho API fallback)
+  'Cache-Control': 'public, max-age=60, s-maxage=300, stale-while-revalidate=60',
+  // 1 min browser cache for proxied images (Zoho API fallback)
+  // Short cache to ensure quick propagation of new images
 };
 
 export async function GET(

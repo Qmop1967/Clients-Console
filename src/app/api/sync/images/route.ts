@@ -2,8 +2,9 @@
 // Image Sync API Route
 // ============================================
 // Syncs product images from Zoho to Vercel Blob
+// Detects deleted images and cleans them up
 // Protected with secret key
-// Can be called manually or triggered by webhooks
+// Can be called manually, via webhooks, or Vercel Cron (daily backup)
 // ============================================
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -16,6 +17,9 @@ import {
   acquireSyncLock,
   releaseSyncLock,
   getCachedImageUrls,
+  deleteImageFromBlob,
+  clearImageCache,
+  getStoredImageDocId,
 } from '@/lib/blob/image-cache';
 import { getAllProductsComplete } from '@/lib/zoho/products';
 
@@ -172,8 +176,129 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST handler for webhook-triggered syncs
+// POST handler for Vercel Cron (requires CRON_SECRET header) and webhook-triggered syncs
 export async function POST(request: NextRequest) {
+  const authHeader = request.headers.get('authorization');
+  const cronSecret = process.env.CRON_SECRET;
+  const contentType = request.headers.get('content-type');
+
+  // Check if this is a Vercel Cron request
+  const isCronRequest = authHeader?.startsWith('Bearer ') && cronSecret;
+
+  if (isCronRequest) {
+    // Verify Vercel Cron secret
+    if (authHeader !== `Bearer ${cronSecret}`) {
+      return NextResponse.json(
+        { error: 'Unauthorized cron request' },
+        { status: 401 }
+      );
+    }
+
+    console.log('[ImageSync] Image sync triggered by Vercel Cron');
+
+    try {
+      // Try to acquire lock
+      const hasLock = await acquireSyncLock();
+      if (!hasLock) {
+        console.log('[ImageSync] Skipping cron - sync already in progress');
+        return NextResponse.json({
+          success: true,
+          skipped: true,
+          message: 'Sync already in progress',
+        });
+      }
+
+      try {
+        await updateSyncStatus({ inProgress: true, lastSync: Date.now() });
+
+        // Get all products and check for image changes/deletions
+        const products = await getAllProductsComplete();
+        const accessToken = await getAccessToken();
+
+        let imagesSynced = 0;
+        let imagesDeleted = 0;
+        let itemsProcessed = 0;
+        const errors: string[] = [];
+
+        // Process each product to detect changes and deletions
+        for (const product of products) {
+          itemsProcessed++;
+
+          const hasImage = !!(product.image_document_id || product.image_name);
+          const storedDocId = await getStoredImageDocId(product.item_id);
+
+          // Case 1: Item has image, check if it needs sync
+          if (hasImage && product.image_document_id) {
+            if (!storedDocId || storedDocId !== product.image_document_id) {
+              try {
+                const result = await syncSingleImage(product.item_id, accessToken, {
+                  force: false,
+                  imageDocId: product.image_document_id,
+                });
+                if (result.success && !result.unchanged) {
+                  imagesSynced++;
+                  console.log(`[ImageSync] Synced image for ${product.item_id} (${product.sku})`);
+                }
+              } catch (error) {
+                errors.push(`Sync failed for ${product.item_id}`);
+              }
+            }
+          }
+
+          // Case 2: Item has no image but we have cached one - image was deleted
+          if (!hasImage && storedDocId) {
+            console.log(`[ImageSync] Detected deleted image for ${product.item_id} (${product.sku})`);
+            try {
+              await deleteImageFromBlob(product.item_id);
+              await clearImageCache(product.item_id);
+              imagesDeleted++;
+            } catch (error) {
+              errors.push(`Delete failed for ${product.item_id}`);
+            }
+          }
+
+          // Small delay every 50 items to avoid overwhelming the API
+          if (itemsProcessed % 50 === 0) {
+            await new Promise(resolve => setTimeout(resolve, 100));
+          }
+        }
+
+        await updateSyncStatus({
+          inProgress: false,
+          syncedImages: imagesSynced,
+          failedImages: errors.length,
+          totalImages: itemsProcessed,
+        });
+
+        console.log(`[ImageSync] Cron sync complete: ${imagesSynced} synced, ${imagesDeleted} deleted, ${errors.length} errors`);
+
+        return NextResponse.json({
+          success: errors.length === 0,
+          result: {
+            itemsProcessed,
+            imagesSynced,
+            imagesDeleted,
+            errorsCount: errors.length,
+          },
+        });
+
+      } finally {
+        await releaseSyncLock();
+      }
+
+    } catch (error) {
+      console.error('[ImageSync] Cron sync error:', error);
+      return NextResponse.json(
+        {
+          success: false,
+          error: error instanceof Error ? error.message : 'Unknown error',
+        },
+        { status: 500 }
+      );
+    }
+  }
+
+  // Handle webhook-triggered syncs (JSON body with itemIds)
   try {
     const body = await request.json();
     const { itemIds, secret } = body;
@@ -193,7 +318,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log(`🖼️ Webhook-triggered image sync for ${itemIds.length} items`);
+    console.log(`[ImageSync] Webhook-triggered image sync for ${itemIds.length} items`);
 
     // Get access token
     const accessToken = await getAccessToken();
@@ -215,7 +340,7 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error) {
-    console.error('Webhook image sync error:', error);
+    console.error('[ImageSync] Webhook image sync error:', error);
     return NextResponse.json(
       {
         success: false,
