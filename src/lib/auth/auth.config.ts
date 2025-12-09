@@ -64,20 +64,21 @@ export const authConfig: NextAuthConfig = {
             session.user.currencyCode = cached.data.currencyCode;
             session.user.name = cached.data.name || session.user.name;
           } else {
-            // Fetch fresh from Zoho (applies to ALL customers)
+            // Fetch FRESH from Zoho (NO CACHE - always real-time for session data)
+            // This ensures price list changes are immediately reflected
             try {
-              const { getZohoCustomerByEmail, getZohoCustomer } = await import('@/lib/zoho/customers');
+              const { getZohoCustomerByEmail, getZohoCustomerFresh } = await import('@/lib/zoho/customers');
 
               // Use contactId from DB if available (faster), otherwise lookup by email
               let customer;
               if (contactId) {
-                customer = await getZohoCustomer(contactId);
+                customer = await getZohoCustomerFresh(contactId);  // UNCACHED
               }
-              // If no contactId or getZohoCustomer failed, lookup by email
+              // If no contactId or getZohoCustomerFresh failed, lookup by email
               if (!customer) {
                 const customerBasic = await getZohoCustomerByEmail(email);
                 if (customerBasic) {
-                  customer = await getZohoCustomer(customerBasic.contact_id) || customerBasic;
+                  customer = await getZohoCustomerFresh(customerBasic.contact_id) || customerBasic;  // UNCACHED
                 }
               }
 

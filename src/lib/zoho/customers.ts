@@ -39,7 +39,8 @@ export async function getZohoCustomerByEmail(
   }
 }
 
-// Get customer by ID (cached)
+// Get customer by ID (cached - 5 minutes)
+// Use this for general data display where slight staleness is acceptable
 export const getZohoCustomer = unstable_cache(
   async (contactId: string): Promise<ZohoCustomer | null> => {
     try {
@@ -59,6 +60,21 @@ export const getZohoCustomer = unstable_cache(
     tags: ['customer'],
   }
 );
+
+// Get customer by ID (UNCACHED - real-time)
+// Use this for session/auth where we need the latest pricebook_id
+export async function getZohoCustomerFresh(contactId: string): Promise<ZohoCustomer | null> {
+  try {
+    const data = await rateLimitedFetch(() =>
+      zohoFetch<ZohoCustomerResponse>(`/contacts/${contactId}`)
+    );
+
+    return data.contact || null;
+  } catch (error) {
+    console.error('[getZohoCustomerFresh] Error:', error);
+    return null;
+  }
+}
 
 // Get customer with specific tag for revalidation
 export async function getCustomerWithTag(
