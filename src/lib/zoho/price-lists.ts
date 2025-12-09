@@ -13,7 +13,7 @@ import type { ZohoPriceList, ZohoItemPrice } from '@/types';
 // ============================================
 // PRICE LIST CONFIGURATION
 // ============================================
-// TSH uses 6 active price lists in Zoho Books/Inventory
+// TSH uses 9 active price lists in Zoho Books/Inventory
 // Each customer is assigned a price list based on their type
 // Public visitors always see Consumer prices (IQD)
 // ============================================
@@ -28,10 +28,10 @@ export const PRICE_LIST_IDS = {
   // Description: المستهلك المقصود الشخص الذي يستهلك او يستخدم المنتج
   CONSUMER: '2646610000049149103',
 
-  // Retailor - For retail shop customers (USD)
+  // Retailor USD - For retail shop customers (USD pricing)
   // Currency: USD - United States Dollar
   // Description: تجار الجملة او محلات المفرد بكميات بسيطة اجل او نقد
-  RETAILOR: '2646610000004453985',
+  RETAILOR_USD: '2646610000004453985',
 
   // Retailor IQD - For retail shop customers (IQD pricing)
   // Currency: IQD - Iraqi Dinar
@@ -45,19 +45,19 @@ export const PRICE_LIST_IDS = {
   // Currency: USD - United States Dollar
   TECHNICAL_USD: '2646610000045742089',
 
-  // Wholesale A - Cash wholesale (large quantities, cash payment)
+  // Wholesale A USD - Cash wholesale (large quantities, cash payment)
   // Currency: USD - United States Dollar
   // Description: k تجار الجملة بكميات كبيرة نقدي
-  WHOLESALE_A: '2646610000004152175',
+  WHOLESALE_A_USD: '2646610000004152175',
 
   // Wholesale A IQD - Cash wholesale (IQD pricing)
   // Currency: IQD - Iraqi Dinar
   WHOLESALE_A_IQD: '2646610000113417534',
 
-  // Wholesale B - Credit wholesale (large quantities, credit payment)
+  // Wholesale B USD - Credit wholesale (large quantities, credit payment)
   // Currency: USD - United States Dollar
   // Description: هم تجار الجملة بكميات كبيرة اجل
-  WHOLESALE_B: '2646610000004453961',
+  WHOLESALE_B_USD: '2646610000004453961',
 
   // Wholesale B IQD - Credit wholesale (IQD pricing)
   // Currency: IQD - Iraqi Dinar
@@ -77,9 +77,9 @@ export const PRICE_LIST_INFO = {
     currency: 'IQD',
     description: 'Public visitors and individual consumers',
   },
-  [PRICE_LIST_IDS.RETAILOR]: {
-    name: 'Retailor',
-    nameAr: 'التجزئة',
+  [PRICE_LIST_IDS.RETAILOR_USD]: {
+    name: 'Retailor USD',
+    nameAr: 'التجزئة (دولار)',
     currency: 'USD',
     description: 'Retail shops and small quantity dealers',
   },
@@ -101,9 +101,9 @@ export const PRICE_LIST_INFO = {
     currency: 'USD',
     description: 'Technicians with USD pricing',
   },
-  [PRICE_LIST_IDS.WHOLESALE_A]: {
-    name: 'Wholesale A',
-    nameAr: 'جملة أ',
+  [PRICE_LIST_IDS.WHOLESALE_A_USD]: {
+    name: 'Wholesale A USD',
+    nameAr: 'جملة أ (دولار)',
     currency: 'USD',
     description: 'Cash wholesale - large quantities',
   },
@@ -113,9 +113,9 @@ export const PRICE_LIST_INFO = {
     currency: 'IQD',
     description: 'Cash wholesale with IQD pricing',
   },
-  [PRICE_LIST_IDS.WHOLESALE_B]: {
-    name: 'Wholesale B',
-    nameAr: 'جملة ب',
+  [PRICE_LIST_IDS.WHOLESALE_B_USD]: {
+    name: 'Wholesale B USD',
+    nameAr: 'جملة ب (دولار)',
     currency: 'USD',
     description: 'Credit wholesale - large quantities',
   },

@@ -142,7 +142,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
     // Default based on currency if still no price list
     if (!priceListId) {
       priceListId = session.user.currencyCode === 'USD'
-        ? PRICE_LIST_IDS.RETAILOR
+        ? PRICE_LIST_IDS.RETAILOR_USD
         : PRICE_LIST_IDS.CONSUMER;
     }
   }
