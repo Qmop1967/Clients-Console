@@ -18,7 +18,7 @@ export default async function AccountStatementPage() {
     redirect("/login");
   }
 
-  const currencyCode = session.user.currencyCode || "USD";
+  const currencyCode = session.user.currencyCode || "IQD";
 
   // Fetch account statement data from Zoho
   const statement = await getAccountStatement(session.user.zohoContactId || "");

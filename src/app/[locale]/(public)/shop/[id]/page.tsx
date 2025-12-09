@@ -139,11 +139,10 @@ export default async function ProductPage({ params }: ProductPageProps) {
       }
     }
 
-    // Default based on currency if still no price list
+    // If no price list ID after checking session and Zoho, fall back to Consumer (public pricing)
+    // Do NOT guess based on currency - customer could be on any price list (Wholesale, Technical, etc.)
     if (!priceListId) {
-      priceListId = session.user.currencyCode === 'USD'
-        ? PRICE_LIST_IDS.RETAILOR_USD
-        : PRICE_LIST_IDS.CONSUMER;
+      priceListId = PRICE_LIST_IDS.CONSUMER;
     }
   }
 

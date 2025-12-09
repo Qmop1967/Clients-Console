@@ -42,7 +42,7 @@ export default async function OrderDetailPage({
       order={order}
       packages={packages}
       shipments={shipments}
-      currencyCode={session.user.currencyCode || "USD"}
+      currencyCode={session.user.currencyCode || "IQD"}
     />
   );
 }

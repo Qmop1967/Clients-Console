@@ -91,7 +91,7 @@ export default async function InvoicesPage({
         invoices={invoicesResponse.data}
         pageContext={invoicesResponse.page_context}
         currentPage={currentPage}
-        currencyCode={session.user.currencyCode || "USD"}
+        currencyCode={session.user.currencyCode || "IQD"}
         summaryStats={summaryStats}
       />
     </div>

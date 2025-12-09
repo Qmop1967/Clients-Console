@@ -120,7 +120,7 @@ export default async function OrdersPage({
       <Suspense fallback={<OrdersSkeleton />}>
         <OrdersContent
           customerId={session.user.zohoContactId || ""}
-          currencyCode={session.user.currencyCode || "USD"}
+          currencyCode={session.user.currencyCode || "IQD"}
           orders={ordersResponse.data}
           pageContext={ordersResponse.page_context}
           currentPage={currentPage}

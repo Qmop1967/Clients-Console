@@ -243,8 +243,8 @@ export async function getAccountStatement(
         const firstDate = fromDate || dates[0] || new Date().toISOString().split('T')[0];
         const lastDate = toDate || dates[dates.length - 1] || new Date().toISOString().split('T')[0];
 
-        // Get currency from first invoice or default
-        const currencyCode = invoices[0]?.currency_code || 'USD';
+        // Get currency from first invoice or default to IQD (TSH's home currency)
+        const currencyCode = invoices[0]?.currency_code || 'IQD';
 
         return {
           opening_balance: 0, // We start from 0 in the statement view
@@ -263,7 +263,7 @@ export async function getAccountStatement(
           closing_balance: 0,
           total_debits: 0,
           total_credits: 0,
-          currency_code: 'USD',
+          currency_code: 'IQD',
           from_date: new Date().toISOString().split('T')[0],
           to_date: new Date().toISOString().split('T')[0],
           transactions: [],
@@ -303,7 +303,8 @@ export async function getStatementSummary(
         const totalPaid = payments.reduce((sum, pmt) => sum + pmt.amount, 0);
         const totalCredits = creditNotes.reduce((sum, cn) => sum + cn.total, 0);
         const balance = totalInvoiced - totalPaid - totalCredits;
-        const currencyCode = invoices[0]?.currency_code || 'USD';
+        // Get currency from first invoice or default to IQD (TSH's home currency)
+        const currencyCode = invoices[0]?.currency_code || 'IQD';
 
         return {
           totalInvoiced,
@@ -319,7 +320,7 @@ export async function getStatementSummary(
           totalPaid: 0,
           totalCredits: 0,
           balance: 0,
-          currency_code: 'USD',
+          currency_code: 'IQD',
         };
       }
     },

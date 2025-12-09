@@ -119,7 +119,7 @@ export default async function InvoiceDetailPage({
     return statusMap[statusLower] || statusMap.draft;
   };
 
-  const currency = invoice.currency_code || "USD";
+  const currency = invoice.currency_code || "IQD";
   const statusInfo = getStatusInfo(invoice.status);
 
   // Calculate payment progress
