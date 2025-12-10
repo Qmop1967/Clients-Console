@@ -1,8 +1,8 @@
 import { Suspense } from "react";
 import { getTranslations } from "next-intl/server";
-import { PublicProductsContent } from "@/components/products/public-products-content";
+import { ShopContainer } from "@/components/products/shop-container";
 import { ProductsSkeleton } from "@/components/products/products-skeleton";
-import { getProductsWithPrices, getProductsWithConsumerPrices, getProductImageUrl } from "@/lib/zoho/products";
+import { getProductsWithPrices, getProductsWithConsumerPrices, getProductImageUrl, getCategories } from "@/lib/zoho/products";
 import { PRICE_LIST_IDS } from "@/lib/zoho/price-lists";
 import { auth } from "@/lib/auth/auth";
 import { getZohoCustomerFresh } from "@/lib/zoho/customers";
@@ -24,15 +24,20 @@ export async function generateMetadata() {
  * OPTIMIZED: Fetch shop data using cached products with prices
  * - Uses cached getProductsWithPrices (24h cache)
  * - Stock is fresh from Redis on every call
+ * - Fetches categories in parallel
  * - Reduces API calls from ~15 to ~1-2 per request
  */
 async function fetchShopData(priceListId: string, isPublicVisitor: boolean) {
   try {
-    // Use cached data - products + prices cached together for 24h
-    // Stock is always fresh from Redis
-    const { products: allProducts, currency } = isPublicVisitor
-      ? await getProductsWithConsumerPrices()
-      : await getProductsWithPrices(priceListId);
+    // Fetch products and categories in parallel
+    const [productResult, categories] = await Promise.all([
+      isPublicVisitor
+        ? getProductsWithConsumerPrices()
+        : getProductsWithPrices(priceListId),
+      getCategories()
+    ]);
+
+    const { products: allProducts, currency } = productResult;
 
     // Map to display format - keep it minimal for faster serialization
     const productsWithPrices = allProducts.map((product) => ({
@@ -53,8 +58,12 @@ async function fetchShopData(priceListId: string, isPublicVisitor: boolean) {
     // Filter to only in-stock products
     const inStockProducts = productsWithPrices.filter(p => p.available_stock > 0);
 
+    // Filter to only active categories
+    const activeCategories = categories.filter(c => c.is_active);
+
     return {
       products: inStockProducts,
+      categories: activeCategories,
       currencyCode: currency,
       error: null,
     };
@@ -65,6 +74,7 @@ async function fetchShopData(priceListId: string, isPublicVisitor: boolean) {
 
     return {
       products: [],
+      categories: [],
       currencyCode: "IQD",
       error: isRateLimit ? "rate_limit" : "general",
     };
@@ -72,7 +82,7 @@ async function fetchShopData(priceListId: string, isPublicVisitor: boolean) {
 }
 
 // Separate async component for products - enables streaming
-async function ProductsLoader({
+async function ShopLoader({
   priceListId,
   isPublicVisitor,
   isAuthenticated,
@@ -82,7 +92,7 @@ async function ProductsLoader({
   isAuthenticated: boolean;
 }) {
   const t = await getTranslations("products");
-  const { products, currencyCode, error } = await fetchShopData(priceListId, isPublicVisitor);
+  const { products, categories, currencyCode, error } = await fetchShopData(priceListId, isPublicVisitor);
 
   // Error State
   if (error && products.length === 0) {
@@ -115,8 +125,9 @@ async function ProductsLoader({
   }
 
   return (
-    <PublicProductsContent
+    <ShopContainer
       products={products}
+      categories={categories}
       currencyCode={currencyCode}
       isAuthenticated={isAuthenticated}
     />
@@ -151,7 +162,7 @@ export default async function PublicShopPage() {
     <div className="space-y-6">
       {/* Use Suspense to enable streaming - shows skeleton immediately */}
       <Suspense fallback={<ProductsSkeleton />}>
-        <ProductsLoader
+        <ShopLoader
           priceListId={priceListId}
           isPublicVisitor={isPublicVisitor}
           isAuthenticated={isAuthenticated}

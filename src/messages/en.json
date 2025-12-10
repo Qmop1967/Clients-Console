@@ -156,7 +156,14 @@
     "quantity": "Quantity",
     "maxQuantity": "Max",
     "availableStock": "Available",
-    "exceededMaxQuantity": "Maximum available is {count}"
+    "exceededMaxQuantity": "Maximum available is {count}",
+    "browseByCategory": "Browse by Category",
+    "selectCategory": "Select a category to view products",
+    "productsCount": "products",
+    "totalCategories": "{count} categories",
+    "noCategoriesFound": "No categories found",
+    "noCategoriesDescription": "Categories will appear here once products are available.",
+    "activeFilters": "Active filters"
   },
   "orders": {
     "title": "Orders",

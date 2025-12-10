@@ -156,7 +156,14 @@
     "quantity": "الكمية",
     "maxQuantity": "أقصى",
     "availableStock": "المتوفر",
-    "exceededMaxQuantity": "الحد الأقصى المتوفر {count}"
+    "exceededMaxQuantity": "الحد الأقصى المتوفر {count}",
+    "browseByCategory": "تصفح حسب الفئة",
+    "selectCategory": "اختر فئة لعرض المنتجات",
+    "productsCount": "منتج",
+    "totalCategories": "{count} فئة",
+    "noCategoriesFound": "لا توجد فئات",
+    "noCategoriesDescription": "ستظهر الفئات هنا عند توفر المنتجات.",
+    "activeFilters": "الفلاتر النشطة"
   },
   "orders": {
     "title": "الطلبات",

@@ -7,9 +7,16 @@ import Link from "next/link";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { ProductImage } from "./product-image";
 import { useCart } from "@/components/providers/cart-provider";
-import { Search, ShoppingCart, Check, Eye, ChevronRight } from "lucide-react";
+import { Search, ShoppingCart, Check, Eye, ChevronRight, X, SlidersHorizontal } from "lucide-react";
 import { WholesaleQuantityInput } from "@/components/ui/wholesale-quantity-input";
 import { NumberedPagination } from "@/components/ui/pagination";
 import { cn } from "@/lib/utils/cn";
@@ -20,6 +27,9 @@ const SCROLL_POSITION_KEY = "shop_scroll_position";
 
 // Pagination configuration - 24 items per page (6 rows of 4 on desktop)
 const PRODUCTS_PER_PAGE = 24;
+
+// Sort options
+type SortOption = "name-asc" | "name-desc" | "price-asc" | "price-desc" | "stock-desc";
 
 // Product type from server
 interface PublicProduct {
@@ -49,7 +59,10 @@ interface PublicProductsContentProps {
   products: PublicProduct[];
   categories: PublicCategory[];
   currencyCode: string;
-  isAuthenticated?: boolean; // Hide login CTA for authenticated users
+  isAuthenticated?: boolean;
+  selectedCategory?: string | null;
+  selectedCategoryName?: string | null;
+  onClearCategory?: () => void;
 }
 
 // Number of products to load with priority (above-the-fold)
@@ -284,9 +297,15 @@ const ProductCardWithCart = memo(function ProductCardWithCart({
 
 export function PublicProductsContent({
   products,
+  // categories is passed for potential future use (e.g., category dropdown filter)
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  categories,
   currencyCode,
   isAuthenticated = false,
-}: Omit<PublicProductsContentProps, 'categories'>) {
+  selectedCategory = null,
+  selectedCategoryName = null,
+  onClearCategory,
+}: PublicProductsContentProps) {
   const t = useTranslations("products");
   const locale = useLocale();
   const pathname = usePathname();
@@ -296,9 +315,11 @@ export function PublicProductsContent({
   // Get page from URL params, default to 1
   const pageFromUrl = parseInt(searchParams.get("page") || "1", 10);
   const searchFromUrl = searchParams.get("q") || "";
+  const sortFromUrl = (searchParams.get("sort") as SortOption) || "name-asc";
 
   const [searchQuery, setSearchQuery] = useState(searchFromUrl);
   const [currentPage, setCurrentPage] = useState(pageFromUrl);
+  const [sortBy, setSortBy] = useState<SortOption>(sortFromUrl);
 
   // Use deferred value for search to keep input responsive (improves INP)
   const deferredSearchQuery = useDeferredValue(searchQuery);
@@ -320,25 +341,40 @@ export function PublicProductsContent({
     }
   }, []);
 
-  // Update URL when page or search changes (without full navigation)
+  // Update URL when page, search, or sort changes (without full navigation)
   useEffect(() => {
-    const params = new URLSearchParams();
-    if (currentPage > 1) params.set("page", String(currentPage));
-    if (searchQuery) params.set("q", searchQuery);
+    const params = new URLSearchParams(searchParams.toString());
+
+    if (currentPage > 1) {
+      params.set("page", String(currentPage));
+    } else {
+      params.delete("page");
+    }
+
+    if (searchQuery) {
+      params.set("q", searchQuery);
+    } else {
+      params.delete("q");
+    }
+
+    if (sortBy !== "name-asc") {
+      params.set("sort", sortBy);
+    } else {
+      params.delete("sort");
+    }
 
     const newUrl = params.toString() ? `${pathname}?${params.toString()}` : pathname;
     window.history.replaceState(null, "", newUrl);
-  }, [currentPage, searchQuery, pathname]);
+  }, [currentPage, searchQuery, sortBy, pathname, searchParams]);
 
-  // Reset to page 1 when search changes
+  // Reset to page 1 when search or sort changes
   useEffect(() => {
-    if (searchQuery !== searchFromUrl) {
+    if (searchQuery !== searchFromUrl || sortBy !== sortFromUrl) {
       setCurrentPage(1);
     }
-  }, [searchQuery, searchFromUrl]);
+  }, [searchQuery, searchFromUrl, sortBy, sortFromUrl]);
 
-  // STRICT RULE: Only show products with WholeSale warehouse stock > 0
-  // Uses deferred search query for responsive input (improves INP)
+  // Filter and sort products
   const filteredProducts = useMemo(() => {
     // First filter: ONLY products with stock > 0 (strict rule)
     let filtered = products.filter((p) => p.available_stock > 0);
@@ -355,11 +391,26 @@ export function PublicProductsContent({
       );
     }
 
-    // Sort by name (all products are in-stock now)
-    filtered.sort((a, b) => a.name.localeCompare(b.name));
+    // Sort based on selected option
+    filtered.sort((a, b) => {
+      switch (sortBy) {
+        case "name-asc":
+          return a.name.localeCompare(b.name);
+        case "name-desc":
+          return b.name.localeCompare(a.name);
+        case "price-asc":
+          return a.rate - b.rate;
+        case "price-desc":
+          return b.rate - a.rate;
+        case "stock-desc":
+          return b.available_stock - a.available_stock;
+        default:
+          return a.name.localeCompare(b.name);
+      }
+    });
 
     return filtered;
-  }, [products, deferredSearchQuery]);
+  }, [products, deferredSearchQuery, sortBy]);
 
   // Pagination calculations
   const totalPages = Math.ceil(filteredProducts.length / PRODUCTS_PER_PAGE);
@@ -376,23 +427,64 @@ export function PublicProductsContent({
 
   return (
     <div className="space-y-6">
-      {/* Header with Search */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <h2 className="text-2xl font-bold">{t("title")}</h2>
+      {/* Filters Row */}
+      <div className="flex flex-col gap-4">
+        {/* Search and Sort Row */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+          {/* Search Bar */}
+          <div className="relative flex-1">
+            <Search className={cn(
+              "absolute left-3 rtl:left-auto rtl:right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground transition-opacity",
+              isSearching && "animate-pulse"
+            )} />
+            <Input
+              placeholder={t("searchPlaceholder")}
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="ps-10"
+            />
+          </div>
 
-        {/* Search Bar - optimized with deferred value for INP */}
-        <div className="relative w-full sm:w-80">
-          <Search className={cn(
-            "absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground transition-opacity",
-            isSearching && "animate-pulse"
-          )} />
-          <Input
-            placeholder={t("searchPlaceholder")}
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10"
-          />
+          {/* Sort Dropdown */}
+          <div className="flex items-center gap-2">
+            <SlidersHorizontal className="h-4 w-4 text-muted-foreground hidden sm:block" />
+            <Select value={sortBy} onValueChange={(value) => setSortBy(value as SortOption)}>
+              <SelectTrigger className="w-full sm:w-[180px]">
+                <SelectValue placeholder={t("sortBy")} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="name-asc">{t("sortOptions.nameAsc")}</SelectItem>
+                <SelectItem value="name-desc">{t("sortOptions.nameDesc")}</SelectItem>
+                <SelectItem value="price-asc">{t("sortOptions.priceAsc")}</SelectItem>
+                <SelectItem value="price-desc">{t("sortOptions.priceDesc")}</SelectItem>
+                <SelectItem value="stock-desc">{t("sortOptions.stockDesc")}</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </div>
+
+        {/* Active Category Badge */}
+        {selectedCategory && selectedCategoryName && onClearCategory && (
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">{t("activeFilters")}:</span>
+            <Badge
+              variant="gold"
+              className="gap-1.5 pe-1.5 cursor-pointer hover:bg-gold/80 transition-colors"
+              onClick={onClearCategory}
+            >
+              {selectedCategoryName}
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onClearCategory();
+                }}
+                className="hover:bg-white/20 rounded-full p-0.5 transition-colors"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </Badge>
+          </div>
+        )}
       </div>
 
       {/* Products Section */}
