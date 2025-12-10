@@ -29,7 +29,12 @@ import {
  * Maps category names to Lucide icons based on keywords
  * Uses fuzzy matching to find the best icon for each category
  */
-export function getCategoryIcon(categoryName: string): LucideIcon {
+export function getCategoryIcon(categoryName: string | undefined | null): LucideIcon {
+  // Handle undefined/null category names
+  if (!categoryName) {
+    return Package;
+  }
+
   const iconMap: Record<string, LucideIcon> = {
     // Networking
     network: Network,
@@ -132,7 +137,12 @@ export function getCategoryIcon(categoryName: string): LucideIcon {
  * Get a color class for the category icon based on category type
  * Returns Tailwind color classes for icon styling
  */
-export function getCategoryIconColor(categoryName: string): string {
+export function getCategoryIconColor(categoryName: string | undefined | null): string {
+  // Handle undefined/null category names
+  if (!categoryName) {
+    return 'text-primary';
+  }
+
   const lowerName = categoryName.toLowerCase();
 
   // Security - red/orange
