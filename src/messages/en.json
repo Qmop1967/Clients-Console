@@ -155,7 +155,8 @@
     "genuineDesc": "Original products",
     "quantity": "Quantity",
     "maxQuantity": "Max",
-    "availableStock": "Available"
+    "availableStock": "Available",
+    "exceededMaxQuantity": "Maximum available is {count}"
   },
   "orders": {
     "title": "Orders",

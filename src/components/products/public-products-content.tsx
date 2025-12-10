@@ -232,6 +232,7 @@ const ProductCardWithCart = memo(function ProductCardWithCart({
               translations={{
                 max: t("maxQuantity"),
                 available: t("availableStock"),
+                exceededMax: t("exceededMaxQuantity", { count: maxQuantity }),
               }}
               onPreventNavigation={preventNavigation}
             />

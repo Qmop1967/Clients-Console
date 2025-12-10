@@ -155,7 +155,8 @@
     "genuineDesc": "منتجات أصلية",
     "quantity": "الكمية",
     "maxQuantity": "أقصى",
-    "availableStock": "المتوفر"
+    "availableStock": "المتوفر",
+    "exceededMaxQuantity": "الحد الأقصى المتوفر {count}"
   },
   "orders": {
     "title": "الطلبات",

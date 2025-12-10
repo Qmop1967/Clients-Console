@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useState, useCallback, useEffect, useRef } from "react";
-import { Minus, Plus, ChevronsUp } from "lucide-react";
+import { Minus, Plus, ChevronsUp, AlertCircle } from "lucide-react";
 import { Button } from "./button";
 import { cn } from "@/lib/utils/cn";
 
@@ -16,6 +16,7 @@ interface WholesaleQuantityInputProps {
   translations: {
     max: string;
     available: string;
+    exceededMax?: string;
   };
   onPreventNavigation?: (e: React.MouseEvent) => void;
 }
@@ -32,7 +33,9 @@ export function WholesaleQuantityInput({
 }: WholesaleQuantityInputProps) {
   const [inputValue, setInputValue] = useState(String(value));
   const [isFocused, setIsFocused] = useState(false);
+  const [showExceededWarning, setShowExceededWarning] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const warningTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Sync inputValue with external value changes
   useEffect(() => {
@@ -40,6 +43,26 @@ export function WholesaleQuantityInput({
       setInputValue(String(value));
     }
   }, [value, isFocused]);
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (warningTimeoutRef.current) {
+        clearTimeout(warningTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  // Show exceeded warning with auto-hide
+  const triggerExceededWarning = useCallback(() => {
+    setShowExceededWarning(true);
+    if (warningTimeoutRef.current) {
+      clearTimeout(warningTimeoutRef.current);
+    }
+    warningTimeoutRef.current = setTimeout(() => {
+      setShowExceededWarning(false);
+    }, 3000);
+  }, []);
 
   // Handle direct input
   const handleInputChange = useCallback(
@@ -58,12 +81,16 @@ export function WholesaleQuantityInput({
 
       const parsed = parseInt(numericValue, 10);
       if (!isNaN(parsed)) {
+        // Check if exceeds max and show warning
+        if (parsed > max) {
+          triggerExceededWarning();
+        }
         // Clamp value to valid range
         const clampedValue = Math.min(Math.max(parsed, min), max);
         onChange(clampedValue);
       }
     },
-    [min, max, onChange]
+    [min, max, onChange, triggerExceededWarning]
   );
 
   // Handle blur - validate and correct value
@@ -74,13 +101,14 @@ export function WholesaleQuantityInput({
       setInputValue(String(min));
       onChange(min);
     } else if (parsed > max) {
+      triggerExceededWarning();
       setInputValue(String(max));
       onChange(max);
     } else {
       setInputValue(String(parsed));
       onChange(parsed);
     }
-  }, [inputValue, min, max, onChange]);
+  }, [inputValue, min, max, onChange, triggerExceededWarning]);
 
   // Handle focus - select all text for easy replacement
   const handleFocus = useCallback((e: React.FocusEvent<HTMLInputElement>) => {
@@ -258,9 +286,28 @@ export function WholesaleQuantityInput({
         </button>
       </div>
 
-      {/* Available stock indicator */}
-      <div className="text-center text-[10px] text-muted-foreground">
-        {translations.available}: <span className="font-medium tabular-nums">{max}</span>
+      {/* Available stock indicator / Exceeded warning */}
+      <div className="relative h-5">
+        {/* Normal available text */}
+        <div
+          className={cn(
+            "text-center text-[10px] text-muted-foreground transition-all duration-300",
+            showExceededWarning ? "opacity-0 translate-y-1" : "opacity-100 translate-y-0"
+          )}
+        >
+          {translations.available}: <span className="font-medium tabular-nums">{max}</span>
+        </div>
+
+        {/* Exceeded warning message */}
+        <div
+          className={cn(
+            "absolute inset-0 flex items-center justify-center gap-1.5 text-[11px] font-medium text-red-500 dark:text-red-400 transition-all duration-300",
+            showExceededWarning ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-1 pointer-events-none"
+          )}
+        >
+          <AlertCircle className="h-3.5 w-3.5 animate-pulse" />
+          <span>{translations.exceededMax || `Maximum available: ${max}`}</span>
+        </div>
       </div>
     </div>
   );

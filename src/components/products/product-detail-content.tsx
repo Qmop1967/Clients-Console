@@ -331,6 +331,7 @@ export function ProductDetailContent({ product, locale }: ProductDetailProps) {
                   translations={{
                     max: t("maxQuantity"),
                     available: t("availableStock"),
+                    exceededMax: t("exceededMaxQuantity", { count: maxQuantity }),
                   }}
                 />
 
