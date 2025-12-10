@@ -193,22 +193,22 @@ export function WholesaleQuantityInput({
       </div>
 
       {/* Quick actions row - Physical button style */}
-      <div className="flex items-center gap-2">
+      <div className="grid grid-cols-3 gap-2">
         {/* +10 Button */}
         <button
           type="button"
           onClick={(e) => handleIncrement(e, 10)}
           disabled={disabled || value >= max}
           className={cn(
-            "flex-1 h-9 px-3 rounded-xl text-sm font-semibold tabular-nums",
-            "bg-gradient-to-b from-secondary/80 to-secondary",
-            "border border-border/50",
-            "shadow-[0_2px_0_0_hsl(var(--border)),inset_0_1px_0_0_rgba(255,255,255,0.1)]",
-            "hover:shadow-[0_1px_0_0_hsl(var(--border)),inset_0_1px_0_0_rgba(255,255,255,0.1)]",
+            "h-10 px-2 rounded-xl text-sm font-bold tabular-nums whitespace-nowrap",
+            "bg-gradient-to-b from-muted/90 to-muted",
+            "border border-border/60",
+            "shadow-[0_3px_0_0_hsl(var(--border)),inset_0_1px_0_0_rgba(255,255,255,0.08)]",
+            "hover:shadow-[0_2px_0_0_hsl(var(--border)),inset_0_1px_0_0_rgba(255,255,255,0.08)]",
             "hover:translate-y-[1px]",
-            "active:shadow-none active:translate-y-[2px]",
-            "transition-all duration-100",
-            "disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:shadow-[0_2px_0_0_hsl(var(--border)),inset_0_1px_0_0_rgba(255,255,255,0.1)]"
+            "active:shadow-[0_0px_0_0_hsl(var(--border))] active:translate-y-[3px]",
+            "transition-all duration-75",
+            "disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:shadow-[0_3px_0_0_hsl(var(--border)),inset_0_1px_0_0_rgba(255,255,255,0.08)]"
           )}
         >
           +10
@@ -220,15 +220,15 @@ export function WholesaleQuantityInput({
           onClick={(e) => handleIncrement(e, 100)}
           disabled={disabled || value >= max}
           className={cn(
-            "flex-1 h-9 px-3 rounded-xl text-sm font-semibold tabular-nums",
-            "bg-gradient-to-b from-secondary/80 to-secondary",
-            "border border-border/50",
-            "shadow-[0_2px_0_0_hsl(var(--border)),inset_0_1px_0_0_rgba(255,255,255,0.1)]",
-            "hover:shadow-[0_1px_0_0_hsl(var(--border)),inset_0_1px_0_0_rgba(255,255,255,0.1)]",
+            "h-10 px-2 rounded-xl text-sm font-bold tabular-nums whitespace-nowrap",
+            "bg-gradient-to-b from-muted/90 to-muted",
+            "border border-border/60",
+            "shadow-[0_3px_0_0_hsl(var(--border)),inset_0_1px_0_0_rgba(255,255,255,0.08)]",
+            "hover:shadow-[0_2px_0_0_hsl(var(--border)),inset_0_1px_0_0_rgba(255,255,255,0.08)]",
             "hover:translate-y-[1px]",
-            "active:shadow-none active:translate-y-[2px]",
-            "transition-all duration-100",
-            "disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:shadow-[0_2px_0_0_hsl(var(--border)),inset_0_1px_0_0_rgba(255,255,255,0.1)]"
+            "active:shadow-[0_0px_0_0_hsl(var(--border))] active:translate-y-[3px]",
+            "transition-all duration-75",
+            "disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:shadow-[0_3px_0_0_hsl(var(--border)),inset_0_1px_0_0_rgba(255,255,255,0.08)]"
           )}
         >
           +100
@@ -240,21 +240,21 @@ export function WholesaleQuantityInput({
           onClick={handleSetMax}
           disabled={disabled || value >= max}
           className={cn(
-            "flex-1 h-9 px-3 rounded-xl text-sm font-semibold",
-            "flex items-center justify-center gap-1.5",
-            "bg-gradient-to-b from-amber-500/20 to-amber-600/20",
-            "border border-amber-500/40",
+            "h-10 px-2 rounded-xl text-sm font-bold whitespace-nowrap",
+            "inline-flex items-center justify-center gap-1",
+            "bg-gradient-to-b from-amber-500/25 to-amber-600/30",
+            "border border-amber-500/50",
             "text-amber-500 dark:text-amber-400",
-            "shadow-[0_2px_0_0_rgba(245,158,11,0.3),inset_0_1px_0_0_rgba(255,255,255,0.1)]",
-            "hover:shadow-[0_1px_0_0_rgba(245,158,11,0.3),inset_0_1px_0_0_rgba(255,255,255,0.1)]",
-            "hover:translate-y-[1px] hover:from-amber-500/25 hover:to-amber-600/25",
-            "active:shadow-none active:translate-y-[2px]",
-            "transition-all duration-100",
-            "disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:shadow-[0_2px_0_0_rgba(245,158,11,0.3),inset_0_1px_0_0_rgba(255,255,255,0.1)]"
+            "shadow-[0_3px_0_0_rgba(180,120,30,0.5),inset_0_1px_0_0_rgba(255,255,255,0.15)]",
+            "hover:shadow-[0_2px_0_0_rgba(180,120,30,0.5),inset_0_1px_0_0_rgba(255,255,255,0.15)]",
+            "hover:translate-y-[1px] hover:bg-gradient-to-b hover:from-amber-500/30 hover:to-amber-600/35",
+            "active:shadow-[0_0px_0_0_rgba(180,120,30,0.5)] active:translate-y-[3px]",
+            "transition-all duration-75",
+            "disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:shadow-[0_3px_0_0_rgba(180,120,30,0.5),inset_0_1px_0_0_rgba(255,255,255,0.15)]"
           )}
         >
-          <ChevronsUp className="h-4 w-4" />
-          {translations.max}
+          <ChevronsUp className="h-3.5 w-3.5" />
+          <span>{translations.max}</span>
         </button>
       </div>
 
