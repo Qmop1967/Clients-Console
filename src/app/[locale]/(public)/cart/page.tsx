@@ -11,8 +11,6 @@ import { Badge } from "@/components/ui/badge";
 import {
   ShoppingBag,
   Trash2,
-  Plus,
-  Minus,
   ArrowLeft,
   AlertTriangle,
   Package,
@@ -21,6 +19,7 @@ import {
   CheckCircle,
   LogIn,
 } from "lucide-react";
+import { WholesaleQuantityInput } from "@/components/ui/wholesale-quantity-input";
 import Image from "next/image";
 import Link from "next/link";
 import { useParams } from "next/navigation";
@@ -380,34 +379,9 @@ export default function CartPage() {
                           </Button>
                         </div>
 
-                        <div className="mt-auto flex flex-col sm:flex-row sm:items-center sm:justify-between pt-3 gap-3 border-t">
-                          {/* Quantity Controls */}
-                          <div className="flex items-center gap-1.5">
-                            <Button
-                              variant="outline"
-                              size="icon"
-                              className="h-8 w-8"
-                              onClick={() => updateQuantity(item.item_id, item.quantity - 1)}
-                            >
-                              <Minus className="h-3 w-3" />
-                            </Button>
-                            <span className="w-10 text-center font-semibold">{item.quantity}</span>
-                            <Button
-                              variant="outline"
-                              size="icon"
-                              className="h-8 w-8"
-                              onClick={() => updateQuantity(item.item_id, item.quantity + 1)}
-                              disabled={item.quantity >= item.available_stock}
-                            >
-                              <Plus className="h-3 w-3" />
-                            </Button>
-                            <span className="text-xs text-muted-foreground ml-2">
-                              {item.available_stock} {t("available")}
-                            </span>
-                          </div>
-
-                          {/* Price */}
-                          <div className="flex items-center gap-3 sm:gap-4">
+                        <div className="mt-auto pt-3 border-t space-y-3">
+                          {/* Price Row */}
+                          <div className="flex items-center justify-between">
                             <div className="text-sm text-muted-foreground">
                               <span className="font-medium">{formatUnitPrice(item.rate)}</span>
                               <span className="mx-1">×</span>
@@ -419,6 +393,18 @@ export default function CartPage() {
                               </p>
                             </div>
                           </div>
+
+                          {/* Quantity Controls - Wholesale Input */}
+                          <WholesaleQuantityInput
+                            value={item.quantity}
+                            onChange={(newQuantity) => updateQuantity(item.item_id, newQuantity)}
+                            max={item.available_stock}
+                            translations={{
+                              max: tProducts("maxQuantity"),
+                              available: tProducts("availableStock"),
+                              exceededMax: tProducts("exceededMaxQuantity", { count: item.available_stock }),
+                            }}
+                          />
                         </div>
                       </div>
                     </div>
