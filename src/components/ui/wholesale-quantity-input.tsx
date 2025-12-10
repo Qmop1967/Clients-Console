@@ -192,46 +192,70 @@ export function WholesaleQuantityInput({
         </Button>
       </div>
 
-      {/* Quick actions row */}
-      <div className="flex items-center gap-1">
-        {/* Quick increment buttons */}
-        <Button
+      {/* Quick actions row - Physical button style */}
+      <div className="flex items-center gap-2">
+        {/* +10 Button */}
+        <button
           type="button"
-          variant="ghost"
-          size="sm"
-          className="h-7 flex-1 text-xs font-medium hover:bg-secondary"
           onClick={(e) => handleIncrement(e, 10)}
           disabled={disabled || value >= max}
+          className={cn(
+            "flex-1 h-9 px-3 rounded-xl text-sm font-semibold tabular-nums",
+            "bg-gradient-to-b from-secondary/80 to-secondary",
+            "border border-border/50",
+            "shadow-[0_2px_0_0_hsl(var(--border)),inset_0_1px_0_0_rgba(255,255,255,0.1)]",
+            "hover:shadow-[0_1px_0_0_hsl(var(--border)),inset_0_1px_0_0_rgba(255,255,255,0.1)]",
+            "hover:translate-y-[1px]",
+            "active:shadow-none active:translate-y-[2px]",
+            "transition-all duration-100",
+            "disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:shadow-[0_2px_0_0_hsl(var(--border)),inset_0_1px_0_0_rgba(255,255,255,0.1)]"
+          )}
         >
           +10
-        </Button>
-        <Button
+        </button>
+
+        {/* +100 Button */}
+        <button
           type="button"
-          variant="ghost"
-          size="sm"
-          className="h-7 flex-1 text-xs font-medium hover:bg-secondary"
           onClick={(e) => handleIncrement(e, 100)}
           disabled={disabled || value >= max}
+          className={cn(
+            "flex-1 h-9 px-3 rounded-xl text-sm font-semibold tabular-nums",
+            "bg-gradient-to-b from-secondary/80 to-secondary",
+            "border border-border/50",
+            "shadow-[0_2px_0_0_hsl(var(--border)),inset_0_1px_0_0_rgba(255,255,255,0.1)]",
+            "hover:shadow-[0_1px_0_0_hsl(var(--border)),inset_0_1px_0_0_rgba(255,255,255,0.1)]",
+            "hover:translate-y-[1px]",
+            "active:shadow-none active:translate-y-[2px]",
+            "transition-all duration-100",
+            "disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:shadow-[0_2px_0_0_hsl(var(--border)),inset_0_1px_0_0_rgba(255,255,255,0.1)]"
+          )}
         >
           +100
-        </Button>
+        </button>
 
-        {/* Max button */}
-        <Button
+        {/* Max Button - Gold accent */}
+        <button
           type="button"
-          variant="outline"
-          size="sm"
-          className={cn(
-            "h-7 flex-1 text-xs font-medium gap-1",
-            "border-amber-500/30 text-amber-600 dark:text-amber-400",
-            "hover:bg-amber-500/10 hover:border-amber-500/50"
-          )}
           onClick={handleSetMax}
           disabled={disabled || value >= max}
+          className={cn(
+            "flex-1 h-9 px-3 rounded-xl text-sm font-semibold",
+            "flex items-center justify-center gap-1.5",
+            "bg-gradient-to-b from-amber-500/20 to-amber-600/20",
+            "border border-amber-500/40",
+            "text-amber-500 dark:text-amber-400",
+            "shadow-[0_2px_0_0_rgba(245,158,11,0.3),inset_0_1px_0_0_rgba(255,255,255,0.1)]",
+            "hover:shadow-[0_1px_0_0_rgba(245,158,11,0.3),inset_0_1px_0_0_rgba(255,255,255,0.1)]",
+            "hover:translate-y-[1px] hover:from-amber-500/25 hover:to-amber-600/25",
+            "active:shadow-none active:translate-y-[2px]",
+            "transition-all duration-100",
+            "disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:shadow-[0_2px_0_0_rgba(245,158,11,0.3),inset_0_1px_0_0_rgba(255,255,255,0.1)]"
+          )}
         >
-          <ChevronsUp className="h-3 w-3" />
+          <ChevronsUp className="h-4 w-4" />
           {translations.max}
-        </Button>
+        </button>
       </div>
 
       {/* Available stock indicator */}
