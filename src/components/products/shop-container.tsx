@@ -1,11 +1,11 @@
 "use client";
 
-import { useCallback, useMemo } from "react";
+import { Suspense, useCallback, useMemo } from "react";
 import { useTranslations } from "next-intl";
 import { useSearchParams, usePathname, useRouter } from "next/navigation";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { Package, Layers } from "lucide-react";
+import { Package, Layers, Loader2 } from "lucide-react";
 import { CategoriesGrid } from "./categories-grid";
 import { PublicProductsContent } from "./public-products-content";
 import { cn } from "@/lib/utils/cn";
@@ -43,7 +43,27 @@ interface ShopContainerProps {
 
 type TabValue = "products" | "categories";
 
-export function ShopContainer({
+// Loading fallback component
+function ShopContainerSkeleton() {
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div className="h-9 w-40 bg-muted animate-pulse rounded-lg" />
+        <div className="h-6 w-32 bg-muted animate-pulse rounded-full" />
+      </div>
+      <div className="flex gap-2">
+        <div className="h-10 w-32 bg-muted animate-pulse rounded-lg" />
+        <div className="h-10 w-32 bg-muted animate-pulse rounded-lg" />
+      </div>
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    </div>
+  );
+}
+
+// Inner component that uses useSearchParams
+function ShopContainerInner({
   products,
   categories,
   currencyCode,
@@ -130,6 +150,9 @@ export function ShopContainer({
     router.push(newUrl, { scroll: false });
   }, [searchParams, pathname, router]);
 
+  // Determine which tab should be active
+  const activeTab = selectedCategory ? "products" : currentTab;
+
   return (
     <div className="space-y-6">
       {/* Shop Header */}
@@ -144,7 +167,7 @@ export function ShopContainer({
 
       {/* Tabs */}
       <Tabs
-        value={selectedCategory ? "products" : currentTab}
+        value={activeTab}
         onValueChange={handleTabChange}
         className="w-full"
       >
@@ -194,5 +217,14 @@ export function ShopContainer({
         </TabsContent>
       </Tabs>
     </div>
+  );
+}
+
+// Main export with Suspense wrapper
+export function ShopContainer(props: ShopContainerProps) {
+  return (
+    <Suspense fallback={<ShopContainerSkeleton />}>
+      <ShopContainerInner {...props} />
+    </Suspense>
   );
 }
