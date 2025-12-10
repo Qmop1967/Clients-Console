@@ -86,7 +86,8 @@ interface ZohoBooksSingleItemResponse {
 
 interface ZohoBooksCategory {
   category_id: string;
-  category_name: string;
+  category_name?: string;  // Some API responses use this
+  name?: string;           // Zoho Books /categories uses this
   description?: string;
   is_inactive?: boolean;
   // Some additional fields Books might return
@@ -163,7 +164,8 @@ function booksItemToZohoItem(item: ZohoBooksItem): ZohoItem {
 function booksCategoryToZohoCategory(cat: ZohoBooksCategory): ZohoCategory {
   return {
     category_id: cat.category_id,
-    name: cat.category_name,
+    // Handle both 'name' (Zoho Books /categories) and 'category_name' (other contexts)
+    name: cat.name || cat.category_name || '',
     description: cat.description,
     is_active: !cat.is_inactive,
   };
