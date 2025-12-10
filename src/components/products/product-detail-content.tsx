@@ -10,8 +10,6 @@ import { Separator } from "@/components/ui/separator";
 import { ProductImage } from "./product-image";
 import { useCart } from "@/components/providers/cart-provider";
 import {
-  Minus,
-  Plus,
   ShoppingCart,
   Check,
   Package,
@@ -26,6 +24,7 @@ import {
   Copy,
   CheckCircle,
 } from "lucide-react";
+import { WholesaleQuantityInput } from "@/components/ui/wholesale-quantity-input";
 import { cn } from "@/lib/utils/cn";
 import { formatCurrency } from "@/lib/utils/format";
 
@@ -63,11 +62,8 @@ export function ProductDetailContent({ product, locale }: ProductDetailProps) {
   const currentCartQuantity = getItemQuantity(product.item_id);
   const maxQuantity = Math.max(0, product.available_stock - currentCartQuantity);
 
-  const handleQuantityChange = (delta: number) => {
-    const newQuantity = quantity + delta;
-    if (newQuantity >= 1 && newQuantity <= maxQuantity) {
-      setQuantity(newQuantity);
-    }
+  const handleQuantityChange = (newQuantity: number) => {
+    setQuantity(newQuantity);
   };
 
   const handleAddToCart = () => {
@@ -321,43 +317,26 @@ export function ProductDetailContent({ product, locale }: ProductDetailProps) {
           {/* Add to Cart Section */}
           {hasPrice && isInStock && (
             <Card className="border-2 border-primary/20 bg-gradient-to-br from-background to-muted/30">
-              <CardContent className="p-5 space-y-4">
-                {/* Quantity Selector */}
-                <div className="flex items-center justify-between">
-                  <span className="font-medium">{tCart("quantity")}</span>
-                  <div className="flex items-center gap-3">
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      className="h-10 w-10 rounded-full"
-                      onClick={() => handleQuantityChange(-1)}
-                      disabled={quantity <= 1}
-                    >
-                      <Minus className="h-4 w-4" />
-                    </Button>
-                    <span className="w-12 text-center text-xl font-bold">
-                      {quantity}
-                    </span>
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      className="h-10 w-10 rounded-full"
-                      onClick={() => handleQuantityChange(1)}
-                      disabled={quantity >= maxQuantity}
-                    >
-                      <Plus className="h-4 w-4" />
-                    </Button>
-                  </div>
+              <CardContent className="p-5 space-y-5">
+                {/* Quantity Header */}
+                <div className="text-center">
+                  <span className="text-sm font-medium text-muted-foreground">{tCart("quantity")}</span>
                 </div>
 
-                {/* Max quantity info */}
-                <p className="text-xs text-muted-foreground text-center">
-                  {t("maxAvailable", { count: maxQuantity })}
-                </p>
+                {/* Wholesale Quantity Input */}
+                <WholesaleQuantityInput
+                  value={quantity}
+                  onChange={handleQuantityChange}
+                  max={maxQuantity}
+                  translations={{
+                    max: t("maxQuantity"),
+                    available: t("availableStock"),
+                  }}
+                />
 
                 {/* Already in cart notice */}
                 {currentCartQuantity > 0 && (
-                  <div className="flex items-center justify-center gap-2 p-2 rounded-lg bg-primary/10 text-primary text-sm">
+                  <div className="flex items-center justify-center gap-2 p-2.5 rounded-lg bg-primary/10 text-primary text-sm font-medium">
                     <ShoppingCart className="h-4 w-4" />
                     {t("alreadyInCart", { count: currentCartQuantity })}
                   </div>
@@ -366,7 +345,7 @@ export function ProductDetailContent({ product, locale }: ProductDetailProps) {
                 <Separator />
 
                 {/* Total */}
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between p-3 rounded-xl bg-muted/50">
                   <span className="text-lg font-semibold">{tCart("total")}</span>
                   <span className="text-2xl font-bold text-primary">
                     {formatCurrency(product.rate * quantity, product.currencyCode)}
