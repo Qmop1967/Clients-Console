@@ -12,6 +12,7 @@ import { put, del, list } from '@vercel/blob';
 // Redis key prefixes for image data
 const IMAGE_URL_PREFIX = 'image:';
 const IMAGE_DOC_ID_PREFIX = 'image:docId:';
+const IMAGE_NAME_PREFIX = 'image:name:';  // Track image_name for multi-signal change detection
 const IMAGE_SYNC_STATUS_KEY = 'image:sync:status';
 
 // ============================================
@@ -223,6 +224,7 @@ export async function setStoredImageDocId(itemId: string, docId: string): Promis
 /**
  * Check if image has changed by comparing document IDs
  * Returns true if image has changed (docId is different or not stored)
+ * @deprecated Use hasImageChangedMultiSignal for more reliable change detection
  */
 export async function hasImageChanged(itemId: string, newDocId: string | null | undefined): Promise<boolean> {
   if (!newDocId) {
@@ -246,22 +248,131 @@ export async function hasImageChanged(itemId: string, newDocId: string | null | 
   return changed;
 }
 
+// ============================================
+// IMAGE NAME TRACKING (Additional Change Detection)
+// ============================================
+// Zoho's image_document_id may not change when image is replaced.
+// Track image_name as additional signal for change detection.
+// ============================================
+
 /**
- * Clear image cache for an item (URL and docId)
+ * Get stored image_name for an item
+ */
+export async function getStoredImageName(itemId: string): Promise<string | null> {
+  const key = `${IMAGE_NAME_PREFIX}${itemId}`;
+  return redisGet(key);
+}
+
+/**
+ * Store image_name for an item
+ */
+export async function setStoredImageName(itemId: string, imageName: string): Promise<boolean> {
+  const key = `${IMAGE_NAME_PREFIX}${itemId}`;
+  return redisSet(key, imageName);
+}
+
+/**
+ * Store both image identifiers (docId and imageName) after sync
+ */
+export async function setStoredImageIdentifiers(
+  itemId: string,
+  docId: string | null,
+  imageName: string | null
+): Promise<boolean> {
+  const keyValuePairs: Record<string, string> = {};
+
+  if (docId) {
+    keyValuePairs[`${IMAGE_DOC_ID_PREFIX}${itemId}`] = docId;
+  }
+  if (imageName) {
+    keyValuePairs[`${IMAGE_NAME_PREFIX}${itemId}`] = imageName;
+  }
+
+  if (Object.keys(keyValuePairs).length === 0) {
+    return true; // Nothing to store
+  }
+
+  return redisMSet(keyValuePairs);
+}
+
+/**
+ * Multi-signal change detection for images
+ * Checks both image_document_id AND image_name to detect changes
+ *
+ * Returns { changed: true/false, reason: string } for debugging
+ *
+ * IMPORTANT: This is more reliable than hasImageChanged because Zoho
+ * sometimes keeps the same image_document_id when replacing an image.
+ */
+export async function hasImageChangedMultiSignal(
+  itemId: string,
+  newDocId: string | null | undefined,
+  newImageName: string | null | undefined
+): Promise<{ changed: boolean; reason: string }> {
+  // If no identifiers provided at all, assume changed (be safe)
+  if (!newDocId && !newImageName) {
+    return { changed: true, reason: 'no_identifiers_provided' };
+  }
+
+  // Fetch stored values
+  const [storedDocId, storedImageName] = await Promise.all([
+    getStoredImageDocId(itemId),
+    getStoredImageName(itemId),
+  ]);
+
+  // If nothing stored, this is a new image
+  if (!storedDocId && !storedImageName) {
+    console.log(`[ImageCache] No stored identifiers for ${itemId}, treating as new`);
+    return { changed: true, reason: 'new_image' };
+  }
+
+  // Check image_document_id change
+  if (newDocId && storedDocId && newDocId !== storedDocId) {
+    console.log(`[ImageCache] DocId changed for ${itemId}: ${storedDocId} → ${newDocId}`);
+    return { changed: true, reason: 'docId_changed' };
+  }
+
+  // Check image_name change (important when docId stays same but file changes)
+  if (newImageName && storedImageName && newImageName !== storedImageName) {
+    console.log(`[ImageCache] ImageName changed for ${itemId}: ${storedImageName} → ${newImageName}`);
+    return { changed: true, reason: 'imageName_changed' };
+  }
+
+  // If we have new identifiers that weren't stored before, treat as changed
+  if (newDocId && !storedDocId) {
+    console.log(`[ImageCache] New docId for ${itemId}: ${newDocId} (was not stored)`);
+    return { changed: true, reason: 'new_docId' };
+  }
+  if (newImageName && !storedImageName) {
+    console.log(`[ImageCache] New imageName for ${itemId}: ${newImageName} (was not stored)`);
+    return { changed: true, reason: 'new_imageName' };
+  }
+
+  // All identifiers match - no change
+  return { changed: false, reason: 'unchanged' };
+}
+
+/**
+ * Clear image cache for an item (URL, docId, and imageName)
  * Used when forcing a re-sync
  */
 export async function clearImageCache(itemId: string): Promise<boolean> {
   try {
     const urlKey = `${IMAGE_URL_PREFIX}${itemId}`;
     const docIdKey = `${IMAGE_DOC_ID_PREFIX}${itemId}`;
+    const nameKey = `${IMAGE_NAME_PREFIX}${itemId}`;
 
-    // Delete both keys
+    // Delete all three keys
     await Promise.all([
       fetch(`${process.env.UPSTASH_REDIS_REST_URL}/del/${urlKey}`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${process.env.UPSTASH_REDIS_REST_TOKEN}` },
       }),
       fetch(`${process.env.UPSTASH_REDIS_REST_URL}/del/${docIdKey}`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${process.env.UPSTASH_REDIS_REST_TOKEN}` },
+      }),
+      fetch(`${process.env.UPSTASH_REDIS_REST_URL}/del/${nameKey}`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${process.env.UPSTASH_REDIS_REST_TOKEN}` },
       }),
@@ -504,18 +615,18 @@ interface SyncResult {
 }
 
 /**
- * Fetch image identifier from Zoho API for change detection
- * Returns image_document_id if available, otherwise image_name
+ * Fetch image identifiers from Zoho API for change detection
+ * Returns both image_document_id and image_name for multi-signal detection
  * This is used for change detection when syncing images
  */
-async function fetchImageIdentifierFromZoho(
+async function fetchImageIdentifiersFromZoho(
   itemId: string,
   accessToken: string
-): Promise<string | null> {
+): Promise<{ docId: string | null; imageName: string | null }> {
   try {
     const ORGANIZATION_ID = process.env.ZOHO_ORGANIZATION_ID || '748369814';
 
-    // Try Inventory API first (more likely to have image_document_id)
+    // Try Inventory API first (more likely to have both fields)
     const inventoryResponse = await fetch(
       `https://www.zohoapis.com/inventory/v1/items/${itemId}?organization_id=${ORGANIZATION_ID}`,
       {
@@ -529,11 +640,12 @@ async function fetchImageIdentifierFromZoho(
       const data = await inventoryResponse.json();
       const item = data.item;
 
-      // Prefer image_document_id, fall back to image_name
-      const identifier = item?.image_document_id || item?.image_name;
-      if (identifier) {
-        console.log(`[ImageCache] Fetched image identifier for ${itemId}: ${identifier} (from Inventory)`);
-        return identifier;
+      if (item?.image_document_id || item?.image_name) {
+        console.log(`[ImageCache] Fetched identifiers for ${itemId}: docId=${item.image_document_id}, name=${item.image_name} (from Inventory)`);
+        return {
+          docId: item.image_document_id || null,
+          imageName: item.image_name || null,
+        };
       }
     }
 
@@ -551,18 +663,20 @@ async function fetchImageIdentifierFromZoho(
       const data = await booksResponse.json();
       const item = data.item;
 
-      const identifier = item?.image_document_id || item?.image_name;
-      if (identifier) {
-        console.log(`[ImageCache] Fetched image identifier for ${itemId}: ${identifier} (from Books)`);
-        return identifier;
+      if (item?.image_document_id || item?.image_name) {
+        console.log(`[ImageCache] Fetched identifiers for ${itemId}: docId=${item.image_document_id}, name=${item.image_name} (from Books)`);
+        return {
+          docId: item.image_document_id || null,
+          imageName: item.image_name || null,
+        };
       }
     }
 
-    console.warn(`[ImageCache] No image identifier found for ${itemId}`);
-    return null;
+    console.warn(`[ImageCache] No image identifiers found for ${itemId}`);
+    return { docId: null, imageName: null };
   } catch (error) {
-    console.warn(`[ImageCache] Error fetching image identifier for ${itemId}:`, error);
-    return null;
+    console.warn(`[ImageCache] Error fetching image identifiers for ${itemId}:`, error);
+    return { docId: null, imageName: null };
   }
 }
 
@@ -572,8 +686,9 @@ async function fetchImageIdentifierFromZoho(
  * Options:
  * - force: Skip cache check and re-sync regardless of existing cache
  * - imageDocId: Zoho's image_document_id for change detection
+ * - imageName: Zoho's image_name for additional change detection
  *
- * When imageDocId is provided and matches stored value, sync is skipped.
+ * Uses multi-signal change detection (both docId AND imageName).
  * When force=true, always re-syncs and uses timestamp for cache busting.
  */
 export async function syncSingleImage(
@@ -582,24 +697,27 @@ export async function syncSingleImage(
   options: {
     force?: boolean;
     imageDocId?: string | null;
+    imageName?: string | null;
   } = {}
 ): Promise<ImageUploadResult> {
   const { force = false } = options;
-  let { imageDocId } = options;
+  let { imageDocId, imageName } = options;
 
-  // If not forcing, check if image actually changed via docId
-  if (!force && imageDocId) {
-    const changed = await hasImageChanged(itemId, imageDocId);
+  // If not forcing, use multi-signal change detection
+  if (!force && (imageDocId || imageName)) {
+    const { changed, reason } = await hasImageChangedMultiSignal(itemId, imageDocId, imageName);
     if (!changed) {
       const existingUrl = await getCachedImageUrl(itemId);
       if (existingUrl) {
-        console.log(`[ImageCache] Image unchanged for ${itemId}, using cached URL`);
+        console.log(`[ImageCache] Image unchanged for ${itemId} (${reason}), using cached URL`);
         return { success: true, url: existingUrl, unchanged: true };
       }
+    } else {
+      console.log(`[ImageCache] Image change detected for ${itemId}: ${reason}`);
     }
   }
 
-  // Check cache only if not forcing and no docId change detected
+  // Check cache only if not forcing and no change detected
   if (!force) {
     const existingUrl = await getCachedImageUrl(itemId);
     if (existingUrl) {
@@ -625,15 +743,17 @@ export async function syncSingleImage(
     useTimestamp: force, // Use timestamp only when forcing to bust caches
   });
 
-  // If no imageDocId was provided, fetch it from Zoho for future change detection
-  if (result.success && !imageDocId) {
-    imageDocId = await fetchImageIdentifierFromZoho(itemId, accessToken);
+  // If identifiers were not provided, fetch them from Zoho for future change detection
+  if (result.success && (!imageDocId || !imageName)) {
+    const identifiers = await fetchImageIdentifiersFromZoho(itemId, accessToken);
+    if (!imageDocId) imageDocId = identifiers.docId;
+    if (!imageName) imageName = identifiers.imageName;
   }
 
-  // Store docId if available and upload succeeded
-  if (result.success && imageDocId) {
-    await setStoredImageDocId(itemId, imageDocId);
-    console.log(`[ImageCache] Stored docId for ${itemId}: ${imageDocId}`);
+  // Store both identifiers if available and upload succeeded
+  if (result.success && (imageDocId || imageName)) {
+    await setStoredImageIdentifiers(itemId, imageDocId || null, imageName || null);
+    console.log(`[ImageCache] Stored identifiers for ${itemId}: docId=${imageDocId}, name=${imageName}`);
   }
 
   return result;

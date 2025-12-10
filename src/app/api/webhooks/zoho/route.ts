@@ -3,7 +3,7 @@ import { revalidateTag } from "next/cache";
 import { CACHE_TAGS, getAccessToken } from "@/lib/zoho/client";
 import {
   syncSingleImage,
-  hasImageChanged,
+  hasImageChangedMultiSignal,
   getStoredImageDocId,
   deleteImageFromBlob,
   clearImageCache
@@ -340,32 +340,42 @@ async function deleteProductImage(itemId: string, reason: string): Promise<boole
   }
 }
 
-// Sync product image to Vercel Blob with change detection
-// If imageDocId is provided, checks if image actually changed before re-syncing
+// Sync product image to Vercel Blob with multi-signal change detection
+// Uses both imageDocId AND imageName to detect changes more reliably
+// Set forceSync=true to always re-sync regardless of change detection (for item.updated events)
 async function syncProductImage(
   itemId: string,
   reason: string,
-  imageDocId?: string | null
+  options: {
+    imageDocId?: string | null;
+    imageName?: string | null;
+    forceSync?: boolean;  // Skip change detection entirely
+  } = {}
 ) {
-  try {
-    console.log(`[Webhook] 🖼️ Checking image for ${itemId}: ${reason}`);
+  const { imageDocId, imageName, forceSync = false } = options;
 
-    // Check if image actually changed using document ID
-    if (imageDocId) {
-      const changed = await hasImageChanged(itemId, imageDocId);
+  try {
+    console.log(`[Webhook] 🖼️ Checking image for ${itemId}: ${reason} (forceSync=${forceSync})`);
+
+    // If not forcing, use multi-signal change detection
+    if (!forceSync && (imageDocId || imageName)) {
+      const { changed, reason: changeReason } = await hasImageChangedMultiSignal(itemId, imageDocId, imageName);
       if (!changed) {
-        console.log(`[Webhook] ⏭️ Image unchanged for ${itemId} (docId: ${imageDocId})`);
+        console.log(`[Webhook] ⏭️ Image unchanged for ${itemId} (${changeReason})`);
         return;
       }
-      console.log(`[Webhook] 🔄 Image changed for ${itemId}, forcing re-sync`);
+      console.log(`[Webhook] 🔄 Image change detected for ${itemId}: ${changeReason}`);
     }
 
     const token = await getAccessToken();
 
-    // Force re-sync if we detected a change or no docId available
+    // Determine if we should force (forceSync or change detected)
+    const shouldForce = forceSync || !!(imageDocId || imageName);
+
     const result = await syncSingleImage(itemId, token, {
-      force: !!imageDocId, // Force if we have docId (indicates intentional update check)
+      force: shouldForce,
       imageDocId: imageDocId || undefined,
+      imageName: imageName || undefined,
     });
 
     if (result.success) {
@@ -413,11 +423,11 @@ export async function POST(request: NextRequest) {
         await revalidateProducts(`bill received: ${eventType}`);
         // Sync stock cache for affected items
         syncStockForItems(affectedItemIds, `bill: ${eventType}`);
-        // Check if line items have item IDs to sync images
+        // Check if line items have item IDs to sync images (only if not already cached)
         if (Array.isArray(data.line_items)) {
           for (const item of data.line_items as Array<{ item_id?: string }>) {
             if (item.item_id) {
-              syncProductImage(item.item_id, "bill line item").catch(() => {});
+              syncProductImage(item.item_id, "bill line item", {}).catch(() => {});
             }
           }
         }
@@ -471,9 +481,14 @@ export async function POST(request: NextRequest) {
             } else {
               console.log(`[Webhook] ℹ️ No image for ${itemId} (and no cached image)`);
             }
-          } else if (imageDocId) {
-            // Image exists - sync with change detection
-            syncProductImage(itemId, eventType, imageDocId).catch(() => {});
+          } else if (imageDocId || imageName) {
+            // Image exists - sync with FORCE to ensure replaced images are updated
+            // forceSync=true bypasses change detection which may fail if Zoho reuses docId
+            syncProductImage(itemId, eventType, {
+              imageDocId,
+              imageName,
+              forceSync: true,  // CRITICAL: Always re-sync on item.updated to catch replaced images
+            }).catch(() => {});
           }
         }
         break;

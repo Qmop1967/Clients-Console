@@ -6,10 +6,10 @@
 // 2. If found, redirect to CDN (fast, no Zoho API call)
 // 3. If not found, fetch from Zoho (fallback)
 //
-// Cache Strategy:
-// - Blob URLs: 1 hour browser cache, 24 hour CDN with revalidation
-// - This allows image updates to reflect within ~1 hour
-// - On-demand invalidation via webhook triggers immediate re-sync
+// Cache Strategy (UPDATED 2024-12):
+// - Shorter cache TTLs to allow faster image updates
+// - URL now includes version hash (?v=xxx) for cache busting
+// - When image changes in Zoho, URL changes → cache invalidated
 // ============================================
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -20,17 +20,18 @@ import { getCachedImageUrl, syncSingleImage } from '@/lib/blob/image-cache';
 const ZOHO_INVENTORY_URL = 'https://www.zohoapis.com/inventory/v1';
 
 // Cache headers for images
-// OPTIMIZED: Short browser cache for fast updates, longer CDN cache for performance
+// UPDATED: Shorter TTLs since URLs now include version hash for cache busting
 const CDN_CACHE_HEADERS = {
-  'Cache-Control': 'public, max-age=300, s-maxage=3600, stale-while-revalidate=60',
-  // 5 min browser cache, 1 hour CDN cache with 60s stale-while-revalidate
-  // This ensures image updates reflect within 5 minutes while maintaining performance
+  'Cache-Control': 'public, max-age=60, s-maxage=300, stale-while-revalidate=30',
+  // 1 min browser cache, 5 min CDN cache
+  // Short TTLs ensure image updates propagate quickly
+  // Version hash in URL (?v=xxx) handles cache busting when image changes
 };
 
 const PROXY_CACHE_HEADERS = {
-  'Cache-Control': 'public, max-age=60, s-maxage=300, stale-while-revalidate=60',
-  // 1 min browser cache for proxied images (Zoho API fallback)
-  // Short cache to ensure quick propagation of new images
+  'Cache-Control': 'public, max-age=30, s-maxage=120, stale-while-revalidate=30',
+  // 30s browser cache, 2 min CDN cache for proxied images (Zoho API fallback)
+  // Very short cache to ensure quick propagation of new images
 };
 
 export async function GET(

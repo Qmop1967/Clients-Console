@@ -478,12 +478,33 @@ export async function searchProducts(
 }
 
 /**
- * Get product image URL
+ * Simple hash function for cache busting
+ * Creates a short hash from image identifiers
+ */
+function simpleHash(str: string): string {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash; // Convert to 32bit integer
+  }
+  // Convert to base36 and take last 8 chars for a short hash
+  return Math.abs(hash).toString(36).slice(-8);
+}
+
+/**
+ * Get product image URL with cache-busting version parameter
  * Uses our proxy API route to fetch images with OAuth authentication
+ *
+ * The version parameter (v) is based on image_document_id and image_name,
+ * so when the image changes in Zoho, the URL changes and caches are invalidated.
  */
 export function getProductImageUrl(item: ZohoItem): string | null {
   if (item.image_document_id || item.image_name) {
-    return `/api/zoho/images/${item.item_id}`;
+    // Create version hash from image identifiers for cache busting
+    const versionSource = `${item.image_document_id || ''}_${item.image_name || ''}`;
+    const version = simpleHash(versionSource);
+    return `/api/zoho/images/${item.item_id}?v=${version}`;
   }
   return null;
 }
