@@ -4,7 +4,7 @@ import { memo } from "react";
 import { useTranslations } from "next-intl";
 import { Card, CardContent } from "@/components/ui/card";
 import { ArrowRight, Layers } from "lucide-react";
-import { getCategoryIcon, getCategoryIconColor } from "@/lib/utils/category-icons";
+import { getCategoryStyle } from "@/lib/utils/category-icons";
 import { cn } from "@/lib/utils/cn";
 
 interface PublicCategory {
@@ -31,8 +31,7 @@ const CategoryCard = memo(function CategoryCard({
   onClick: () => void;
 }) {
   const t = useTranslations("products");
-  const Icon = getCategoryIcon(category.name);
-  const iconColor = getCategoryIconColor(category.name);
+  const { Icon, color, bgColor } = getCategoryStyle(category.name);
 
   return (
     <Card
@@ -40,29 +39,30 @@ const CategoryCard = memo(function CategoryCard({
         "group cursor-pointer overflow-hidden",
         "transition-all duration-300 ease-out",
         "hover:shadow-lg hover:-translate-y-1",
-        "hover:border-gold/30 dark:hover:border-gold/20",
-        "active:scale-[0.98] native-press"
+        "hover:border-gold/40 dark:hover:border-gold/30",
+        "active:scale-[0.98]"
       )}
       onClick={onClick}
     >
-      <CardContent className="p-6">
-        <div className="flex items-start justify-between">
-          <div className="flex-1 min-w-0">
-            {/* Icon Container */}
-            <div
-              className={cn(
-                "w-14 h-14 rounded-xl mb-4",
-                "flex items-center justify-center",
-                "bg-primary/10 dark:bg-primary/5",
-                "group-hover:bg-gold/20 dark:group-hover:bg-gold/10",
-                "transition-colors duration-300"
-              )}
-            >
-              <Icon className={cn("h-7 w-7", iconColor, "group-hover:text-gold transition-colors duration-300")} />
-            </div>
+      <CardContent className="p-5">
+        <div className="flex items-center gap-4">
+          {/* Icon Container - with category-specific colors */}
+          <div
+            className={cn(
+              "w-14 h-14 rounded-xl flex-shrink-0",
+              "flex items-center justify-center",
+              bgColor,
+              "group-hover:scale-110",
+              "transition-all duration-300"
+            )}
+          >
+            <Icon className={cn("h-7 w-7", color, "transition-colors duration-300")} />
+          </div>
 
+          {/* Category Info */}
+          <div className="flex-1 min-w-0">
             {/* Category Name */}
-            <h3 className="font-semibold text-lg mb-1 truncate group-hover:text-gold transition-colors duration-300">
+            <h3 className="font-semibold text-base mb-0.5 truncate group-hover:text-gold transition-colors duration-300">
               {category.name}
             </h3>
 
@@ -70,31 +70,33 @@ const CategoryCard = memo(function CategoryCard({
             <p className="text-sm text-muted-foreground">
               {productCount} {t("productsCount")}
             </p>
-
-            {/* Description (if available) */}
-            {category.description && (
-              <p className="text-xs text-muted-foreground mt-2 line-clamp-2">
-                {category.description}
-              </p>
-            )}
           </div>
 
           {/* Arrow Icon */}
-          <div className="ms-4 flex-shrink-0">
-            <ArrowRight
-              className={cn(
-                "h-5 w-5 text-muted-foreground/50",
-                "group-hover:text-gold group-hover:translate-x-1",
-                "rtl:rotate-180 rtl:group-hover:-translate-x-1",
-                "transition-all duration-300"
-              )}
-            />
+          <div className="flex-shrink-0">
+            <div className={cn(
+              "w-8 h-8 rounded-full flex items-center justify-center",
+              "bg-muted/50 group-hover:bg-gold/20",
+              "transition-all duration-300"
+            )}>
+              <ArrowRight
+                className={cn(
+                  "h-4 w-4 text-muted-foreground/70",
+                  "group-hover:text-gold group-hover:translate-x-0.5",
+                  "rtl:rotate-180 rtl:group-hover:-translate-x-0.5",
+                  "transition-all duration-300"
+                )}
+              />
+            </div>
           </div>
         </div>
       </CardContent>
     </Card>
   );
 });
+
+// Category Card Export for use elsewhere if needed
+export { CategoryCard };
 
 export function CategoriesGrid({
   categories,
@@ -112,6 +114,9 @@ export function CategoriesGrid({
   const sortedCategories = [...categoriesWithProducts].sort(
     (a, b) => (productCounts[b.category_id] || 0) - (productCounts[a.category_id] || 0)
   );
+
+  // Calculate total products across all categories
+  const totalProducts = Object.values(productCounts).reduce((sum, count) => sum + count, 0);
 
   if (sortedCategories.length === 0) {
     return (
@@ -131,14 +136,22 @@ export function CategoriesGrid({
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="space-y-2">
-        <h2 className="text-2xl font-bold">{t("browseByCategory")}</h2>
-        <p className="text-muted-foreground">{t("selectCategory")}</p>
+      {/* Header with stats */}
+      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-2">
+        <div className="space-y-1">
+          <h2 className="text-2xl font-bold">{t("browseByCategory")}</h2>
+          <p className="text-muted-foreground">{t("selectCategory")}</p>
+        </div>
+        <div className="flex items-center gap-4 text-sm text-muted-foreground">
+          <span className="flex items-center gap-1.5">
+            <Layers className="h-4 w-4" />
+            {t("totalCategories", { count: sortedCategories.length })}
+          </span>
+        </div>
       </div>
 
-      {/* Category Grid */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      {/* Category Grid - 2 columns on mobile, 3 on desktop */}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {sortedCategories.map((category) => (
           <CategoryCard
             key={category.category_id}
@@ -147,13 +160,6 @@ export function CategoriesGrid({
             onClick={() => onCategorySelect(category.category_id)}
           />
         ))}
-      </div>
-
-      {/* Total Categories Info */}
-      <div className="pt-4 border-t">
-        <p className="text-sm text-muted-foreground text-center">
-          {t("totalCategories", { count: sortedCategories.length })}
-        </p>
       </div>
     </div>
   );
