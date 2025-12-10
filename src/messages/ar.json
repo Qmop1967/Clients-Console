@@ -152,7 +152,10 @@
     "warranty": "ضمان",
     "warrantyDesc": "جودة مضمونة",
     "genuine": "أصلي",
-    "genuineDesc": "منتجات أصلية"
+    "genuineDesc": "منتجات أصلية",
+    "quantity": "الكمية",
+    "maxQuantity": "الحد الأقصى",
+    "availableStock": "المتوفر"
   },
   "orders": {
     "title": "الطلبات",

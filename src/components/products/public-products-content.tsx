@@ -9,7 +9,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ProductImage } from "./product-image";
 import { useCart } from "@/components/providers/cart-provider";
-import { Search, ShoppingCart, Plus, Minus, Check, Eye, ChevronRight } from "lucide-react";
+import { Search, ShoppingCart, Check, Eye, ChevronRight } from "lucide-react";
+import { WholesaleQuantityInput } from "@/components/ui/wholesale-quantity-input";
 import { NumberedPagination } from "@/components/ui/pagination";
 import { cn } from "@/lib/utils/cn";
 import { formatCurrency } from "@/lib/utils/format";
@@ -105,15 +106,16 @@ const ProductCardWithCart = memo(function ProductCardWithCart({
     }, 1500);
   }, [hasPrice, isInStock, maxQuantity, addItem, product, quantity]);
 
-  // Memoized quantity change handler
-  const handleQuantityChange = useCallback((e: React.MouseEvent, delta: number) => {
+  // Handler to prevent navigation when interacting with quantity input
+  const preventNavigation = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    const newQuantity = quantity + delta;
-    if (newQuantity >= 1 && newQuantity <= maxQuantity) {
-      setQuantity(newQuantity);
-    }
-  }, [quantity, maxQuantity]);
+  }, []);
+
+  // Handler for quantity change from input component
+  const handleQuantityChange = useCallback((newQuantity: number) => {
+    setQuantity(newQuantity);
+  }, []);
 
   // Save scroll position before navigating to product detail
   const handleCardClick = useCallback(() => {
@@ -219,33 +221,20 @@ const ProductCardWithCart = memo(function ProductCardWithCart({
           </div>
         </div>
 
-        {/* Add to Cart Section - Enhanced */}
+        {/* Add to Cart Section - Wholesale Enhanced */}
         {hasPrice && isInStock && maxQuantity > 0 && (
           <div className="mt-4 pt-3 border-t border-border/50 space-y-3">
-            {/* Quantity Selector - Refined */}
-            <div className="flex items-center justify-center gap-3">
-              <Button
-                variant="outline"
-                size="icon"
-                className="h-8 w-8 rounded-full btn-press"
-                onClick={(e) => handleQuantityChange(e, -1)}
-                disabled={quantity <= 1}
-              >
-                <Minus className="h-3 w-3" />
-              </Button>
-              <span className="w-10 text-center font-semibold text-lg">
-                {quantity}
-              </span>
-              <Button
-                variant="outline"
-                size="icon"
-                className="h-8 w-8 rounded-full btn-press"
-                onClick={(e) => handleQuantityChange(e, 1)}
-                disabled={quantity >= maxQuantity}
-              >
-                <Plus className="h-3 w-3" />
-              </Button>
-            </div>
+            {/* Wholesale Quantity Input */}
+            <WholesaleQuantityInput
+              value={quantity}
+              onChange={handleQuantityChange}
+              max={maxQuantity}
+              translations={{
+                max: t("maxQuantity"),
+                available: t("availableStock"),
+              }}
+              onPreventNavigation={preventNavigation}
+            />
 
             {/* Add to Cart Button - Enhanced */}
             <Button

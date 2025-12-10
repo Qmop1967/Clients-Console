@@ -152,7 +152,10 @@
     "warranty": "Warranty",
     "warrantyDesc": "Quality assured",
     "genuine": "Genuine",
-    "genuineDesc": "Original products"
+    "genuineDesc": "Original products",
+    "quantity": "Quantity",
+    "maxQuantity": "Max",
+    "availableStock": "Available"
   },
   "orders": {
     "title": "Orders",
