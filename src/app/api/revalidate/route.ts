@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
-import { revalidateTag } from "next/cache";
+import { revalidateTag, revalidatePath } from "next/cache";
 import { CACHE_TAGS } from "@/lib/zoho/client";
 
 // Simple revalidation endpoint
 // Usage: GET /api/revalidate?tag=products
 // Available tags: products, categories, price-lists, all
+//
+// IMPORTANT: This endpoint revalidates BOTH:
+// 1. Data cache (unstable_cache) via revalidateTag()
+// 2. ISR page cache via revalidatePath() for shop pages
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const tag = searchParams.get("tag");
@@ -25,12 +29,20 @@ export async function GET(request: NextRequest) {
     switch (tag) {
       case "products":
       case "all":
+        // Revalidate data cache (unstable_cache)
         revalidateTag(CACHE_TAGS.PRODUCTS);
         revalidateTag("all-products-complete");
         revalidateTag("products-in-stock");
         revalidateTag("product");
         revalidateTag("all-products");
         revalidated.push("products", "all-products-complete", "products-in-stock", "product", "all-products");
+
+        // CRITICAL: Also revalidate ISR page cache for shop pages
+        // This ensures stock changes are reflected immediately on rendered pages
+        revalidatePath("/en/shop", "layout");
+        revalidatePath("/ar/shop", "layout");
+        revalidated.push("shop-pages-isr");
+
         if (tag !== "all") break;
       // falls through for "all"
       case "categories":

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { revalidateTag } from "next/cache";
+import { revalidateTag, revalidatePath } from "next/cache";
 import { CACHE_TAGS, getAccessToken } from "@/lib/zoho/client";
 import {
   syncSingleImage,
@@ -141,14 +141,25 @@ async function safeRevalidate(tag: string, context?: string) {
   }
 }
 
-// Revalidate all product-related caches
+// Revalidate all product-related caches (both data and ISR page cache)
 async function revalidateProducts(reason: string) {
   console.log(`[Webhook] 🔄 Revalidating products: ${reason}`);
+
+  // Revalidate data cache (unstable_cache)
   await safeRevalidate(CACHE_TAGS.PRODUCTS, reason);
-  // Also revalidate the complete products cache
   await safeRevalidate('all-products-complete', reason);
   await safeRevalidate('all-products-complete-books', reason);
   await safeRevalidate('products-in-stock', reason);
+
+  // CRITICAL: Also revalidate ISR page cache for shop pages
+  // This ensures stock changes are reflected immediately on rendered pages
+  try {
+    revalidatePath("/en/shop", "layout");
+    revalidatePath("/ar/shop", "layout");
+    console.log(`[Webhook] ✅ Revalidated ISR shop pages (${reason})`);
+  } catch (error) {
+    console.error(`[Webhook] ❌ Failed to revalidate ISR pages:`, error);
+  }
 }
 
 // Extract item IDs from webhook data (line_items, items array, or single item)
