@@ -153,9 +153,11 @@ async function revalidateProducts(reason: string) {
 
   // CRITICAL: Also revalidate ISR page cache for shop pages
   // This ensures stock changes are reflected immediately on rendered pages
+  // Note: "page" type revalidates the specific page and all dynamic children
   try {
-    revalidatePath("/en/shop", "layout");
-    revalidatePath("/ar/shop", "layout");
+    revalidatePath("/[locale]/(public)/shop", "page");
+    revalidatePath("/en/shop", "page");
+    revalidatePath("/ar/shop", "page");
     console.log(`[Webhook] ✅ Revalidated ISR shop pages (${reason})`);
   } catch (error) {
     console.error(`[Webhook] ❌ Failed to revalidate ISR pages:`, error);

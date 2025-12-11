@@ -39,8 +39,10 @@ export async function GET(request: NextRequest) {
 
         // CRITICAL: Also revalidate ISR page cache for shop pages
         // This ensures stock changes are reflected immediately on rendered pages
-        revalidatePath("/en/shop", "layout");
-        revalidatePath("/ar/shop", "layout");
+        // Note: "page" type revalidates the specific page and all dynamic children
+        revalidatePath("/[locale]/(public)/shop", "page");
+        revalidatePath("/en/shop", "page");
+        revalidatePath("/ar/shop", "page");
         revalidated.push("shop-pages-isr");
 
         if (tag !== "all") break;
