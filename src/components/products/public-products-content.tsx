@@ -181,35 +181,35 @@ const ProductCardWithCart = memo(function ProductCardWithCart({
         )}
       </div>
 
-      <div className="p-4">
+      <div className="p-3 sm:p-4">
         {/* Product Info */}
-        <div className="space-y-2">
+        <div className="space-y-1.5 sm:space-y-2">
           {/* Product Name */}
-          <h3 className="font-semibold text-sm line-clamp-2 min-h-[2.5rem] group-hover:text-primary transition-colors duration-200">
+          <h3 className="font-semibold text-xs sm:text-sm line-clamp-2 min-h-[2rem] sm:min-h-[2.5rem] group-hover:text-primary transition-colors duration-200">
             {product.name}
           </h3>
 
           {/* SKU & Brand */}
-          <div className="flex items-center justify-between text-xs text-muted-foreground">
-            <span className="font-mono">{product.sku}</span>
+          <div className="flex items-center justify-between text-[10px] sm:text-xs text-muted-foreground">
+            <span className="font-mono truncate max-w-[60%]">{product.sku}</span>
             {product.brand && (
-              <span className="text-primary font-medium">{product.brand}</span>
+              <span className="text-primary font-medium truncate">{product.brand}</span>
             )}
           </div>
 
           {/* Price & Stock - Enhanced Layout */}
-          <div className="pt-3 border-t border-border/50">
-            <div className="flex items-end justify-between">
+          <div className="pt-2 sm:pt-3 border-t border-border/50">
+            <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-1">
               {/* Price */}
               <div>
                 {hasPrice ? (
                   <>
-                    <span className="price-tag text-xl text-primary">
+                    <span className="price-tag text-base sm:text-xl text-primary">
                       {formatCurrency(product.rate, currencyCode)}
                     </span>
                   </>
                 ) : (
-                  <span className="text-sm text-muted-foreground italic">
+                  <span className="text-xs sm:text-sm text-muted-foreground italic">
                     {t("contactForPrice")}
                   </span>
                 )}
@@ -218,7 +218,7 @@ const ProductCardWithCart = memo(function ProductCardWithCart({
               {/* Stock Count */}
               <div
                 className={cn(
-                  "stock-indicator text-xs font-medium",
+                  "stock-indicator text-[10px] sm:text-xs font-medium",
                   isInStock
                     ? isLowStock
                       ? "stock-low text-amber-600 dark:text-amber-400"
@@ -236,7 +236,7 @@ const ProductCardWithCart = memo(function ProductCardWithCart({
 
         {/* Add to Cart Section - Wholesale Enhanced */}
         {hasPrice && isInStock && maxQuantity > 0 && (
-          <div className="mt-4 pt-3 border-t border-border/50 space-y-3">
+          <div className="mt-3 sm:mt-4 pt-2 sm:pt-3 border-t border-border/50 space-y-2 sm:space-y-3">
             {/* Wholesale Quantity Input */}
             <WholesaleQuantityInput
               value={quantity}
@@ -279,7 +279,7 @@ const ProductCardWithCart = memo(function ProductCardWithCart({
 
         {/* View Details for non-purchasable items */}
         {(!hasPrice || !isInStock) && (
-          <div className="mt-4 pt-3 border-t border-border/50">
+          <div className="mt-3 sm:mt-4 pt-2 sm:pt-3 border-t border-border/50">
             <Button
               variant="outline"
               className="w-full btn-press group/btn"
@@ -513,7 +513,7 @@ export function PublicProductsContent({
           </div>
 
           {/* Product Grid */}
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4">
             {paginatedProducts.map((product, index) => (
               <ProductCardWithCart
                 key={product.item_id}
