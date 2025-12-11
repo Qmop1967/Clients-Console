@@ -6,18 +6,59 @@ This file contains critical information that Claude must memorize for effective 
 
 ---
 
+## TSH Architecture Overview
+
+### Project Purpose
+TSH Clients Console is a **B2B Wholesale Portal** for TSH Company's wholesale clients (retailers, technicians, resellers) to browse products, place orders, and manage their accounts.
+
+### Zoho Locations Structure
+
+```
+TSH COMPANY - ZOHO LOCATIONS
+│
+├── 📍 Main TSH Business ⭐ (Primary Business Location)
+│   │   📍 Baghdad, Iraq
+│   │
+│   ├── 🏭 Main WareHouse 🔒 ← THIS CONSOLE USES THIS ONLY
+│   │       📍 AL-DORA, Baghdad, Iraq
+│   │       ID: 2646610000000077024
+│   │
+│   ├── 🏭 inactive 1 (Warehouse) - Inactive
+│   └── 🏭 inactive 2 (Warehouse) - Inactive
+│
+└── 📍 TSH Retail Dora (Business Location) - SEPARATE PROJECT
+    └── 🏪 Dora Store - NOT USED BY THIS CONSOLE
+```
+
+### Stock Source Rule (CRITICAL)
+```
+This console ONLY shows stock from: Main WareHouse
+Warehouse ID: 2646610000000077024
+Warehouse Name: "Main WareHouse"
+
+NEVER use stock from other locations (Dora Store, etc.)
+NEVER use item.available_stock (combines ALL warehouses)
+ALWAYS use location_available_for_sale_stock from locations array
+```
+
+---
+
 ## Critical IDs (MEMORIZE THESE)
 
 | Entity | ID | Usage |
 |--------|-----|-------|
 | **Organization ID** | `748369814` | All Zoho API calls |
-| **WholeSale Warehouse ID** | `2646610000000077024` | Stock source |
+| **Main WareHouse ID** | `2646610000000077024` | Stock source for B2B |
+| **Main WareHouse Name** | `Main WareHouse` | Location lookup |
 | **Consumer Price List** | `2646610000049149103` | Public visitors (IQD) |
-| **Retailor Price List** | `2646610000004453985` | Retail shops (USD) |
+| **Retailor USD Price List** | `2646610000004453985` | Retail shops (USD) |
+| **Retailor IQD Price List** | `2646610000113426769` | Retail shops (IQD) |
 | **Technical IQD Price List** | `2646610000057419683` | Technicians (IQD) |
 | **Technical USD Price List** | `2646610000045742089` | Technicians (USD) |
-| **Wholesale A Price List** | `2646610000004152175` | Cash wholesale (USD) |
-| **Wholesale B Price List** | `2646610000004453961` | Credit wholesale (USD) |
+| **Wholesale A USD Price List** | `2646610000004152175` | Cash wholesale (USD) |
+| **Wholesale A IQD Price List** | `2646610000113417534` | Cash wholesale (IQD) |
+| **Wholesale B USD Price List** | `2646610000004453961` | Credit wholesale (USD) |
+| **Wholesale B IQD Price List** | `2646610000113426003` | Credit wholesale (IQD) |
 
 ---
 
@@ -32,10 +73,14 @@ If item not in pricebook → show "Contact for price" (NOT 0)
 
 ### 2. Stock Rule
 ```
+Warehouse Name: "Main WareHouse"
+Warehouse ID: 2646610000000077024
 Field: location_available_for_sale_stock
 Array: locations (NOT warehouses)
-Warehouse: WholeSale WareHouse (Warehouse)
 Formula: Available = Stock on Hand - Committed Stock
+
+CRITICAL: Use getUnifiedStock() or getUnifiedStockBulk() functions
+NEVER access Redis directly for stock display
 ```
 
 ### 3. Public Visitors
@@ -57,6 +102,22 @@ If broken → All prices show "Contact for price"
 Staging: Push to `preview` branch → staging.tsh.sale
 Production: Push to `main` branch → www.tsh.sale (ONLY when user requests)
 Method: GitHub Actions (NOT Vercel CLI)
+```
+
+### 6. Stock Sync Architecture
+```
+LAYER 1: Webhooks (Instant)     → /api/webhooks/zoho
+LAYER 2: Periodic Sync (15 min) → Vercel Cron
+LAYER 3: Manual Sync            → /api/sync/stock
+LAYER 4: Health Monitoring      → Cache status checks
+
+Stock-Affecting Transactions:
+- Invoice (decreases stock)
+- Bill (increases stock)
+- Sales Order (commits stock)
+- Credit Note (may increase stock)
+- Inventory Adjustment (changes stock)
+- Sales Return Received (increases stock)
 ```
 
 ---
@@ -230,4 +291,4 @@ Skills are automatically loaded when Claude detects relevant context.
 
 ---
 
-**Last Updated:** 2025-11-27
+**Last Updated:** 2025-12-11

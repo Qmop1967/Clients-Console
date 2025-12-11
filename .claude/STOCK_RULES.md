@@ -1,6 +1,6 @@
 # TSH Clients Console - Stock Rules
 
-Complete stock display logic with code examples.
+Complete stock display logic with code examples for Main WareHouse.
 
 ---
 
@@ -8,11 +8,13 @@ Complete stock display logic with code examples.
 
 | Setting | Value |
 |---------|-------|
-| **Warehouse Name** | WholeSale WareHouse (Warehouse) |
+| **Warehouse Name** | `Main WareHouse` |
 | **Warehouse ID** | `2646610000000077024` |
-| **Stock Type** | Accounting Stock |
+| **Business Location** | Main TSH Business |
+| **Stock Type** | Accounting Stock (Available for Sale) |
 | **Field** | `location_available_for_sale_stock` |
 | **Array** | `locations` (NOT `warehouses`) |
+| **Address** | AL-DORA, Baghdad, Iraq |
 
 ---
 
@@ -32,8 +34,11 @@ Available for Sale = Stock on Hand - Committed Stock
 
 ```typescript
 // ✅ CORRECT - Use these
+const WHOLESALE_LOCATION_NAME = 'Main WareHouse';
+const WHOLESALE_WAREHOUSE_ID = '2646610000000077024';
+
 const location = item.locations?.find(
-  loc => loc.location_id === '2646610000000077024'
+  loc => loc.location_name === WHOLESALE_LOCATION_NAME
 );
 const stock = location?.location_available_for_sale_stock;
 
@@ -41,7 +46,7 @@ const stock = location?.location_available_for_sale_stock;
 item.warehouses                    // Wrong array name
 warehouse_available_stock          // Wrong field name
 stock_on_hand                      // Includes committed stock
-item.available_stock               // May not be warehouse-specific
+item.available_stock               // Combines ALL warehouses (Main + Dora)
 ```
 
 ---
@@ -51,30 +56,45 @@ item.available_stock               // May not be warehouse-specific
 ### Constants
 
 ```typescript
-// src/lib/zoho/products.ts
-export const WHOLESALE_WAREHOUSE_ID = '2646610000000077024';
-export const WHOLESALE_WAREHOUSE_NAME = 'WholeSale WareHouse (Warehouse)';
+// src/lib/zoho/stock-cache.ts & src/lib/zoho/products.ts
+const WHOLESALE_LOCATION_NAME = 'Main WareHouse';
+const WHOLESALE_WAREHOUSE_ID = '2646610000000077024';
 ```
 
 ### Stock Extraction Function
 
 ```typescript
-export function getWholesaleAvailableStock(item: ZohoItem): number {
-  const WHOLESALE_WAREHOUSE_ID = '2646610000000077024';
+// src/lib/zoho/stock-cache.ts
+function getWholesaleAvailableStock(item: ZohoItemWithLocations): number {
+  const WHOLESALE_LOCATION_NAME = 'Main WareHouse';
 
-  // CRITICAL: Use locations array (NOT warehouses)
-  const location = item.locations?.find(
-    loc => loc.location_id === WHOLESALE_WAREHOUSE_ID
-  );
+  if (item.locations && item.locations.length > 0) {
+    const wholesaleLocation = item.locations.find(
+      (loc) => loc.location_name === WHOLESALE_LOCATION_NAME
+    );
 
-  // CRITICAL: Use location_available_for_sale_stock
-  if (location) {
-    return location.location_available_for_sale_stock ?? 0;
+    if (wholesaleLocation) {
+      return wholesaleLocation.location_available_for_sale_stock || 0;
+    }
   }
-
-  // Fallback to item-level stock if no locations data
-  return item.available_stock ?? 0;
+  // NEVER fall back to item.available_stock (combines all warehouses)
+  return 0;
 }
+```
+
+### Unified Stock Functions (ALWAYS USE THESE)
+
+```typescript
+// For single item (detail page)
+const { stock, source } = await getUnifiedStock(itemId, {
+  fetchOnMiss: true,
+  context: 'product-detail',
+});
+
+// For multiple items (list page)
+const stockMap = await getUnifiedStockBulk(itemIds, {
+  context: 'shop-list',
+});
 ```
 
 ### ZohoItem Type Definition
@@ -312,12 +332,83 @@ curl "https://www.tsh.sale/api/revalidate?tag=products&secret=tsh-revalidate-202
 
 ---
 
-## Other Warehouses (DO NOT USE)
+## Other Locations (DO NOT USE FOR THIS CONSOLE)
 
-| Warehouse | Purpose | Notes |
-|-----------|---------|-------|
-| TSH WholeSale Sales | Sales fulfillment | Not for display |
-| Retail WareHouse | Retail store | Separate business |
-| TSH Retail Store | Display stock | Retail only |
+| Location | Type | Purpose | Use |
+|----------|------|---------|-----|
+| **Main WareHouse** | Warehouse | B2B wholesale | ✅ THIS CONSOLE |
+| Dora Store | Warehouse | Retail shop | ❌ EndUser Console |
+| inactive 1/2 | Warehouse | Inactive | ❌ Delete |
 
-Only use **WholeSale WareHouse** (`2646610000000077024`) for public display.
+Only use **Main WareHouse** (`2646610000000077024`) for this B2B console.
+
+---
+
+## Stock Sync Architecture
+
+### Multi-Layer Synchronization
+
+```
+LAYER 1: WEBHOOKS (Instant, < 5 seconds)
+├── Zoho transaction triggers webhook
+├── POST /api/webhooks/zoho
+├── quickSyncStock(itemIds)
+└── Update Redis + Revalidate ISR
+
+LAYER 2: PERIODIC SYNC (Every 15 minutes)
+├── Vercel Cron job
+├── POST /api/sync/stock
+├── syncStockFromBooks()
+└── Full cache refresh
+
+LAYER 3: ON-DEMAND SYNC (Manual)
+├── Admin trigger
+├── GET /api/sync/stock?action=sync&force=true
+└── Immediate full refresh
+
+LAYER 4: HEALTH MONITORING (Continuous)
+├── GET /api/sync/stock?action=status
+├── Check: itemCount > 400
+├── Check: cache age < 4 hours
+└── Alert if unhealthy
+```
+
+### Transactions That Affect Stock
+
+| Transaction | Effect | Webhook |
+|-------------|--------|---------|
+| Invoice Created | ⬇️ Decreases | `invoice.created` |
+| Bill Created | ⬆️ Increases | `bill.created` |
+| Sales Order | 🔒 Commits | `salesorder.created` |
+| Credit Note | ⬆️ May increase | `creditnote.created` |
+| Inventory Adjustment | ⬆️⬇️ Changes | `inventoryadjustment.created` |
+| Sales Return Received | ⬆️ Increases | `salesreturnreceive.created` |
+| Package Shipped | ⬇️ Physical stock | `package.shipped` |
+| Item Updated | 🔄 May change | `item.updated` |
+
+### Stock Sync Commands
+
+```bash
+# Check cache status
+curl "https://www.tsh.sale/api/sync/stock?action=status"
+
+# Force full sync
+curl "https://www.tsh.sale/api/sync/stock?action=sync&secret=tsh-stock-sync-2024&force=true"
+
+# Revalidate caches
+curl "https://www.tsh.sale/api/revalidate?tag=all&secret=tsh-revalidate-2024"
+```
+
+---
+
+## Golden Rules (NEVER Break)
+
+1. **Single Source of Truth**: Always use `getUnifiedStock()` or `getUnifiedStockBulk()`
+2. **Warehouse Isolation**: Only show Main WareHouse stock
+3. **No Fallbacks**: Never use `item.available_stock` as fallback
+4. **Consistency**: List and detail pages must show same stock
+5. **Graceful Degradation**: Show "Check availability" if stock unavailable
+
+---
+
+**Last Updated:** 2025-12-11

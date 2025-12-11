@@ -54,7 +54,14 @@
       "Skill(production-debugger)",
       "Bash(xargs:*)",
       "mcp__zoho__ZohoBooks_list_contacts",
-      "mcp__zoho__ZohoBooks_get_contact"
+      "mcp__zoho__ZohoBooks_get_contact",
+      "Bash(grep:*)",
+      "Skill(zoho-api)",
+      "Bash(node /tmp/check-zoho-stock.mjs:*)",
+      "Bash(node /tmp/check-zoho-books-stock.mjs:*)",
+      "Bash(node /tmp/test-books-locations.mjs:*)",
+      "Bash(node /tmp/check-nova-item.mjs:*)",
+      "Bash(gtimeout 30 vercel logs:*)"
     ],
     "deny": [],
     "ask": []

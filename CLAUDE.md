@@ -315,7 +315,7 @@ git add -A && git commit -m "feat: description" && git push origin preview
 Stock Display Rules:
   Source: Zoho Inventory API
   Stock Type: Accounting Stock (NOT Physical Stock)
-  Warehouse: WholeSale WareHouse (Warehouse)
+  Warehouse: Main WareHouse
   Warehouse ID: 2646610000000077024
   Field: location_available_for_sale_stock (from locations array)
 
@@ -337,7 +337,7 @@ Technical Implementation:
   Key Function: getWholesaleAvailableStock(item)
 
   The function extracts stock from the locations array:
-    - Finds location with name "WholeSale WareHouse (Warehouse)"
+    - Finds location with name "Main WareHouse"
     - Returns location_available_for_sale_stock value
     - Falls back to item-level available_stock if no locations data
 
@@ -366,7 +366,7 @@ CRITICAL: Single Source of Truth
 
   Why no Books fallback:
   - Books API `available_stock` = Total across ALL warehouses
-  - Inventory API `location_available_for_sale_stock` = Only WholeSale WareHouse
+  - Inventory API `location_available_for_sale_stock` = Only Main WareHouse
   - These values are DIFFERENT, causing user-visible inconsistency
 
 Stock Resolution Priority:

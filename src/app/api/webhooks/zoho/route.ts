@@ -661,8 +661,14 @@ export async function POST(request: NextRequest) {
 
       // ============================================
       // CREDIT NOTE EVENTS
+      // Credit notes with returned items affect stock levels
       // ============================================
       case "creditnote":
+        // Credit notes may include returned items that increase stock
+        await revalidateProducts(`credit note: ${eventType}`);
+        // Sync stock cache for returned items
+        syncStockForItems(affectedItemIds, `credit note: ${eventType}`);
+        // Also revalidate customer credit notes list
         const cnCustomerId = (data.customer_id as string) || (data.contact_id as string);
         if (cnCustomerId) {
           await safeRevalidate(CACHE_TAGS.CREDIT_NOTES(cnCustomerId), eventType);

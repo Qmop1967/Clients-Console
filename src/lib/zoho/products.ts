@@ -14,10 +14,10 @@ import type { ZohoItem, ZohoCategory, PaginatedResponse } from '@/types';
 
 // ============================================
 // WAREHOUSE/LOCATION CONFIGURATION
-// Stock should ONLY come from WholeSale WareHouse
+// Stock should ONLY come from Main WareHouse
 // Using Accounting Stock > Available for Sale
 // ============================================
-const WHOLESALE_LOCATION_NAME = 'WholeSale WareHouse (Warehouse)';
+const WHOLESALE_LOCATION_NAME = 'Main WareHouse';
 const WHOLESALE_WAREHOUSE_ID = '2646610000000077024'; // For filtering list API
 
 // ============================================

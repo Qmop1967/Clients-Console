@@ -1,13 +1,14 @@
 ---
 name: tsh-stock
 description: |
-  TSH stock and warehouse logic for Zoho Inventory. Use when:
+  TSH stock and warehouse logic for Main WareHouse. Use when:
   (1) Displaying stock levels on product pages
   (2) Understanding warehouse configuration
   (3) Debugging stock display issues (showing 0 when shouldn't)
   (4) Working with "In Stock" / "Out of Stock" badges
   (5) Implementing stock-based filtering
-  (6) Understanding the difference between list and detail page stock
+  (6) Understanding stock sync architecture (webhooks, cron, manual)
+  (7) Understanding the difference between list and detail page stock
 ---
 
 # TSH Stock Rules
@@ -16,8 +17,9 @@ description: |
 
 | Setting | Value |
 |---------|-------|
-| **Warehouse Name** | WholeSale WareHouse (Warehouse) |
+| **Warehouse Name** | `Main WareHouse` |
 | **Warehouse ID** | `2646610000000077024` |
+| **Business Location** | Main TSH Business |
 | **Stock Type** | Accounting Stock (Available for Sale) |
 | **Field** | `location_available_for_sale_stock` |
 | **Array** | `locations` (NOT `warehouses`) |
@@ -36,8 +38,10 @@ Available for Sale = Stock on Hand - Committed Stock
 
 ```typescript
 // CORRECT - Use these
+const WHOLESALE_LOCATION_NAME = 'Main WareHouse';
+
 const location = item.locations?.find(
-  loc => loc.location_id === '2646610000000077024'
+  loc => loc.location_name === WHOLESALE_LOCATION_NAME
 );
 const stock = location?.location_available_for_sale_stock;
 
@@ -45,30 +49,47 @@ const stock = location?.location_available_for_sale_stock;
 item.warehouses                    // Wrong array name
 warehouse_available_stock          // Wrong field name
 stock_on_hand                      // Includes committed stock
+item.available_stock               // Combines ALL warehouses
 ```
 
 ## Code Implementation
 
 ### Constants
 ```typescript
-// src/lib/zoho/products.ts
-export const WHOLESALE_WAREHOUSE_ID = '2646610000000077024';
+// src/lib/zoho/stock-cache.ts & src/lib/zoho/products.ts
+const WHOLESALE_LOCATION_NAME = 'Main WareHouse';
+const WHOLESALE_WAREHOUSE_ID = '2646610000000077024';
 ```
 
 ### Stock Extraction Function
 ```typescript
-export function getWholesaleAvailableStock(item: ZohoItem): number {
-  const location = item.locations?.find(
-    loc => loc.location_id === WHOLESALE_WAREHOUSE_ID
-  );
+function getWholesaleAvailableStock(item: ZohoItemWithLocations): number {
+  if (item.locations && item.locations.length > 0) {
+    const wholesaleLocation = item.locations.find(
+      (loc) => loc.location_name === WHOLESALE_LOCATION_NAME
+    );
 
-  if (location) {
-    return location.location_available_for_sale_stock ?? 0;
+    if (wholesaleLocation) {
+      return wholesaleLocation.location_available_for_sale_stock || 0;
+    }
   }
-
-  // Fallback to item-level stock
-  return item.available_stock ?? 0;
+  // NEVER fall back to item.available_stock (combines all warehouses)
+  return 0;
 }
+```
+
+### Unified Stock Functions (ALWAYS USE)
+```typescript
+// For single item (detail page)
+const { stock, source } = await getUnifiedStock(itemId, {
+  fetchOnMiss: true,
+  context: 'product-detail',
+});
+
+// For multiple items (list page)
+const stockMap = await getUnifiedStockBulk(itemIds, {
+  context: 'shop-list',
+});
 ```
 
 ### Type Definition
@@ -226,20 +247,30 @@ curl "https://www.tsh.sale/api/debug/stock"
 curl "https://www.tsh.sale/api/revalidate?tag=products&secret=tsh-revalidate-2024"
 ```
 
-## Other Warehouses (DO NOT USE)
+## Other Locations (DO NOT USE FOR THIS CONSOLE)
 
-| Warehouse | Purpose |
-|-----------|---------|
-| TSH WholeSale Sales | Sales fulfillment |
-| Retail WareHouse | Retail store |
-| TSH Retail Store | Display stock |
+| Location | Type | Purpose | Use |
+|----------|------|---------|-----|
+| **Main WareHouse** | Warehouse | B2B wholesale | ✅ THIS CONSOLE |
+| Dora Store | Warehouse | Retail shop | ❌ EndUser Console |
+| inactive 1/2 | Warehouse | Inactive | ❌ Delete |
 
-Only use **WholeSale WareHouse** (`2646610000000077024`) for B2B display.
+Only use **Main WareHouse** (`2646610000000077024`) for this B2B console.
+
+## Stock Sync Commands
+
+```bash
+# Check cache status
+curl "https://www.tsh.sale/api/sync/stock?action=status"
+
+# Force full sync
+curl "https://www.tsh.sale/api/sync/stock?action=sync&secret=tsh-stock-sync-2024&force=true"
+```
 
 ## Checklist
 
-- [ ] Import `WHOLESALE_WAREHOUSE_ID` from products.ts
-- [ ] Use `getWholesaleAvailableStock()` for detail pages
-- [ ] Use `warehouse_id` filter for list pages
+- [ ] Use `getUnifiedStock()` or `getUnifiedStockBulk()` for stock retrieval
+- [ ] NEVER use `item.available_stock` directly
 - [ ] Handle 0 stock with "Out of Stock" badge
 - [ ] Add stock translations (en.json, ar.json)
+- [ ] Verify list/detail stock consistency after changes
