@@ -168,6 +168,8 @@ async function redisDel(key: string): Promise<boolean> {
 // ============================================
 
 function getWholesaleAvailableStock(item: ZohoItemWithLocations): number {
+  // Extract warehouse-specific stock from locations array
+  // Both Books API and Inventory API single item endpoints return this
   if (item.locations && item.locations.length > 0) {
     const wholesaleLocation = item.locations.find(
       (loc) => loc.location_name === WHOLESALE_LOCATION_NAME
@@ -176,9 +178,12 @@ function getWholesaleAvailableStock(item: ZohoItemWithLocations): number {
     if (wholesaleLocation) {
       return wholesaleLocation.location_available_for_sale_stock || 0;
     }
+    // Warehouse not found in locations - return 0 (not item-level stock)
     return 0;
   }
-  return item.available_stock || 0;
+  // No locations array - return 0 (NEVER fall back to item.available_stock)
+  // This prevents showing incorrect item-level stock (total across all warehouses)
+  return 0;
 }
 
 // ============================================
@@ -614,28 +619,29 @@ export async function getUnifiedStock(
     return { stock: 0, source: 'unavailable' };
   }
 
-  // Step 3: Fetch from Inventory API (warehouse-specific)
-  console.log(`[getUnifiedStock] ${itemId}: cache miss, fetching from Inventory API (${context})`);
+  // Step 3: Fetch from Books API (warehouse-specific via locations array)
+  // KEY: Books API /items/{id} returns `locations` array with warehouse-specific stock!
+  console.log(`[getUnifiedStock] ${itemId}: cache miss, fetching from Books API (${context})`);
 
   try {
     const data = await rateLimitedFetch(() =>
       zohoFetch<ZohoSingleItemResponse>(`/items/${itemId}`, {
-        api: 'inventory',
+        api: 'books', // Books API has higher rate limits AND returns locations array!
       })
     );
 
     if (!data.item) {
-      console.warn(`[getUnifiedStock] ${itemId}: item not found in Inventory API (${context})`);
+      console.warn(`[getUnifiedStock] ${itemId}: item not found in Books API (${context})`);
       return { stock: 0, source: 'unavailable' };
     }
 
-    // Extract warehouse-specific stock
+    // Extract warehouse-specific stock from locations array
     const stock = getWholesaleAvailableStock(data.item);
 
     // Step 4: ON-DEMAND CACHING - save to Redis for future consistency
     await cacheStockOnDemand(itemId, stock);
 
-    console.log(`[getUnifiedStock] ${itemId}: ${stock} from API, cached (${context})`);
+    console.log(`[getUnifiedStock] ${itemId}: ${stock} from Books API (warehouse-specific), cached (${context})`);
     return { stock, source: 'api' };
 
   } catch (error) {
@@ -728,10 +734,11 @@ export async function getUnifiedStockBulk(
 }
 
 // ============================================
-// FAST SYNC USING ZOHO BOOKS API
+// FAST SYNC USING ZOHO BOOKS API WITH LOCATIONS
 // ============================================
 // Books API has ~100 requests/minute vs Inventory's ~3,750/day
-// This function uses Books API for faster sync without rate limits
+// Books API single item endpoint (/items/{id}) returns `locations` array
+// with warehouse-specific stock - same as Inventory API!
 // ============================================
 
 interface ZohoBooksItemStock {
@@ -753,18 +760,37 @@ interface ZohoBooksItemsResponse {
   };
 }
 
+// Books API single item response includes locations array
+interface ZohoBooksItemDetailResponse {
+  item: {
+    item_id: string;
+    name: string;
+    locations?: ZohoItemLocationStock[];
+    available_stock?: number;
+  };
+}
+
 /**
- * FAST SYNC using Zoho Books API (higher rate limits)
+ * WAREHOUSE-SPECIFIC SYNC using Zoho Books API (higher rate limits)
  *
- * Uses Books API which has ~100 requests/minute vs Inventory's ~3,750/day
- * Stock from Books is item-level (total across all warehouses) but is
- * sufficient for most use cases and much faster to sync.
+ * KEY DISCOVERY: Books API single item endpoint (/items/{id}) returns
+ * a `locations` array with warehouse-specific stock - same as Inventory API!
+ *
+ * This function:
+ * 1. Gets list of item IDs from Books list endpoint
+ * 2. Fetches each item's detail to get warehouse-specific stock
+ * 3. Extracts `location_available_for_sale_stock` from WholeSale WareHouse
+ * 4. Caches accurate warehouse-specific stock in Redis
  *
  * Options:
- * - maxItems: Maximum items to process per call (default: unlimited)
+ * - batchSize: Items per batch (default: 10)
+ * - delayMs: Delay between batches (default: 500ms)
+ * - maxItems: Maximum items to process (default: unlimited)
  * - offset: Starting offset for chunked sync (default: 0)
  */
 export async function syncStockFromBooks(options: {
+  batchSize?: number;
+  delayMs?: number;
   maxItems?: number;
   offset?: number;
 } = {}): Promise<{
@@ -774,24 +800,24 @@ export async function syncStockFromBooks(options: {
   durationMs: number;
   totalItems?: number;
   nextOffset?: number;
+  errors?: number;
 }> {
-  const { maxItems = 500, offset = 0 } = options;
+  const { batchSize = 10, delayMs = 500, maxItems, offset = 0 } = options;
   const startTime = Date.now();
 
-  console.log(`🚀 [syncStockFromBooks] Starting FAST sync using Books API (offset=${offset}, maxItems=${maxItems})...`);
+  console.log(`🚀 [syncStockFromBooks] Starting warehouse-specific sync using Books API (offset=${offset}, maxItems=${maxItems || 'all'}, batchSize=${batchSize})...`);
 
   try {
-    // Fetch products from Books API (much higher rate limits)
-    const allItems: ZohoBooksItemStock[] = [];
-    let currentPage = Math.floor(offset / 200) + 1;
+    // Step 1: Fetch product IDs from Books list API
+    const allItemIds: { item_id: string; name: string }[] = [];
+    let currentPage = 1;
     const perPage = 200;
     let hasMorePages = true;
-    let totalFetched = 0;
 
-    while (hasMorePages && totalFetched < maxItems) {
+    while (hasMorePages) {
       const data = await rateLimitedFetch(() =>
         zohoFetch<ZohoBooksItemsResponse>('/items', {
-          api: 'books', // Using Books API - higher rate limits!
+          api: 'books',
           params: {
             page: currentPage,
             per_page: perPage,
@@ -803,9 +829,8 @@ export async function syncStockFromBooks(options: {
       );
 
       if (data.items && data.items.length > 0) {
-        allItems.push(...data.items);
-        totalFetched += data.items.length;
-        console.log(`📦 [syncStockFromBooks] Page ${currentPage}: ${data.items.length} items (total: ${totalFetched})`);
+        allItemIds.push(...data.items.map(i => ({ item_id: i.item_id, name: i.name })));
+        console.log(`📋 [syncStockFromBooks] Page ${currentPage}: ${data.items.length} items (total: ${allItemIds.length})`);
       }
 
       hasMorePages = data.page_context?.has_more_page ?? false;
@@ -815,21 +840,82 @@ export async function syncStockFromBooks(options: {
       if (currentPage > 20) break;
     }
 
-    console.log(`📊 [syncStockFromBooks] Fetched ${allItems.length} products from Books API`);
+    console.log(`📦 [syncStockFromBooks] Found ${allItemIds.length} total products`);
 
+    // Apply offset and maxItems for chunked sync
+    const startIndex = Math.min(offset, allItemIds.length);
+    const endIndex = maxItems ? Math.min(startIndex + maxItems, allItemIds.length) : allItemIds.length;
+    const itemsToProcess = allItemIds.slice(startIndex, endIndex);
+
+    console.log(`📊 [syncStockFromBooks] Processing items ${startIndex + 1} to ${endIndex} of ${allItemIds.length}`);
+
+    // Step 2: Fetch individual item details to get locations array
     // Get existing cache to merge
     const existingCache = await getStockCache();
     const stockMap: StockMap = existingCache?.stock || {};
-
-    // Process items and update stock map
+    let processedCount = 0;
+    let errorCount = 0;
     let itemsWithStock = 0;
-    for (const item of allItems) {
-      const stock = item.available_stock ?? item.actual_available_stock ?? item.stock_on_hand ?? 0;
-      stockMap[item.item_id] = stock;
-      if (stock > 0) itemsWithStock++;
+
+    for (let i = 0; i < itemsToProcess.length; i += batchSize) {
+      const batch = itemsToProcess.slice(i, i + batchSize);
+
+      // Fetch batch in parallel from Books API single item endpoint
+      const batchPromises = batch.map(async (item) => {
+        try {
+          const data = await zohoFetch<ZohoBooksItemDetailResponse>(`/items/${item.item_id}`, {
+            api: 'books', // Books API single item endpoint has locations array!
+          });
+
+          // Extract warehouse-specific stock from locations array
+          const stock = getWholesaleAvailableStock(data.item as ZohoItemWithLocations);
+          return {
+            itemId: item.item_id,
+            stock,
+            error: false,
+          };
+        } catch (error) {
+          const errorMsg = error instanceof Error ? error.message : String(error);
+          // On rate limit, wait and retry once
+          if (errorMsg.includes('429') || errorMsg.includes('rate') || errorMsg.includes('blocked')) {
+            await new Promise(resolve => setTimeout(resolve, 3000));
+            try {
+              const retryData = await zohoFetch<ZohoBooksItemDetailResponse>(`/items/${item.item_id}`, {
+                api: 'books',
+              });
+              const stock = getWholesaleAvailableStock(retryData.item as ZohoItemWithLocations);
+              return { itemId: item.item_id, stock, error: false };
+            } catch {
+              return { itemId: item.item_id, stock: 0, error: true };
+            }
+          }
+          return { itemId: item.item_id, stock: 0, error: true };
+        }
+      });
+
+      const results = await Promise.all(batchPromises);
+
+      for (const result of results) {
+        stockMap[result.itemId] = result.stock;
+        if (result.error) errorCount++;
+        if (result.stock > 0) itemsWithStock++;
+      }
+
+      processedCount += batch.length;
+
+      // Log progress
+      if (processedCount % 100 === 0 || processedCount === itemsToProcess.length) {
+        const progress = Math.round((processedCount / itemsToProcess.length) * 100);
+        console.log(`📊 [syncStockFromBooks] Progress: ${processedCount}/${itemsToProcess.length} (${progress}%), ${itemsWithStock} with stock`);
+      }
+
+      // Delay between batches to avoid rate limits
+      if (i + batchSize < itemsToProcess.length) {
+        await new Promise(resolve => setTimeout(resolve, delayMs));
+      }
     }
 
-    // Save to Redis
+    // Step 3: Save to Redis
     const cacheData: StockCacheData = {
       stock: stockMap,
       updatedAt: Date.now(),
@@ -839,22 +925,26 @@ export async function syncStockFromBooks(options: {
     const saved = await redisSet(STOCK_CACHE_KEY, cacheData, STOCK_CACHE_TTL);
     const durationMs = Date.now() - startTime;
 
-    // Calculate next offset
-    const nextOffset = hasMorePages ? offset + totalFetched : undefined;
+    // Calculate next offset for chunked sync
+    const nextOffset = endIndex < allItemIds.length ? endIndex : undefined;
 
     if (saved) {
-      console.log(`✅ [syncStockFromBooks] Complete: ${allItems.length} items synced (${itemsWithStock} with stock), total cached: ${cacheData.itemCount}, took ${Math.round(durationMs / 1000)}s`);
+      console.log(`✅ [syncStockFromBooks] Complete: ${processedCount} items synced (${itemsWithStock} with stock, ${errorCount} errors), total cached: ${cacheData.itemCount}, took ${Math.round(durationMs / 1000)}s`);
+      if (nextOffset) {
+        console.log(`📝 [syncStockFromBooks] More items to sync. Next offset: ${nextOffset}`);
+      }
     } else {
       console.error('❌ [syncStockFromBooks] Failed to save to Redis');
     }
 
     return {
       success: saved,
-      itemsProcessed: allItems.length,
+      itemsProcessed: processedCount,
       itemsWithStock,
       durationMs,
-      totalItems: existingCache?.itemCount || allItems.length,
+      totalItems: allItemIds.length,
       nextOffset,
+      errors: errorCount,
     };
 
   } catch (error) {

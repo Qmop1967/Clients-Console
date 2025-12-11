@@ -49,7 +49,8 @@ export async function GET(request: NextRequest) {
       // Get sync parameters
       const offset = parseInt(searchParams.get('offset') || '0', 10);
       const limit = parseInt(searchParams.get('limit') || '100', 10);
-      const source = searchParams.get('source') || 'inventory'; // 'books' for faster sync
+      // DEFAULT to 'books' - Books API has higher rate limits AND returns warehouse-specific stock
+      const source = searchParams.get('source') || 'books';
 
       // Check if sync is needed (unless force=true or doing chunked sync)
       const isChunkedSync = offset > 0;
@@ -66,11 +67,14 @@ export async function GET(request: NextRequest) {
         }
       }
 
-      // Use Books API for FAST sync (higher rate limits: ~100 req/min vs ~3750/day)
+      // Use Books API for warehouse-specific sync (higher rate limits: ~100 req/min vs ~3750/day)
+      // Books API /items/{id} returns locations array with warehouse-specific stock!
       if (source === 'books') {
-        console.log(`🚀 Starting FAST stock sync via Books API (offset=${offset}, limit=${limit})...`);
+        console.log(`🚀 Starting warehouse-specific stock sync via Books API (offset=${offset}, limit=${limit})...`);
 
         const result = await syncStockFromBooks({
+          batchSize: 10,
+          delayMs: 500,
           maxItems: limit,
           offset: offset,
         });
@@ -83,6 +87,7 @@ export async function GET(request: NextRequest) {
           result: {
             itemsProcessed: result.itemsProcessed,
             itemsWithStock: result.itemsWithStock,
+            errors: result.errors,
             durationSeconds: Math.round(result.durationMs / 1000),
             totalItems: result.totalItems,
             nextOffset: result.nextOffset,
@@ -171,10 +176,10 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Run sync with conservative settings
-    const result = await syncWholesaleStock({
+    // Run sync using Books API (warehouse-specific via locations array)
+    const result = await syncStockFromBooks({
       batchSize: 8,
-      delayMs: 1500,
+      delayMs: 1000,
     });
 
     const status = await getStockCacheStatus();
@@ -183,8 +188,10 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: result.success,
+      source: 'books',
       result: {
         itemsProcessed: result.itemsProcessed,
+        itemsWithStock: result.itemsWithStock,
         errors: result.errors,
         durationSeconds: Math.round(result.durationMs / 1000),
       },

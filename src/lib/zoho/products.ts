@@ -105,10 +105,15 @@ interface ZohoBooksCategoriesResponse {
 
 /**
  * Extract available stock from warehouse array (if present)
- * Zoho Books may include warehouse breakdown in item response
+ *
+ * NOTE: This function is used for metadata cache only.
+ * The actual stock displayed to users comes from Redis cache
+ * (populated by syncStockFromBooks which uses Books API /items/{id} with locations).
+ *
+ * We return 0 here to ensure stock comes from Redis cache only.
  */
 function getWholesaleStockFromItem(item: ZohoBooksItem): number {
-  // Check if item has warehouses array
+  // Check if item has warehouses array (Books list API rarely includes this)
   if (item.warehouses && item.warehouses.length > 0) {
     const wholesaleWarehouse = item.warehouses.find(
       (w) => w.warehouse_name === WHOLESALE_LOCATION_NAME || w.warehouse_id === WHOLESALE_WAREHOUSE_ID
@@ -122,9 +127,10 @@ function getWholesaleStockFromItem(item: ZohoBooksItem): number {
     }
   }
 
-  // Fallback to item-level stock
-  // Books API returns available_stock at item level
-  return item.available_stock ?? item.actual_available_stock ?? item.stock_on_hand ?? 0;
+  // DO NOT fall back to item-level stock
+  // This prevents showing "7" when actual WholeSale WareHouse has "-2"
+  // Stock should come from Redis cache (populated by syncStockFromBooks)
+  return 0;
 }
 
 /**
@@ -637,17 +643,17 @@ export async function getAllProductsComplete(): Promise<ZohoItem[]> {
     // Step 2: Get cache status first to determine strategy
     const cacheStatus = await getStockCacheStatus();
 
-    // SAFEGUARD: If Redis cache is empty or very stale, use Books stock directly
+    // SAFEGUARD: If Redis cache is empty, return products with 0 stock
+    // DO NOT fall back to Books item-level stock (causes warehouse discrepancy)
     if (!cacheStatus.exists || cacheStatus.itemCount === 0) {
-      console.warn('[getAllProductsComplete] Redis stock cache is EMPTY - using Zoho Books stock as fallback');
-      // Return products with their original Zoho Books stock
-      const productsWithBooksStock = products.map((item) => ({
+      console.warn('[getAllProductsComplete] Redis stock cache is EMPTY - all products will show 0 stock');
+      console.warn('[getAllProductsComplete] RUN STOCK SYNC to populate cache: /api/sync/stock?action=sync&secret=...');
+      // Return products with 0 stock - forces sync to be run
+      const productsWithZeroStock = products.map((item) => ({
         ...item,
-        available_stock: item.available_stock ?? 0,
+        available_stock: 0,
       }));
-      const inStockCount = productsWithBooksStock.filter(p => (p.available_stock ?? 0) > 0).length;
-      console.log(`[getAllProductsComplete] Using Books stock: ${inStockCount}/${products.length} in stock`);
-      return productsWithBooksStock;
+      return productsWithZeroStock;
     }
 
     // Step 3: Get stock from Redis cache (warehouse-specific)
@@ -661,20 +667,21 @@ export async function getAllProductsComplete(): Promise<ZohoItem[]> {
     let booksHits = 0;
 
     // Step 4: Merge stock with products
-    // Priority: Redis cache > Zoho Books stock > 0
+    // Priority: Redis cache ONLY (no Books fallback to avoid warehouse discrepancy)
     const productsWithStock = products.map((item) => {
       const redisStock = stockMap.get(item.item_id);
       const hasRedisData = stockMap.has(item.item_id) && redisStock !== undefined;
 
-      // IMPROVED: Use Redis if available, otherwise fall back to Books stock
       let finalStock: number;
       if (hasRedisData && redisStock !== undefined) {
+        // Use Redis warehouse-specific stock
         finalStock = redisStock;
         if (redisStock > 0) redisHits++;
       } else {
-        // Fallback to Books stock
-        finalStock = item.available_stock ?? 0;
-        if (finalStock > 0) booksHits++;
+        // NO FALLBACK to Books item-level stock
+        // This prevents showing "7" when actual warehouse has "-2"
+        finalStock = 0;
+        booksHits++; // Track as "miss" for monitoring
       }
 
       return {
@@ -683,13 +690,18 @@ export async function getAllProductsComplete(): Promise<ZohoItem[]> {
       };
     });
 
-    // Log statistics
-    const totalWithStock = redisHits + booksHits;
-    console.log(`[getAllProductsComplete] Stock sources - Redis: ${redisHits}, Books fallback: ${booksHits}, Total in-stock: ${totalWithStock}/${products.length}, cache items: ${cacheStatus.itemCount}`);
+    // Log statistics (booksHits is actually "cache misses" now)
+    const cacheMisses = booksHits;
+    console.log(`[getAllProductsComplete] Stock sources - Redis hits: ${redisHits}, Cache misses: ${cacheMisses}, Products with stock: ${redisHits}/${products.length}, cache items: ${cacheStatus.itemCount}`);
 
-    // SAFEGUARD: If somehow all products have 0 stock, log critical error
-    if (totalWithStock === 0 && products.length > 0) {
-      console.error('[CRITICAL] getAllProductsComplete: ALL products showing 0 stock! Check stock sync.');
+    // SAFEGUARD: If cache miss rate is high, warn about sync
+    if (cacheMisses > redisHits && products.length > 10) {
+      console.warn('[getAllProductsComplete] HIGH CACHE MISS RATE - run stock sync to populate cache');
+    }
+
+    // SAFEGUARD: If all products have 0 stock, log critical error
+    if (redisHits === 0 && products.length > 0) {
+      console.error('[CRITICAL] getAllProductsComplete: ALL products showing 0 stock! Run stock sync.');
     }
 
     return productsWithStock;
