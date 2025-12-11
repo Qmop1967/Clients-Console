@@ -117,7 +117,7 @@ export function CartProvider({ children, currencyCode = "IQD" }: CartProviderPro
     return item?.quantity || 0;
   }, [items]);
 
-  const itemCount = items.reduce((total, item) => total + item.quantity, 0);
+  const itemCount = items.length; // Number of unique items, not total quantity
   const subtotal = items.reduce((total, item) => total + item.rate * item.quantity, 0);
 
   return (
