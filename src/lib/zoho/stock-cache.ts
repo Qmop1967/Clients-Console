@@ -9,7 +9,7 @@ import { zohoFetch, rateLimitedFetch } from './client';
 
 // Redis key for stock cache
 const STOCK_CACHE_KEY = 'stock:wholesale_map';
-const STOCK_CACHE_TTL = 14400; // 4 HOURS in seconds (reduced from 24h for freshness)
+const STOCK_CACHE_TTL = 86400; // 24 HOURS in seconds (matches Cron schedule - prevents cache expiry between syncs)
 const STOCK_SYNC_LOCK_KEY = 'stock:sync_lock';
 const STOCK_SYNC_LOCK_TTL = 600; // 10 minutes lock
 

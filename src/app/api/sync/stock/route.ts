@@ -48,7 +48,10 @@ export async function GET(request: NextRequest) {
     if (action === 'sync') {
       // Get sync parameters
       const offset = parseInt(searchParams.get('offset') || '0', 10);
-      const limit = parseInt(searchParams.get('limit') || '100', 10);
+      // IMPORTANT: Default to unlimited (no maxItems) to sync ALL products
+      // Only use limit param for manual chunked sync when explicitly set
+      const limitParam = searchParams.get('limit');
+      const limit = limitParam ? parseInt(limitParam, 10) : undefined;
       // DEFAULT to 'books' - Books API has higher rate limits AND returns warehouse-specific stock
       const source = searchParams.get('source') || 'books';
 
@@ -70,7 +73,7 @@ export async function GET(request: NextRequest) {
       // Use Books API for warehouse-specific sync (higher rate limits: ~100 req/min vs ~3750/day)
       // Books API /items/{id} returns locations array with warehouse-specific stock!
       if (source === 'books') {
-        console.log(`🚀 Starting warehouse-specific stock sync via Books API (offset=${offset}, limit=${limit})...`);
+        console.log(`🚀 Starting warehouse-specific stock sync via Books API (offset=${offset}, limit=${limit ?? 'all'})...`);
 
         const result = await syncStockFromBooks({
           batchSize: 10,
@@ -94,13 +97,13 @@ export async function GET(request: NextRequest) {
           },
           cacheStatus: status,
           nextSyncUrl: result.nextOffset
-            ? `/api/sync/stock?action=sync&secret=${SYNC_SECRET}&source=books&offset=${result.nextOffset}&limit=${limit}`
+            ? `/api/sync/stock?action=sync&secret=${SYNC_SECRET}&source=books&offset=${result.nextOffset}${limit ? `&limit=${limit}` : ''}`
             : null,
         });
       }
 
       // Default: Use Inventory API (slower but warehouse-specific stock)
-      console.log(`📦 Starting stock sync via Inventory API (offset=${offset}, limit=${limit})...`);
+      console.log(`📦 Starting stock sync via Inventory API (offset=${offset}, limit=${limit ?? 'all'})...`);
 
       const result = await syncWholesaleStock({
         batchSize: 5,
@@ -124,7 +127,7 @@ export async function GET(request: NextRequest) {
         },
         cacheStatus: status,
         nextSyncUrl: result.nextOffset
-          ? `/api/sync/stock?action=sync&secret=${SYNC_SECRET}&offset=${result.nextOffset}&limit=${limit}`
+          ? `/api/sync/stock?action=sync&secret=${SYNC_SECRET}&offset=${result.nextOffset}${limit ? `&limit=${limit}` : ''}`
           : null,
       });
     }
