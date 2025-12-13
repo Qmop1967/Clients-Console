@@ -3,6 +3,7 @@
 import { useState, useMemo, useEffect, useCallback, memo, useRef, useDeferredValue } from "react";
 import { useTranslations, useLocale } from "next-intl";
 import { useSearchParams, usePathname } from "next/navigation";
+import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -59,7 +60,6 @@ interface PublicProductsContentProps {
   products: PublicProduct[];
   categories: PublicCategory[];
   currencyCode: string;
-  isAuthenticated?: boolean;
   selectedCategory?: string | null;
   selectedCategoryName?: string | null;
   onClearCategory?: () => void;
@@ -302,7 +302,6 @@ export function PublicProductsContent({
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   categories,
   currencyCode,
-  isAuthenticated = false,
   selectedCategory = null,
   selectedCategoryName = null,
   onClearCategory,
@@ -312,6 +311,10 @@ export function PublicProductsContent({
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const isInitialMount = useRef(true);
+
+  // PERFORMANCE: Check auth client-side to keep server render cacheable
+  const { data: session } = useSession();
+  const isAuthenticated = !!session?.user;
 
   // Get page from URL params, default to 1
   const pageFromUrl = parseInt(searchParams.get("page") || "1", 10);

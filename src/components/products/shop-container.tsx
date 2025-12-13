@@ -38,7 +38,6 @@ interface ShopContainerProps {
   products: PublicProduct[];
   categories: PublicCategory[];
   currencyCode: string;
-  isAuthenticated?: boolean;
 }
 
 type TabValue = "products" | "categories";
@@ -67,7 +66,6 @@ function ShopContainerInner({
   products,
   categories,
   currencyCode,
-  isAuthenticated = false,
 }: ShopContainerProps) {
   const t = useTranslations("products");
   const searchParams = useSearchParams();
@@ -200,7 +198,6 @@ function ShopContainerInner({
             products={filteredProducts}
             categories={categories}
             currencyCode={currencyCode}
-            isAuthenticated={isAuthenticated}
             selectedCategory={selectedCategory}
             selectedCategoryName={selectedCategory ? getCategoryName(selectedCategory) : null}
             onClearCategory={handleClearCategory}
