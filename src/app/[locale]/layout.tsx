@@ -23,13 +23,14 @@ const plusJakartaSans = Plus_Jakarta_Sans({
 });
 
 // Display font - Latin (used for headings, prices)
+// PERFORMANCE: Enable preload for display font - prices are key LCP elements
 const cormorantGaramond = Cormorant_Garamond({
   subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
-  style: ["normal", "italic"],
+  weight: ["500", "600"], // Only preload weights actually used for prices
+  style: ["normal"],
   variable: "--font-cormorant",
   display: "swap",
-  preload: false, // Don't preload display font - body is more critical
+  preload: true, // Preload display font for faster LCP on price elements
 });
 
 // Arabic display font

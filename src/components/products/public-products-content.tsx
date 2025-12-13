@@ -66,8 +66,9 @@ interface PublicProductsContentProps {
 }
 
 // Number of products to load with priority (above-the-fold)
-// Reduced to 4 for faster LCP - only first row on most screens
-const PRIORITY_PRODUCTS_COUNT = 4;
+// Set to 8 for better LCP - covers 2 rows on desktop (4x2) and 4 rows on mobile (2x4)
+// This ensures visible images are prioritized without over-fetching
+const PRIORITY_PRODUCTS_COUNT = 8;
 
 // Memoized Product Card Component with Add to Cart - Enhanced Design
 const ProductCardWithCart = memo(function ProductCardWithCart({

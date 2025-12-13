@@ -61,7 +61,8 @@
       "Bash(node /tmp/check-zoho-books-stock.mjs:*)",
       "Bash(node /tmp/test-books-locations.mjs:*)",
       "Bash(node /tmp/check-nova-item.mjs:*)",
-      "Bash(gtimeout 30 vercel logs:*)"
+      "Bash(gtimeout 30 vercel logs:*)",
+      "Bash(wc:*)"
     ],
     "deny": [],
     "ask": []
