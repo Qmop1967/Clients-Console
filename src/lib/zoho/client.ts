@@ -206,13 +206,15 @@ export async function getAccessToken(): Promise<string> {
   // Step 4: Refresh the token from Zoho
   if (process.env.NODE_ENV === 'development') console.log('[Zoho] Refreshing access token...');
 
-  // Log cache status for debugging
-  const cacheStatus = {
-    upstash: isUpstashConfigured(),
-    vercelKv: isVercelKvConfigured(),
-    memoryCache: !!memoryCache,
-  };
-  console.log('📊 Cache status:', cacheStatus);
+  // Log cache status for debugging (only in development)
+  if (process.env.NODE_ENV === 'development') {
+    const cacheStatus = {
+      upstash: isUpstashConfigured(),
+      vercelKv: isVercelKvConfigured(),
+      memoryCache: !!memoryCache,
+    };
+    console.log('📊 Cache status:', cacheStatus);
+  }
 
   // Check if environment variables are set
   if (!process.env.ZOHO_REFRESH_TOKEN) {

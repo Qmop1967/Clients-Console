@@ -197,8 +197,10 @@ function getWholesaleAvailableStock(item: ZohoItemWithLocations): number {
 export async function getStockCache(): Promise<StockCacheData | null> {
   const cached = await redisGet<StockCacheData>(STOCK_CACHE_KEY);
 
-  if (cached) {
-    console.log(`📦 Stock cache hit: ${cached.itemCount} items, age: ${Math.round((Date.now() - cached.updatedAt) / 1000)}s`);
+  // Only log in development or if cache is getting stale (> 20 min)
+  if (cached && process.env.NODE_ENV === 'development') {
+    const ageSeconds = Math.round((Date.now() - cached.updatedAt) / 1000);
+    console.log(`📦 Stock cache: ${cached.itemCount} items, age: ${ageSeconds}s`);
   }
 
   return cached;

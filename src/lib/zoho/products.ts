@@ -902,6 +902,68 @@ async function fetchPricesForItems(
   return priceMap;
 }
 
+// Memoization map for cached functions per price list
+// This ensures unstable_cache is only created ONCE per price list ID
+const priceListCacheMap = new Map<string, () => Promise<{
+  products: ZohoItemWithPrice[];
+  currency: string;
+  priceListName: string;
+}>>();
+
+/**
+ * Internal function to fetch products with prices (not cached)
+ */
+async function fetchProductsWithPricesInternal(priceListId: string): Promise<{
+  products: ZohoItemWithPrice[];
+  currency: string;
+  priceListName: string;
+}> {
+  console.log(`[getProductsWithPrices] Fetching for price list ${priceListId}`);
+
+  try {
+    // Get all products (uses its own cache)
+    const products = await getAllProductsComplete();
+
+    if (!products.length) {
+      console.warn('[Products] No products found');
+      return { products: [], currency: 'IQD', priceListName: 'Unknown' };
+    }
+
+    // Fetch prices for all product IDs
+    const itemIds = products.map(p => p.item_id);
+    const priceMap = await fetchPricesForItems(priceListId, itemIds);
+
+    console.log(`[getProductsWithPrices] Got prices for ${priceMap.size} items`);
+
+    // Get price list info for currency
+    const priceListInfo = await rateLimitedFetch(() =>
+      zohoFetch<{ pricebook: { name: string; currency_code: string } }>(`/pricebooks/${priceListId}`, {
+        api: 'books',
+      })
+    ).catch(() => ({ pricebook: { name: 'Unknown', currency_code: 'IQD' } }));
+
+    const currency = priceListInfo.pricebook?.currency_code || 'IQD';
+    const priceListName = priceListInfo.pricebook?.name || 'Unknown';
+
+    // Merge products with prices
+    const productsWithPrices: ZohoItemWithPrice[] = products.map(product => ({
+      ...product,
+      display_price: priceMap.get(product.item_id) || 0,
+      price_currency: currency,
+      in_price_list: priceMap.has(product.item_id),
+    }));
+
+    return {
+      products: productsWithPrices,
+      currency,
+      priceListName,
+    };
+  } catch (error) {
+    console.error('[getProductsWithPrices] Error:', error);
+    return { products: [], currency: 'IQD', priceListName: 'Unknown' };
+  }
+}
+
 /**
  * Get all products with prices for a specific price list
  * CACHED per price list ID for 24 hours
@@ -911,80 +973,30 @@ async function fetchPricesForItems(
  *
  * IMPORTANT: Each price list gets its own cache entry via dynamic cache key.
  * This ensures IQD customers see IQD prices and USD customers see USD prices.
+ *
+ * OPTIMIZATION: Uses memoization map to ensure unstable_cache is only created
+ * once per price list ID, avoiding overhead of recreating cache wrapper on every call.
  */
 export async function getProductsWithPrices(priceListId: string): Promise<{
   products: ZohoItemWithPrice[];
   currency: string;
   priceListName: string;
 }> {
-  // Create a cached function with DYNAMIC cache key per price list
-  // This is critical - without including priceListId in the cache key,
-  // all customers would see the same cached prices regardless of their price list!
-  const cachedFetch = unstable_cache(
-    async (): Promise<{
-      products: ZohoItemWithPrice[];
-      currency: string;
-      priceListName: string;
-    }> => {
-      console.log(`[getProductsWithPrices] Fetching for price list ${priceListId}`);
+  // Check if we already have a cached function for this price list
+  let cachedFetch = priceListCacheMap.get(priceListId);
 
-      try {
-        // Get all products (uses its own cache)
-        const products = await getAllProductsComplete();
-
-        if (!products.length) {
-          console.warn('[Products] No products found');
-          return { products: [], currency: 'IQD', priceListName: 'Unknown' };
-        }
-
-        if (process.env.NODE_ENV === 'development') {
-          console.log(`[Products] Got ${products.length} products, now fetching prices...`);
-        }
-
-        // Fetch prices for all product IDs
-        const itemIds = products.map(p => p.item_id);
-        const priceMap = await fetchPricesForItems(priceListId, itemIds);
-
-        console.log(`[getProductsWithPrices] Got prices for ${priceMap.size} items`);
-
-        // Get price list info for currency
-        const priceListInfo = await rateLimitedFetch(() =>
-          zohoFetch<{ pricebook: { name: string; currency_code: string } }>(`/pricebooks/${priceListId}`, {
-            api: 'books',
-          })
-        ).catch(() => ({ pricebook: { name: 'Unknown', currency_code: 'IQD' } }));
-
-        const currency = priceListInfo.pricebook?.currency_code || 'IQD';
-        const priceListName = priceListInfo.pricebook?.name || 'Unknown';
-
-        // Merge products with prices
-        const productsWithPrices: ZohoItemWithPrice[] = products.map(product => ({
-          ...product,
-          display_price: priceMap.get(product.item_id) || 0,
-          price_currency: currency,
-          in_price_list: priceMap.has(product.item_id),
-        }));
-
-        if (process.env.NODE_ENV === 'development') {
-          console.log(`[Products] Returning ${productsWithPrices.length} products with prices`);
-        }
-
-        return {
-          products: productsWithPrices,
-          currency,
-          priceListName,
-        };
-      } catch (error) {
-        console.error('[getProductsWithPrices] Error:', error);
-        return { products: [], currency: 'IQD', priceListName: 'Unknown' };
+  if (!cachedFetch) {
+    // Create the cached function ONCE and store it
+    cachedFetch = unstable_cache(
+      () => fetchProductsWithPricesInternal(priceListId),
+      [`products-with-prices-${priceListId}`],
+      {
+        revalidate: 86400, // 24 hours
+        tags: [CACHE_TAGS.PRODUCTS, CACHE_TAGS.PRICE_LISTS],
       }
-    },
-    [`products-with-prices-${priceListId}`], // DYNAMIC cache key per price list!
-    {
-      revalidate: 86400, // 24 hours
-      tags: [CACHE_TAGS.PRODUCTS, CACHE_TAGS.PRICE_LISTS],
-    }
-  );
+    );
+    priceListCacheMap.set(priceListId, cachedFetch);
+  }
 
   return cachedFetch();
 }

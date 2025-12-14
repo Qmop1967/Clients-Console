@@ -418,10 +418,10 @@ export async function POST(request: NextRequest) {
     const parsed = parseZohoWebhook(payload);
     const { eventType, entityType, data } = parsed;
 
-    console.log(`[Webhook] Received: ${eventType} (entity: ${entityType})`, {
-      dataKeys: Object.keys(data),
-      hasLineItems: 'line_items' in data,
-    });
+    // Log concisely - avoid printing full dataKeys array (can be 100+ items)
+    const hasLineItems = 'line_items' in data;
+    const lineItemCount = hasLineItems && Array.isArray(data.line_items) ? data.line_items.length : 0;
+    console.log(`[Webhook] ${eventType} | items: ${lineItemCount} | keys: ${Object.keys(data).length}`);
 
     // Extract item IDs from webhook data for stock sync
     const affectedItemIds = extractItemIds(data);
