@@ -590,7 +590,9 @@ export const getAllProductsMetadata = unstable_cache(
       throw new Error('SAFEGUARD: Refusing to cache empty product list');
     }
 
-    console.log(`[getAllProductsMetadata] Caching ${products.length} products`);
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`[getAllProductsMetadata] Caching ${products.length} products`);
+    }
     return products;
   },
   ['all-products-metadata-books'],
@@ -692,7 +694,9 @@ export async function getAllProductsComplete(): Promise<ZohoItem[]> {
 
     // Log statistics (booksHits is actually "cache misses" now)
     const cacheMisses = booksHits;
-    console.log(`[getAllProductsComplete] Stock sources - Redis hits: ${redisHits}, Cache misses: ${cacheMisses}, Products with stock: ${redisHits}/${products.length}, cache items: ${cacheStatus.itemCount}`);
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`[getAllProductsComplete] Redis: ${redisHits}, Misses: ${cacheMisses}, Total: ${products.length}`);
+    }
 
     // SAFEGUARD: If cache miss rate is high, warn about sync
     if (cacheMisses > redisHits && products.length > 10) {
@@ -918,7 +922,8 @@ async function fetchProductsWithPricesInternal(priceListId: string): Promise<{
   currency: string;
   priceListName: string;
 }> {
-  console.log(`[getProductsWithPrices] Fetching for price list ${priceListId}`);
+  const isDev = process.env.NODE_ENV === 'development';
+  if (isDev) console.log(`[getProductsWithPrices] Fetching for price list ${priceListId}`);
 
   try {
     // Get all products (uses its own cache)
@@ -933,7 +938,7 @@ async function fetchProductsWithPricesInternal(priceListId: string): Promise<{
     const itemIds = products.map(p => p.item_id);
     const priceMap = await fetchPricesForItems(priceListId, itemIds);
 
-    console.log(`[getProductsWithPrices] Got prices for ${priceMap.size} items`);
+    if (isDev) console.log(`[getProductsWithPrices] Got prices for ${priceMap.size} items`);
 
     // Get price list info for currency
     const priceListInfo = await rateLimitedFetch(() =>

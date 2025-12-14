@@ -606,24 +606,25 @@ export async function getUnifiedStock(
   } = {}
 ): Promise<{ stock: number; source: 'cache' | 'api' | 'unavailable' }> {
   const { fetchOnMiss = true, context = 'unknown' } = options;
+  const isDev = process.env.NODE_ENV === 'development';
 
   // Step 1: Check Redis cache
   const cached = await getStockCache();
   if (cached && cached.stock[itemId] !== undefined) {
     const stock = cached.stock[itemId];
-    console.log(`[getUnifiedStock] ${itemId}: ${stock} from cache (${context})`);
+    if (isDev) console.log(`[getUnifiedStock] ${itemId}: ${stock} from cache (${context})`);
     return { stock, source: 'cache' };
   }
 
   // Step 2: Cache miss - decide whether to fetch
   if (!fetchOnMiss) {
-    console.log(`[getUnifiedStock] ${itemId}: cache miss, fetchOnMiss=false (${context})`);
+    if (isDev) console.log(`[getUnifiedStock] ${itemId}: cache miss, fetchOnMiss=false (${context})`);
     return { stock: 0, source: 'unavailable' };
   }
 
   // Step 3: Fetch from Books API (warehouse-specific via locations array)
   // KEY: Books API /items/{id} returns `locations` array with warehouse-specific stock!
-  console.log(`[getUnifiedStock] ${itemId}: cache miss, fetching from Books API (${context})`);
+  if (isDev) console.log(`[getUnifiedStock] ${itemId}: cache miss, fetching from Books API (${context})`);
 
   try {
     const data = await rateLimitedFetch(() =>
@@ -643,7 +644,7 @@ export async function getUnifiedStock(
     // Step 4: ON-DEMAND CACHING - save to Redis for future consistency
     await cacheStockOnDemand(itemId, stock);
 
-    console.log(`[getUnifiedStock] ${itemId}: ${stock} from Books API (warehouse-specific), cached (${context})`);
+    if (isDev) console.log(`[getUnifiedStock] ${itemId}: ${stock} from Books API, cached (${context})`);
     return { stock, source: 'api' };
 
   } catch (error) {
@@ -671,7 +672,9 @@ async function cacheStockOnDemand(itemId: string, stock: number): Promise<void> 
     };
 
     await redisSet(STOCK_CACHE_KEY, cacheData, STOCK_CACHE_TTL);
-    console.log(`[cacheStockOnDemand] ${itemId}: stock ${stock} saved to Redis`);
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`[cacheStockOnDemand] ${itemId}: stock ${stock} saved to Redis`);
+    }
   } catch (error) {
     // Non-critical - log but don't throw
     console.warn(`[cacheStockOnDemand] ${itemId}: failed to cache -`, error);
@@ -723,13 +726,17 @@ export async function getUnifiedStockBulk(
     }
   }
 
-  // Log cache hit rate for monitoring
+  // Log cache hit rate for monitoring (development only, unless hit rate is low)
   const hitRate = ((hitCount / itemIds.length) * 100).toFixed(1);
-  console.log(`[getUnifiedStockBulk] ${hitCount}/${itemIds.length} cache hits (${hitRate}%), ${missCount} misses (${context})`);
+  const lowHitRate = missCount > hitCount && itemIds.length > 10;
 
-  // Warn if hit rate is low - suggests cache needs syncing
-  if (missCount > hitCount && itemIds.length > 10) {
-    console.warn(`[getUnifiedStockBulk] LOW CACHE HIT RATE - consider running stock sync (${context})`);
+  if (process.env.NODE_ENV === 'development') {
+    console.log(`[getUnifiedStockBulk] ${hitCount}/${itemIds.length} cache hits (${hitRate}%), ${missCount} misses (${context})`);
+  }
+
+  // Warn if hit rate is low - suggests cache needs syncing (always log this)
+  if (lowHitRate) {
+    console.warn(`[getUnifiedStockBulk] LOW CACHE HIT RATE (${hitRate}%) - run stock sync (${context})`);
   }
 
   return stockMap;
