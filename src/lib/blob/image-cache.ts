@@ -414,6 +414,7 @@ export async function uploadImageToBlob(
       access: 'public',
       contentType,
       addRandomSuffix: false, // Use exact filename for consistent URLs
+      allowOverwrite: true, // Allow overwriting existing blobs to avoid errors
     });
 
     console.log(`[ImageCache] Uploaded ${itemId} to Blob: ${blob.url}`);

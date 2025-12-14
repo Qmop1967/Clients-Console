@@ -254,7 +254,7 @@ export const {
     strategy: 'database',
     maxAge: 30 * 24 * 60 * 60, // 30 days
   },
-  debug: true, // Temporarily enabled for debugging
+  debug: process.env.NODE_ENV === 'development', // Only enable debug in development
 });
 
 // Type augmentation for NextAuth

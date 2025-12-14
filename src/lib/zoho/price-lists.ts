@@ -175,7 +175,8 @@ async function fetchPricebookItemRates(
     batches.push(itemIds.slice(i, i + batchSize));
   }
 
-  console.log(`📦 Created ${batches.length} batches, processing ${concurrencyLimit} in parallel`);
+  const isDev = process.env.NODE_ENV === 'development';
+  if (isDev) console.log(`📦 Created ${batches.length} batches, processing ${concurrencyLimit} in parallel`);
 
   const allItemPrices: ZohoItemPrice[] = [];
 
@@ -183,10 +184,6 @@ async function fetchPricebookItemRates(
     // Process batches in chunks with concurrency limit
     for (let i = 0; i < batches.length; i += concurrencyLimit) {
       const batchChunk = batches.slice(i, i + concurrencyLimit);
-      const chunkNumber = Math.floor(i / concurrencyLimit) + 1;
-      const totalChunks = Math.ceil(batches.length / concurrencyLimit);
-
-      console.log(`🚀 Processing chunk ${chunkNumber}/${totalChunks} (${batchChunk.length} batches in parallel)`);
 
       // Process batches in parallel
       const results = await Promise.all(
@@ -213,7 +210,7 @@ async function fetchPricebookItemRates(
               }));
             }
 
-            console.warn(`⚠️ Batch ${batchNumber}: No items returned from API`);
+            if (isDev) console.warn(`⚠️ Batch ${batchNumber}: No items returned from API`);
             return [];
           } catch (error) {
             console.error(`❌ Batch ${batchNumber} failed:`, error);
@@ -223,17 +220,10 @@ async function fetchPricebookItemRates(
       );
 
       // Flatten results and add to allItemPrices
-      const chunkPrices = results.flat();
-      allItemPrices.push(...chunkPrices);
-      console.log(`✅ Chunk ${chunkNumber}/${totalChunks}: Got ${chunkPrices.length} prices (total: ${allItemPrices.length})`);
+      allItemPrices.push(...results.flat());
     }
 
-    console.log(`✅ fetchPricebookItemRates: Total ${allItemPrices.length} item prices from pricebook ${pricebookId}`);
-
-    // Log sample prices for verification
-    if (allItemPrices.length > 0) {
-      console.log(`💰 Sample prices:`, allItemPrices.slice(0, 3).map(p => ({ id: p.item_id, name: p.name, rate: p.rate })));
-    }
+    if (isDev) console.log(`✅ fetchPricebookItemRates: Total ${allItemPrices.length} prices`);
 
     return allItemPrices;
   } catch (error) {
@@ -299,7 +289,8 @@ export async function getPriceListWithItems(
   priceListId: string,
   itemIds: string[]
 ): Promise<ZohoPriceList | null> {
-  console.log(`🔍 getPriceListWithItems: Starting for priceListId=${priceListId}, itemIds count=${itemIds.length}`);
+  const isDev = process.env.NODE_ENV === 'development';
+  if (isDev) console.log(`🔍 getPriceListWithItems: priceListId=${priceListId}, items=${itemIds.length}`);
 
   try {
     // First get the basic pricebook info (currency, name, etc.)
@@ -310,23 +301,19 @@ export async function getPriceListWithItems(
       return null;
     }
 
-    console.log(`📋 Fetching prices for ${itemIds.length} items from ${basicPriceList.name} (${basicPriceList.currency_code})`);
+    if (isDev) console.log(`📋 Fetching prices for ${itemIds.length} items from ${basicPriceList.name}`);
 
     // Fetch item prices using Books API
     const itemPrices = await fetchPricebookItemRates(priceListId, itemIds);
 
-    console.log(`📊 getPriceListWithItems: Got ${itemPrices.length} item prices from API`);
+    if (isDev) console.log(`📊 getPriceListWithItems: Got ${itemPrices.length} prices`);
 
     // Return complete price list with items
-    const result = {
+    return {
       ...basicPriceList,
       pricebook_items: itemPrices,
       item_prices: itemPrices, // Backwards compatibility
     };
-
-    console.log(`✅ getPriceListWithItems: Returning price list with ${result.pricebook_items?.length || 0} items`);
-
-    return result;
   } catch (error) {
     console.error('❌ Error fetching price list with items:', error);
     return null;
@@ -341,13 +328,9 @@ export const getPriceList = getPriceListBasic;
 export const getConsumerPriceList = unstable_cache(
   async (): Promise<ZohoPriceList | null> => {
     try {
-      console.log(`📋 Fetching Consumer price list (ID: ${CONSUMER_PRICEBOOK_ID})`);
       const priceList = await getPriceList(CONSUMER_PRICEBOOK_ID);
 
-      if (priceList) {
-        console.log(`✅ Consumer price list loaded: ${priceList.name} (${priceList.currency_code})`);
-        console.log(`📦 Items in price list: ${priceList.pricebook_items?.length || 0}`);
-      } else {
+      if (!priceList) {
         console.warn('⚠️ Consumer price list not found!');
       }
 
@@ -431,11 +414,9 @@ export async function getCustomerPriceList(
 
   // If we have item IDs, fetch prices for them
   if (itemIds.length > 0) {
-    console.log(`🔐 Fetching customer price list ${effectivePriceListId} with ${itemIds.length} items`);
     return getPriceListWithItems(effectivePriceListId, itemIds);
   }
 
   // Fallback to basic price list (no items)
-  console.log(`⚠️ No item IDs provided, fetching basic price list ${effectivePriceListId}`);
   return getPriceListBasic(effectivePriceListId);
 }
