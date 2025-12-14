@@ -160,11 +160,11 @@ async function fetchPricebookItemRates(
   itemIds: string[]
 ): Promise<ZohoItemPrice[]> {
   if (!itemIds.length) {
-    console.log('⚠️ fetchPricebookItemRates called with empty itemIds array');
     return [];
   }
 
-  console.log(`📋 fetchPricebookItemRates: Starting parallel fetch for ${itemIds.length} items from pricebook ${pricebookId}`);
+  const isDev = process.env.NODE_ENV === 'development';
+  if (isDev) console.log(`📋 fetchPricebookItemRates: ${itemIds.length} items from pricebook ${pricebookId}`);
 
   const batchSize = 100; // Zoho may have limits on item_ids parameter
   const concurrencyLimit = 3; // Process 3 batches in parallel to respect rate limits
@@ -175,7 +175,6 @@ async function fetchPricebookItemRates(
     batches.push(itemIds.slice(i, i + batchSize));
   }
 
-  const isDev = process.env.NODE_ENV === 'development';
   if (isDev) console.log(`📦 Created ${batches.length} batches, processing ${concurrencyLimit} in parallel`);
 
   const allItemPrices: ZohoItemPrice[] = [];
