@@ -98,6 +98,26 @@ const nextConfig: NextConfig = {
           },
         ],
       },
+      // PERFORMANCE: Stale-while-revalidate for shop pages (public, cacheable)
+      {
+        source: "/:locale(en|ar)/shop",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, s-maxage=300, stale-while-revalidate=600",
+          },
+        ],
+      },
+      // PERFORMANCE: Short cache for authenticated pages (dashboard, orders, etc.)
+      {
+        source: "/:locale(en|ar)/(dashboard|orders|invoices|payments)",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "private, s-maxage=60, stale-while-revalidate=120",
+          },
+        ],
+      },
       // Cache static assets aggressively
       {
         source: "/:path*.(ico|jpg|jpeg|png|gif|webp|svg|avif)",

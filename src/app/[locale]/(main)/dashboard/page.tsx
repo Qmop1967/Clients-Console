@@ -8,8 +8,10 @@ import { getCustomerBalance, getZohoCustomerFresh } from "@/lib/zoho/customers";
 import { getRecentOrders, getOrderStats } from "@/lib/zoho/orders";
 import { getRecentInvoices } from "@/lib/zoho/invoices";
 
-// Force dynamic rendering to always get fresh customer data
-export const dynamic = 'force-dynamic';
+// PERFORMANCE: Use ISR with short revalidation for balance between freshness and speed
+// Dashboard data is cached for 60 seconds - fresh enough for B2B use case
+// This dramatically improves TTFB and LCP by serving from edge cache
+export const revalidate = 60; // 1 minute ISR
 
 export async function generateMetadata() {
   const t = await getTranslations("dashboard");

@@ -14,9 +14,10 @@ import "../globals.css";
 import { Plus_Jakarta_Sans, Cormorant_Garamond, Cairo, IBM_Plex_Sans_Arabic } from "next/font/google";
 
 // Body font - Latin (used for most UI text)
+// PERFORMANCE: Reduced weights from 5 to 3 for faster loading
 const plusJakartaSans = Plus_Jakarta_Sans({
   subsets: ["latin"],
-  weight: ["300", "400", "500", "600", "700"],
+  weight: ["400", "500", "600"], // Removed 300 and 700 - rarely used
   variable: "--font-jakarta",
   display: "swap",
   preload: true,
@@ -34,18 +35,20 @@ const cormorantGaramond = Cormorant_Garamond({
 });
 
 // Arabic display font
+// PERFORMANCE: Reduced weights from 4 to 3 for faster loading
 const cairo = Cairo({
   subsets: ["arabic", "latin"],
-  weight: ["400", "500", "600", "700"],
+  weight: ["400", "600", "700"], // Removed 500 - use 600 instead
   variable: "--font-cairo",
   display: "swap",
   preload: false, // Preloaded only for Arabic locale
 });
 
 // Arabic body font
+// PERFORMANCE: Reduced weights from 5 to 3 for faster loading
 const ibmPlexSansArabic = IBM_Plex_Sans_Arabic({
   subsets: ["arabic", "latin"],
-  weight: ["300", "400", "500", "600", "700"],
+  weight: ["400", "500", "600"], // Removed 300 and 700 - rarely used
   variable: "--font-ibm-arabic",
   display: "swap",
   preload: false, // Preloaded only for Arabic locale
