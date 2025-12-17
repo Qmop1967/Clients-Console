@@ -5,7 +5,6 @@ import { useTranslations, useLocale } from "next-intl";
 import Link from "next/link";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { ProductImage } from "./product-image";
 import { useCart } from "@/components/providers/cart-provider";
 import { Search, ShoppingCart, Check, Eye, ChevronLeft, ChevronRight } from "lucide-react";
@@ -123,23 +122,6 @@ const ProductCardWithCart = memo(function ProductCardWithCart({
 
         {/* Gradient overlay on hover */}
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-
-        {/* Stock Badge - Enhanced */}
-        <div className="absolute top-3 right-3 rtl:right-auto rtl:left-3">
-          <Badge
-            variant={isInStock ? "success" : "destructive"}
-            className={cn(
-              "text-xs font-medium shadow-sm",
-              isLowStock && "animate-pulse-soft"
-            )}
-          >
-            {isInStock
-              ? isLowStock
-                ? t("lowStock")
-                : t("inStock")
-              : t("outOfStock")}
-          </Badge>
-        </div>
 
         {/* Category Tag */}
         {product.category_name && (
