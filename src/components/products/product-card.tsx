@@ -5,7 +5,6 @@ import { useTranslations } from "next-intl";
 import Image from "next/image";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { ShoppingCart, Check, Package } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { formatCurrency } from "@/lib/utils/format";
@@ -32,7 +31,6 @@ export const ProductCard = memo(function ProductCard({ product, currencyCode }: 
   const { addItem } = useCart();
 
   const isInStock = product.available_stock > 0;
-  const isLowStock = product.available_stock > 0 && product.available_stock <= 5;
 
   // Memoized add to cart handler
   const handleAddToCart = useCallback(() => {
@@ -69,26 +67,6 @@ export const ProductCard = memo(function ProductCard({ product, currencyCode }: 
             <Package className="h-12 w-12 text-muted-foreground/30" strokeWidth={1} />
           </div>
         )}
-
-        {/* Stock Badge - Refined styling */}
-        <Badge
-          variant={
-            !isInStock
-              ? "destructive"
-              : isLowStock
-              ? "warning"
-              : "success"
-          }
-          className="absolute end-2 top-2 shadow-sm"
-        >
-          {!isInStock ? (
-            t("outOfStock")
-          ) : (
-            <span className="stock-number">
-              {product.available_stock} {t("inStock")}
-            </span>
-          )}
-        </Badge>
 
         {/* Hover overlay with quick add */}
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />

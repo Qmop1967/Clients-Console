@@ -62,7 +62,8 @@
       "Bash(node /tmp/test-books-locations.mjs:*)",
       "Bash(node /tmp/check-nova-item.mjs:*)",
       "Bash(gtimeout 30 vercel logs:*)",
-      "Bash(wc:*)"
+      "Bash(wc:*)",
+      "Bash(timeout 60 vercel logs:*)"
     ],
     "deny": [],
     "ask": []
