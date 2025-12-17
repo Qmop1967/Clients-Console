@@ -454,6 +454,64 @@ Implementation:
   5. For items NOT in pricebook: inPriceList=false → show "Contact for price"
 ```
 
+#### Customer-Specific Pricing Architecture (CRITICAL)
+```yaml
+GOLDEN RULE: Logged-in customers MUST see their assigned price list on ALL pages.
+             NEVER show Consumer prices to authenticated wholesale/retail customers.
+
+WHY THIS MATTERS:
+  - B2B customers have negotiated prices (Wholesale, Retail, Technical)
+  - They expect to see THEIR prices, not public Consumer prices
+  - Showing wrong prices breaks trust and causes confusion
+
+IMPLEMENTATION REQUIREMENTS:
+  Shop Page (/shop):
+    - MUST call auth() to check if user is logged in
+    - MUST use session.user.priceListId for authenticated users
+    - Falls back to PRICE_LIST_IDS.CONSUMER only for public visitors
+    - Page uses `force-dynamic` to enable personalization
+
+  Product Detail Page (/shop/[id]):
+    - MUST call auth() to check if user is logged in
+    - MUST use session.user.priceListId for pricing
+    - Falls back to fetching from Zoho if priceListId not in session
+
+  Session Data Flow:
+    1. User logs in via magic link
+    2. signIn callback fetches customer from Zoho (getZohoCustomerFresh)
+    3. Extracts pricebook_id (or price_list_id) from customer record
+    4. Stores in session: session.user.priceListId
+    5. Session callback refreshes Zoho data every 2 minutes (cache TTL)
+
+  Code Locations:
+    - Shop page: src/app/[locale]/(public)/shop/page.tsx
+    - Product detail: src/app/[locale]/(public)/shop/[id]/page.tsx
+    - Auth config: src/lib/auth/auth.config.ts
+    - Auth handlers: src/lib/auth/auth.ts
+
+NEVER DO:
+  - Cache shop page with ISR when it shows prices (prices are personalized)
+  - Use `revalidate = N` on pages that show customer-specific prices
+  - Show Consumer prices to logged-in customers "for performance"
+  - Skip auth() check on pages that display prices
+
+ALWAYS DO:
+  - Use `force-dynamic` on pages with personalized pricing
+  - Check session.user.priceListId before fetching prices
+  - Log which price list is being used in development mode
+  - Test with different customer accounts (Wholesale, Retail, etc.)
+
+DEBUGGING:
+  If customer sees wrong prices:
+    1. Check their Zoho contact: pricebook_id field
+    2. Check session: session.user.priceListId
+    3. Check logs: "[Shop] Using price list: XXX"
+    4. Verify session refresh is working (2-min cache)
+
+  Quick test:
+    curl "https://www.tsh.sale/api/debug/session" (while logged in)
+```
+
 ### TSH Price Lists Reference (Updated: 2025-12-09)
 
 | ID | Name | Currency | Type | Description |
@@ -897,7 +955,9 @@ curl "https://www.tsh.sale/api/revalidate?tag=all&secret=tsh-revalidate-2024"
 
 | Mistake | Why It's Bad | Correct Approach |
 |---------|--------------|------------------|
-| Using `force-dynamic` | Kills ISR/caching benefits | Use `revalidate = 300` or remove |
+| **Showing Consumer prices to logged-in customers** | Breaks B2B trust, customers expect their negotiated prices | Use `auth()` + `session.user.priceListId` on price pages |
+| Using ISR on price-displaying pages | Caches Consumer prices for all users | Use `force-dynamic` for personalized pricing |
+| Skipping `auth()` on shop page | Can't determine customer's price list | Always call `auth()` before fetching prices |
 | Fetching prices without caching | 15+ API calls per request | Use `getProductsWithPrices()` |
 | Ignoring rate limits | API blocks all requests | Use `rateLimitedFetch()` wrapper |
 | Hardcoding price list IDs | Breaks when IDs change | Use `PRICE_LIST_IDS` constants |

@@ -2,14 +2,14 @@ import { Suspense } from "react";
 import { getTranslations } from "next-intl/server";
 import { ShopContainer } from "@/components/products/shop-container";
 import { ProductsSkeleton } from "@/components/products/products-skeleton";
-import { getProductsWithConsumerPrices, getProductImageUrl, getCategories } from "@/lib/zoho/products";
+import { getProductsWithPrices, getProductImageUrl, getCategories } from "@/lib/zoho/products";
+import { auth } from "@/lib/auth/auth";
+import { PRICE_LIST_IDS } from "@/lib/zoho/price-lists";
 
-// PERFORMANCE: Enable ISR caching with 5-minute revalidation
-// Shop page is ALWAYS rendered with Consumer prices (public catalog)
-// This allows the page to be fully cached at the edge (no auth() call = no cookies read)
-// Authenticated users see the same catalog - their specific prices apply at cart/checkout
-// This improves LCP from 3.88s to <1.5s by leveraging Vercel's edge cache
-export const revalidate = 300; // 5 minutes ISR
+// PERSONALIZED PRICING: Page is dynamic for logged-in users to show their assigned prices
+// Public visitors still get Consumer prices
+// This ensures customers see their negotiated wholesale/retail prices, not consumer prices
+export const dynamic = "force-dynamic"; // Required for auth() to work
 
 export async function generateMetadata() {
   const t = await getTranslations("products");
@@ -20,23 +20,30 @@ export async function generateMetadata() {
 }
 
 /**
- * OPTIMIZED: Fetch shop data using cached consumer prices
- * - Always uses Consumer price list (public catalog)
- * - Page is fully cacheable at edge (no personalization)
+ * PERSONALIZED: Fetch shop data with customer-specific pricing
+ * - Logged-in users see their assigned price list (Wholesale, Retail, etc.)
+ * - Public visitors see Consumer prices
  * - Stock is fresh from Redis on every call
  * - Fetches categories in parallel
- * - Reduces API calls from ~15 to ~1-2 per request
+ *
+ * @param priceListId - Customer's price list ID (from session) or undefined for Consumer
  */
-async function fetchShopData() {
+async function fetchShopData(priceListId?: string) {
   try {
-    // Fetch products and categories in parallel
-    // Always use consumer prices - page is public catalog
+    // Determine which price list to use
+    const effectivePriceListId = priceListId || PRICE_LIST_IDS.CONSUMER;
+
+    // Fetch products with appropriate prices and categories in parallel
     const [productResult, categories] = await Promise.all([
-      getProductsWithConsumerPrices(),
+      getProductsWithPrices(effectivePriceListId),
       getCategories()
     ]);
 
     const { products: allProducts, currency } = productResult;
+
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`[Shop] Using price list: ${effectivePriceListId}, currency: ${currency}`);
+    }
 
     // Map to display format - keep it minimal for faster serialization
     const productsWithPrices = allProducts.map((product) => ({
@@ -83,7 +90,16 @@ async function fetchShopData() {
 // Separate async component for products - enables streaming
 async function ShopLoader() {
   const t = await getTranslations("products");
-  const { products, categories, currencyCode, error } = await fetchShopData();
+
+  // Check if user is authenticated and get their price list
+  const session = await auth();
+  const priceListId = session?.user?.priceListId;
+
+  if (process.env.NODE_ENV === 'development') {
+    console.log(`[ShopLoader] Session priceListId: ${priceListId || 'Consumer (not logged in)'}`);
+  }
+
+  const { products, categories, currencyCode, error } = await fetchShopData(priceListId);
 
   // Error State
   if (error && products.length === 0) {
@@ -124,8 +140,8 @@ async function ShopLoader() {
   );
 }
 
-// PERFORMANCE: Page is fully static (no auth() call = no cookies = cacheable at edge)
-// All users see Consumer prices in the catalog - their specific prices apply at cart/checkout
+// PERSONALIZED PRICING: Authenticated users see their assigned price list
+// Public visitors see Consumer prices - their specific prices show after login
 export default async function PublicShopPage() {
   return (
     <div className="space-y-6">
