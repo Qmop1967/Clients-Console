@@ -287,6 +287,12 @@ export async function getOrderStats(
   }
 }
 
+// Location configuration for order creation
+// Main TSH Business: Business location (branch) for the sale
+// Main WareHouse: Warehouse for stock fulfillment
+const MAIN_TSH_BUSINESS_LOCATION_ID = '2646610000001123033';
+const MAIN_WAREHOUSE_ID = '2646610000000077024';
+
 // Order creation result type - includes error details when failed
 export interface CreateOrderResult {
   success: boolean;
@@ -296,9 +302,7 @@ export interface CreateOrderResult {
 }
 
 // Create sales order (write operation - direct to Zoho Inventory API)
-// Note: We don't specify location_id on line items - Zoho will use each item's
-// configured warehouse. This avoids error 27520 "location must match item's
-// immediate warehouse location".
+// Sets both business location (Main TSH Business) and warehouse (Main WareHouse)
 export async function createSalesOrder(data: {
   customer_id: string;
   line_items: Array<{
@@ -310,9 +314,17 @@ export async function createSalesOrder(data: {
   reference_number?: string;
 }): Promise<CreateOrderResult> {
   try {
+    // Add warehouse_id to each line item for proper stock allocation
+    const lineItemsWithWarehouse = data.line_items.map(item => ({
+      ...item,
+      warehouse_id: MAIN_WAREHOUSE_ID,
+    }));
+
     const orderBody = {
       customer_id: data.customer_id,
-      line_items: data.line_items,
+      // Set business location at order level
+      location_id: MAIN_TSH_BUSINESS_LOCATION_ID,
+      line_items: lineItemsWithWarehouse,
       notes: data.notes,
       reference_number: data.reference_number,
     };
