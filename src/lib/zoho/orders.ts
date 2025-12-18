@@ -288,9 +288,8 @@ export async function getOrderStats(
 }
 
 // Location configuration for order creation
-// Main TSH Business: Business location (branch) for the sale
-// Main WareHouse: Warehouse for stock fulfillment
-const MAIN_TSH_BUSINESS_LOCATION_ID = '2646610000001123033';
+// Main WareHouse (2646610000000077024) is a child of Main TSH Business
+// Setting warehouse_id at order level tells Zoho to fulfill from this warehouse
 const MAIN_WAREHOUSE_ID = '2646610000000077024';
 
 // Order creation result type - includes error details when failed
@@ -302,7 +301,7 @@ export interface CreateOrderResult {
 }
 
 // Create sales order (write operation - direct to Zoho Inventory API)
-// Sets both business location (Main TSH Business) and warehouse (Main WareHouse)
+// Sets warehouse_id at order level for stock fulfillment from Main WareHouse
 export async function createSalesOrder(data: {
   customer_id: string;
   line_items: Array<{
@@ -314,17 +313,11 @@ export async function createSalesOrder(data: {
   reference_number?: string;
 }): Promise<CreateOrderResult> {
   try {
-    // Add warehouse_id to each line item for proper stock allocation
-    const lineItemsWithWarehouse = data.line_items.map(item => ({
-      ...item,
-      warehouse_id: MAIN_WAREHOUSE_ID,
-    }));
-
     const orderBody = {
       customer_id: data.customer_id,
-      // Set business location at order level
-      location_id: MAIN_TSH_BUSINESS_LOCATION_ID,
-      line_items: lineItemsWithWarehouse,
+      // Set warehouse at order level - Main WareHouse under Main TSH Business
+      warehouse_id: MAIN_WAREHOUSE_ID,
+      line_items: data.line_items,
       notes: data.notes,
       reference_number: data.reference_number,
     };
