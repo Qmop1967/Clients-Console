@@ -287,6 +287,9 @@ export async function getOrderStats(
   }
 }
 
+// Main WareHouse ID - all orders should fulfill from this warehouse
+const MAIN_WAREHOUSE_ID = '2646610000000077024';
+
 // Create sales order (write operation - direct to Zoho)
 export async function createSalesOrder(data: {
   customer_id: string;
@@ -299,18 +302,25 @@ export async function createSalesOrder(data: {
   reference_number?: string;
 }): Promise<ZohoSalesOrder | null> {
   try {
+    // Add warehouse_id to each line item to ensure stock is taken from Main WareHouse
+    const lineItemsWithWarehouse = data.line_items.map(item => ({
+      ...item,
+      warehouse_id: MAIN_WAREHOUSE_ID,
+    }));
+
     const response = await rateLimitedFetch(() =>
       zohoFetch<ZohoOrderResponse>('/salesorders', {
         method: 'POST',
         body: {
           customer_id: data.customer_id,
-          line_items: data.line_items,
+          line_items: lineItemsWithWarehouse,
           notes: data.notes,
           reference_number: data.reference_number,
         },
       })
     );
 
+    console.log(`[createSalesOrder] Created order with warehouse_id: ${MAIN_WAREHOUSE_ID} (Main WareHouse)`);
     return response.salesorder;
   } catch (error) {
     console.error('Error creating sales order:', error);
