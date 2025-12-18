@@ -71,22 +71,26 @@ export async function POST(request: NextRequest) {
     console.log(`[Checkout] Reference: ${referenceNumber}`);
     console.log(`[Checkout] Items: ${JSON.stringify(lineItems)}`);
 
-    // Step 1: Create the sales order in Zoho Books
-    const order = await createSalesOrder({
+    // Step 1: Create the sales order in Zoho Inventory
+    const result = await createSalesOrder({
       customer_id: session.user.zohoContactId,
       line_items: lineItems,
       notes: orderNotes,
       reference_number: referenceNumber,
     });
 
-    if (!order) {
-      console.error('[Checkout] Failed to create order - null response');
+    if (!result.success || !result.order) {
+      console.error('[Checkout] Failed to create order:', result.error);
       return NextResponse.json(
-        { error: 'Failed to create order. Please try again or contact support.' },
+        {
+          error: result.error || 'Failed to create order. Please try again or contact support.',
+          errorCode: result.errorCode,
+        },
         { status: 500 }
       );
     }
 
+    const order = result.order;
     console.log(`[Checkout] Order created successfully: ${order.salesorder_number}`);
 
     // Step 2: Confirm the sales order

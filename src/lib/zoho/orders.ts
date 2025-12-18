@@ -291,6 +291,14 @@ export async function getOrderStats(
 // Note: Zoho Inventory API uses 'location_id' not 'warehouse_id' for line items
 const MAIN_WAREHOUSE_LOCATION_ID = '2646610000000077024';
 
+// Order creation result type - includes error details when failed
+export interface CreateOrderResult {
+  success: boolean;
+  order?: ZohoSalesOrder;
+  error?: string;
+  errorCode?: string;
+}
+
 // Create sales order (write operation - direct to Zoho Inventory API)
 // Uses Inventory API because it supports warehouse_id in line items
 export async function createSalesOrder(data: {
@@ -302,7 +310,7 @@ export async function createSalesOrder(data: {
   }>;
   notes?: string;
   reference_number?: string;
-}): Promise<ZohoSalesOrder | null> {
+}): Promise<CreateOrderResult> {
   try {
     // Add location_id to each line item to ensure stock is taken from Main WareHouse
     // Note: Zoho Inventory API uses 'location_id' (not 'warehouse_id') for specifying warehouse
@@ -319,7 +327,7 @@ export async function createSalesOrder(data: {
     };
 
     console.log(`[createSalesOrder] Creating order for customer ${data.customer_id} with ${data.line_items.length} items`);
-    console.log(`[createSalesOrder] Using location_id: ${MAIN_WAREHOUSE_LOCATION_ID} (Main WareHouse)`);
+    console.log(`[createSalesOrder] Request body:`, JSON.stringify(orderBody, null, 2));
 
     const response = await rateLimitedFetch(() =>
       zohoFetch<ZohoOrderResponse>('/salesorders', {
@@ -330,10 +338,28 @@ export async function createSalesOrder(data: {
     );
 
     console.log(`[createSalesOrder] Success! Order: ${response.salesorder?.salesorder_number}`);
-    return response.salesorder;
+    return { success: true, order: response.salesorder };
   } catch (error) {
-    console.error('[createSalesOrder] Failed to create order:', error instanceof Error ? error.message : error);
-    return null;
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error('[createSalesOrder] Failed to create order:', errorMessage);
+
+    // Parse Zoho error code if available
+    let errorCode: string | undefined;
+    let userFriendlyError = errorMessage;
+
+    // Try to extract Zoho error details
+    try {
+      const zohoErrorMatch = errorMessage.match(/Zoho API error \(\d+\): (.+)/);
+      if (zohoErrorMatch) {
+        const zohoResponse = JSON.parse(zohoErrorMatch[1]);
+        errorCode = zohoResponse.code?.toString();
+        userFriendlyError = zohoResponse.message || errorMessage;
+      }
+    } catch {
+      // Keep original error message
+    }
+
+    return { success: false, error: userFriendlyError, errorCode };
   }
 }
 
