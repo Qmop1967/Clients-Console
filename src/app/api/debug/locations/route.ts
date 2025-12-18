@@ -4,27 +4,8 @@ import { zohoFetch, rateLimitedFetch } from '@/lib/zoho/client';
 // Debug endpoint to list Zoho locations and warehouses
 // Usage: GET /api/debug/locations?secret=tsh-debug-2024
 
-interface ZohoLocationsResponse {
-  locations: Array<{
-    location_id: string;
-    location_name: string;
-    is_primary_location: boolean;
-    address?: string;
-    city?: string;
-    state?: string;
-    country?: string;
-  }>;
-}
-
-interface ZohoWarehousesResponse {
-  warehouses: Array<{
-    warehouse_id: string;
-    warehouse_name: string;
-    is_primary: boolean;
-    status: string;
-    address?: string;
-  }>;
-}
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type AnyResponse = any;
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -34,38 +15,41 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  try {
-    // Fetch locations (business branches)
-    const locationsPromise = rateLimitedFetch(() =>
-      zohoFetch<ZohoLocationsResponse>('/settings/locations', {
-        api: 'inventory',
-      })
-    ).catch(e => ({ locations: [], error: e.message }));
+  const results: Record<string, AnyResponse> = {};
 
-    // Fetch warehouses
-    const warehousesPromise = rateLimitedFetch(() =>
-      zohoFetch<ZohoWarehousesResponse>('/settings/warehouses', {
-        api: 'inventory',
-      })
-    ).catch(e => ({ warehouses: [], error: e.message }));
+  // Try multiple endpoints to find location/warehouse info
+  const endpoints = [
+    { name: 'warehouses_inventory', path: '/warehouses', api: 'inventory' as const },
+    { name: 'warehouses_books', path: '/settings/warehouses', api: 'books' as const },
+    { name: 'organization_inventory', path: '/organizations', api: 'inventory' as const },
+    { name: 'organization_books', path: '/organization', api: 'books' as const },
+  ];
 
-    const [locations, warehouses] = await Promise.all([
-      locationsPromise,
-      warehousesPromise,
-    ]);
-
-    return NextResponse.json({
-      locations,
-      warehouses,
-      usage: {
-        location_id: 'Business location (branch) - set at order level',
-        warehouse_id: 'Warehouse for stock fulfillment - set at order level',
-      }
-    });
-
-  } catch (error) {
-    return NextResponse.json({
-      error: error instanceof Error ? error.message : 'Unknown error',
-    }, { status: 500 });
+  for (const ep of endpoints) {
+    try {
+      const data = await rateLimitedFetch(() =>
+        zohoFetch<AnyResponse>(ep.path, { api: ep.api })
+      );
+      results[ep.name] = data;
+    } catch (e) {
+      results[ep.name] = { error: e instanceof Error ? e.message : String(e) };
+    }
   }
+
+  // Also get a sample item to see its warehouse/location structure
+  try {
+    const itemData = await rateLimitedFetch(() =>
+      zohoFetch<AnyResponse>('/items/2646610000002505427', { api: 'inventory' })
+    );
+    results['sample_item'] = {
+      item_id: itemData.item?.item_id,
+      name: itemData.item?.name,
+      warehouses: itemData.item?.warehouses,
+      locations: itemData.item?.locations,
+    };
+  } catch (e) {
+    results['sample_item'] = { error: e instanceof Error ? e.message : String(e) };
+  }
+
+  return NextResponse.json(results);
 }
