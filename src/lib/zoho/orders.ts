@@ -290,7 +290,8 @@ export async function getOrderStats(
 // Main WareHouse ID - all orders should fulfill from this warehouse
 const MAIN_WAREHOUSE_ID = '2646610000000077024';
 
-// Create sales order (write operation - direct to Zoho)
+// Create sales order (write operation - direct to Zoho Inventory API)
+// Uses Inventory API because it supports warehouse_id in line items
 export async function createSalesOrder(data: {
   customer_id: string;
   line_items: Array<{
@@ -311,6 +312,7 @@ export async function createSalesOrder(data: {
     const response = await rateLimitedFetch(() =>
       zohoFetch<ZohoOrderResponse>('/salesorders', {
         method: 'POST',
+        api: 'inventory', // Use Inventory API for warehouse_id support
         body: {
           customer_id: data.customer_id,
           line_items: lineItemsWithWarehouse,
@@ -328,12 +330,13 @@ export async function createSalesOrder(data: {
   }
 }
 
-// Confirm a sales order
+// Confirm a sales order (uses Inventory API to match order creation)
 export async function confirmSalesOrder(salesorderId: string): Promise<boolean> {
   try {
     await rateLimitedFetch(() =>
       zohoFetch<{ message: string }>(`/salesorders/${salesorderId}/status/confirmed`, {
         method: 'POST',
+        api: 'inventory', // Match the API used for order creation
       })
     );
     console.log(`[confirmSalesOrder] Order ${salesorderId} confirmed successfully`);
