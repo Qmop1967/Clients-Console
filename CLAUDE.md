@@ -428,6 +428,68 @@ Deprecated Functions (DO NOT USE):
   - getCachedStockBulk() → Use getUnifiedStockBulk() instead
 ```
 
+#### Order Creation & Warehouse Fulfillment (CRITICAL)
+```yaml
+PROBLEM: Orders were taking stock from business location instead of warehouse.
+  - Main TSH Business showed -1,500 stock (wrong!)
+  - Main WareHouse showed 1,500 stock unchanged (should have been deducted)
+
+ROOT CAUSE:
+  The Zoho Inventory API uses `location_id` on LINE ITEMS to specify
+  which warehouse to fulfill stock from. NOT `warehouse_id` at order level.
+  - `warehouse_id` is NOT a valid parameter for sales orders
+  - `location_id` must be set on EACH LINE ITEM
+
+ZOHO LOCATION STRUCTURE:
+  Main TSH Business (Business Location)
+    └── Main WareHouse (Warehouse - child location)
+
+Location IDs:
+  | Location | Type | ID | Purpose |
+  |----------|------|-----|---------|
+  | Main TSH Business | Business Location | 2646610000001123033 | Tax/reporting (order level) |
+  | Main WareHouse | Warehouse | 2646610000000077024 | Stock fulfillment (line item level) |
+
+CORRECT API REQUEST STRUCTURE:
+  {
+    "customer_id": "...",
+    "location_id": "2646610000001123033",    // Business location (order level)
+    "line_items": [
+      {
+        "item_id": "...",
+        "quantity": 1,
+        "rate": 2250,
+        "location_id": "2646610000000077024"  // Warehouse (line item level) ← CRITICAL!
+      }
+    ]
+  }
+
+NEVER DO:
+  - Use `warehouse_id` at order level (invalid parameter, causes error)
+  - Omit `location_id` from line items (defaults to business location)
+  - Use `location_id` only at order level (stock taken from business location)
+
+ALWAYS DO:
+  - Set `location_id` at ORDER level → Main TSH Business (for tax/reporting)
+  - Set `location_id` on EACH LINE ITEM → Main WareHouse (for stock fulfillment)
+
+Code Location: src/lib/zoho/orders.ts
+Key Function: createSalesOrder()
+Constants:
+  - MAIN_TSH_BUSINESS_ID = '2646610000001123033'
+  - MAIN_WAREHOUSE_ID = '2646610000000077024'
+
+VERIFICATION:
+  After order creation, check in Zoho:
+  1. Order shows "Location: Main TSH Business" at top
+  2. Line item shows "LOCATION: Main WareHouse" in items table
+  3. Stock deducted from Main WareHouse in Stock Locations panel
+
+API Documentation:
+  - https://www.zoho.com/inventory/api/v1/salesorders/
+  - Line items support `location_id` field for warehouse-specific fulfillment
+```
+
 #### Pricing Rules (CRITICAL)
 ```yaml
 IMPORTANT: NEVER display the base "rate" field from items API.
@@ -1001,19 +1063,20 @@ curl "https://www.tsh.sale/api/revalidate?tag=all&secret=tsh-revalidate-2024"
 
 ### Quick Reference: Critical IDs
 
-| Entity | ID |
-|--------|-----|
-| Organization | `748369814` |
-| WholeSale Warehouse | `2646610000000077024` |
-| Consumer Price List | `2646610000049149103` |
-| Retailor USD | `2646610000004453985` |
-| Retailor IQD | `2646610000113426769` |
-| Technical IQD | `2646610000057419683` |
-| Technical USD | `2646610000045742089` |
-| Wholesale A USD | `2646610000004152175` |
-| Wholesale A IQD | `2646610000113417534` |
-| Wholesale B USD | `2646610000004453961` |
-| Wholesale B IQD | `2646610000113426003` |
+| Entity | ID | Notes |
+|--------|-----|-------|
+| Organization | `748369814` | Zoho org ID |
+| **Main TSH Business** | `2646610000001123033` | Business location (order level) |
+| **Main WareHouse** | `2646610000000077024` | Warehouse (line item level for stock) |
+| Consumer Price List | `2646610000049149103` | Public visitors |
+| Retailor USD | `2646610000004453985` | |
+| Retailor IQD | `2646610000113426769` | |
+| Technical IQD | `2646610000057419683` | |
+| Technical USD | `2646610000045742089` | |
+| Wholesale A USD | `2646610000004152175` | Cash wholesale |
+| Wholesale A IQD | `2646610000113417534` | |
+| Wholesale B USD | `2646610000004453961` | Credit wholesale |
+| Wholesale B IQD | `2646610000113426003` | |
 
 ---
 
@@ -1026,10 +1089,21 @@ curl "https://www.tsh.sale/api/revalidate?tag=all&secret=tsh-revalidate-2024"
 
 ---
 
-**Last Updated:** 2025-12-05
-**Version:** 1.8.0
+**Last Updated:** 2025-12-19
+**Version:** 1.9.0
 
-## Recent Changes (v1.8.0)
+## Recent Changes (v1.9.0)
+- **CRITICAL FIX: Order Warehouse Fulfillment**: Fixed stock being deducted from wrong location
+  - Problem: Orders took stock from Main TSH Business instead of Main WareHouse
+  - Solution: Set `location_id` on LINE ITEMS (not `warehouse_id` at order level)
+  - `warehouse_id` is NOT a valid parameter for Zoho Inventory sales orders
+  - `location_id` must be on each line item to specify warehouse for stock fulfillment
+  - Added MAIN_TSH_BUSINESS_ID and MAIN_WAREHOUSE_ID constants to orders.ts
+  - Documentation: See "Order Creation & Warehouse Fulfillment" section above
+- **Improved Error Handling**: Checkout API now surfaces actual Zoho error messages
+- **Debug Endpoints Added**: `/api/debug/order-test` and `/api/debug/locations` for troubleshooting
+
+## Previous Changes (v1.8.0)
 - **Two-Branch Deployment Workflow**: New deployment strategy
   - `preview` branch → Auto-deploy to staging.tsh.sale via GitHub Actions
   - `main` branch → Production-ready code (NO auto-deploy, manual only)
