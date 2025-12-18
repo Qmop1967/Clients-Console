@@ -287,10 +287,6 @@ export async function getOrderStats(
   }
 }
 
-// Main WareHouse location_id - all orders should fulfill from this warehouse
-// Note: Zoho Inventory API uses 'location_id' not 'warehouse_id' for line items
-const MAIN_WAREHOUSE_LOCATION_ID = '2646610000000077024';
-
 // Order creation result type - includes error details when failed
 export interface CreateOrderResult {
   success: boolean;
@@ -300,7 +296,9 @@ export interface CreateOrderResult {
 }
 
 // Create sales order (write operation - direct to Zoho Inventory API)
-// Uses Inventory API because it supports warehouse_id in line items
+// Note: We don't specify location_id on line items - Zoho will use each item's
+// configured warehouse. This avoids error 27520 "location must match item's
+// immediate warehouse location".
 export async function createSalesOrder(data: {
   customer_id: string;
   line_items: Array<{
@@ -312,16 +310,9 @@ export async function createSalesOrder(data: {
   reference_number?: string;
 }): Promise<CreateOrderResult> {
   try {
-    // Add location_id to each line item to ensure stock is taken from Main WareHouse
-    // Note: Zoho Inventory API uses 'location_id' (not 'warehouse_id') for specifying warehouse
-    const lineItemsWithLocation = data.line_items.map(item => ({
-      ...item,
-      location_id: MAIN_WAREHOUSE_LOCATION_ID,
-    }));
-
     const orderBody = {
       customer_id: data.customer_id,
-      line_items: lineItemsWithLocation,
+      line_items: data.line_items,
       notes: data.notes,
       reference_number: data.reference_number,
     };

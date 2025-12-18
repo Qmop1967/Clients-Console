@@ -4,8 +4,6 @@ import { zohoFetch, rateLimitedFetch } from '@/lib/zoho/client';
 // Debug endpoint to test Zoho order creation
 // Usage: GET /api/debug/order-test?customer_id=XXX&item_id=YYY&rate=ZZZ&secret=tsh-debug-2024
 
-const MAIN_WAREHOUSE_LOCATION_ID = '2646610000000077024';
-
 interface ZohoOrderResponse {
   salesorder: {
     salesorder_id: string;
@@ -42,13 +40,14 @@ export async function GET(request: NextRequest) {
     }, { status: 400 });
   }
 
+  // Note: We don't specify location_id - Zoho will use each item's configured warehouse
+  // This avoids error 27520 "location must match item's immediate warehouse location"
   const orderBody = {
     customer_id: customerId,
     line_items: [{
       item_id: itemId,
       quantity: 1,
       rate: parseFloat(rate),
-      location_id: MAIN_WAREHOUSE_LOCATION_ID,
     }],
     notes: 'DEBUG TEST ORDER - Please delete',
     reference_number: `DEBUG-${Date.now()}`,
@@ -60,10 +59,7 @@ export async function GET(request: NextRequest) {
       message: 'This is what would be sent to Zoho (add dry_run=false to actually create)',
       endpoint: 'POST /salesorders (Inventory API)',
       body: orderBody,
-      warehouse_info: {
-        location_id: MAIN_WAREHOUSE_LOCATION_ID,
-        name: 'Main WareHouse',
-      }
+      note: 'location_id removed - Zoho uses item default warehouse',
     });
   }
 
