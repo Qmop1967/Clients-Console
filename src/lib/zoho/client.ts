@@ -342,8 +342,9 @@ export async function zohoFetch<T>(
 
   if (!response.ok) {
     const errorText = await response.text();
-    console.error(`Zoho API error (${endpoint}):`, errorText);
-    throw new Error(`Zoho API error: ${response.status}`);
+    console.error(`[Zoho API Error] Endpoint: ${endpoint}, Status: ${response.status}, Response: ${errorText}`);
+    // Include the actual error message in the thrown error
+    throw new Error(`Zoho API error (${response.status}): ${errorText}`);
   }
 
   const data = await response.json();

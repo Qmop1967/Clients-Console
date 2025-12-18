@@ -309,23 +309,28 @@ export async function createSalesOrder(data: {
       warehouse_id: MAIN_WAREHOUSE_ID,
     }));
 
+    const orderBody = {
+      customer_id: data.customer_id,
+      line_items: lineItemsWithWarehouse,
+      notes: data.notes,
+      reference_number: data.reference_number,
+    };
+
+    console.log(`[createSalesOrder] Creating order for customer ${data.customer_id} with ${data.line_items.length} items`);
+    console.log(`[createSalesOrder] Request body:`, JSON.stringify(orderBody));
+
     const response = await rateLimitedFetch(() =>
       zohoFetch<ZohoOrderResponse>('/salesorders', {
         method: 'POST',
         api: 'inventory', // Use Inventory API for warehouse_id support
-        body: {
-          customer_id: data.customer_id,
-          line_items: lineItemsWithWarehouse,
-          notes: data.notes,
-          reference_number: data.reference_number,
-        },
+        body: orderBody,
       })
     );
 
-    console.log(`[createSalesOrder] Created order with warehouse_id: ${MAIN_WAREHOUSE_ID} (Main WareHouse)`);
+    console.log(`[createSalesOrder] Success! Order: ${response.salesorder?.salesorder_number}, warehouse_id: ${MAIN_WAREHOUSE_ID}`);
     return response.salesorder;
   } catch (error) {
-    console.error('Error creating sales order:', error);
+    console.error('[createSalesOrder] Failed to create order:', error instanceof Error ? error.message : error);
     return null;
   }
 }
