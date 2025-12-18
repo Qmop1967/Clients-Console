@@ -287,8 +287,9 @@ export async function getOrderStats(
   }
 }
 
-// Main WareHouse ID - all orders should fulfill from this warehouse
-const MAIN_WAREHOUSE_ID = '2646610000000077024';
+// Main WareHouse location_id - all orders should fulfill from this warehouse
+// Note: Zoho Inventory API uses 'location_id' not 'warehouse_id' for line items
+const MAIN_WAREHOUSE_LOCATION_ID = '2646610000000077024';
 
 // Create sales order (write operation - direct to Zoho Inventory API)
 // Uses Inventory API because it supports warehouse_id in line items
@@ -303,31 +304,32 @@ export async function createSalesOrder(data: {
   reference_number?: string;
 }): Promise<ZohoSalesOrder | null> {
   try {
-    // Add warehouse_id to each line item to ensure stock is taken from Main WareHouse
-    const lineItemsWithWarehouse = data.line_items.map(item => ({
+    // Add location_id to each line item to ensure stock is taken from Main WareHouse
+    // Note: Zoho Inventory API uses 'location_id' (not 'warehouse_id') for specifying warehouse
+    const lineItemsWithLocation = data.line_items.map(item => ({
       ...item,
-      warehouse_id: MAIN_WAREHOUSE_ID,
+      location_id: MAIN_WAREHOUSE_LOCATION_ID,
     }));
 
     const orderBody = {
       customer_id: data.customer_id,
-      line_items: lineItemsWithWarehouse,
+      line_items: lineItemsWithLocation,
       notes: data.notes,
       reference_number: data.reference_number,
     };
 
     console.log(`[createSalesOrder] Creating order for customer ${data.customer_id} with ${data.line_items.length} items`);
-    console.log(`[createSalesOrder] Request body:`, JSON.stringify(orderBody));
+    console.log(`[createSalesOrder] Using location_id: ${MAIN_WAREHOUSE_LOCATION_ID} (Main WareHouse)`);
 
     const response = await rateLimitedFetch(() =>
       zohoFetch<ZohoOrderResponse>('/salesorders', {
         method: 'POST',
-        api: 'inventory', // Use Inventory API for warehouse_id support
+        api: 'inventory',
         body: orderBody,
       })
     );
 
-    console.log(`[createSalesOrder] Success! Order: ${response.salesorder?.salesorder_number}, warehouse_id: ${MAIN_WAREHOUSE_ID}`);
+    console.log(`[createSalesOrder] Success! Order: ${response.salesorder?.salesorder_number}`);
     return response.salesorder;
   } catch (error) {
     console.error('[createSalesOrder] Failed to create order:', error instanceof Error ? error.message : error);
