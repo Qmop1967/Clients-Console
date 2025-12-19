@@ -59,7 +59,7 @@ export async function POST(request: NextRequest) {
             message_ar: 'رمز التحقق غير صحيح أو منتهي الصلاحية. يرجى المحاولة مرة أخرى.',
           },
         },
-        { status: 401 }
+        { status: 400 }  // Use 400, not 401, so Swift client reads the error message
       );
     }
 
