@@ -187,12 +187,19 @@ export async function verifyOTPCode(
   email: string,
   code: string
 ): Promise<boolean> {
-  const storedCode = await redis.get<string>(`mobile:otp:${email.toLowerCase()}`);
+  const normalizedEmail = email.toLowerCase();
+  const storedCode = await redis.get<string>(`mobile:otp:${normalizedEmail}`);
+
+  console.log(`[OTP Verify] Email: ${normalizedEmail}, Input: ${code}, Stored: ${storedCode || 'none'}`);
+
   if (storedCode && storedCode === code) {
     // Delete code after successful verification (one-time use)
-    await redis.del(`mobile:otp:${email.toLowerCase()}`);
+    await redis.del(`mobile:otp:${normalizedEmail}`);
+    console.log(`[OTP Verify] SUCCESS - Code matched and deleted`);
     return true;
   }
+
+  console.log(`[OTP Verify] FAILED - Code mismatch or not found`);
   return false;
 }
 
