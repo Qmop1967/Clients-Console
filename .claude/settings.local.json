@@ -69,7 +69,16 @@
       "Bash(brew list:*)",
       "Bash(xcodegen generate:*)",
       "Bash(xcrun simctl:*)",
-      "Bash(open:*)"
+      "Bash(open:*)",
+      "Bash(APP_PATH=\"/Users/khaleelal-mulla/Library/Developer/Xcode/DerivedData/Tclients-bkbqfmckelnvtkahfvmpnaoroafc/Build/Products/Debug-iphonesimulator/Tclients.app\":*)",
+      "Bash(__NEW_LINE__ xcrun simctl terminate \"80008D57-995C-4C35-A107-21275C36410B\" com.tsh.tclients)",
+      "Bash(__NEW_LINE__ sleep 3)",
+      "Bash(sips:*)",
+      "Bash(osascript:*)",
+      "Bash(__NEW_LINE__ sleep 1)",
+      "Bash(xcrun xctrace:*)",
+      "Bash(xcrun devicectl:*)",
+      "Bash(security find-identity:*)"
     ],
     "deny": [],
     "ask": []

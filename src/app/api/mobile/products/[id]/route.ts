@@ -31,6 +31,11 @@ export async function GET(
       );
     }
 
+    // Get base URL for absolute image URLs
+    const protocol = request.headers.get('x-forwarded-proto') || 'https';
+    const host = request.headers.get('host') || 'staging.tsh.sale';
+    const baseUrl = `${protocol}://${host}`;
+
     // Get auth context (optional)
     const auth = await getMobileAuth(request);
 
@@ -83,7 +88,8 @@ export async function GET(
       unit: item.unit || null,
       category_id: item.category_id || null,
       category_name: item.category_name || null,
-      image_url: getProductImageUrl(item),
+      // Use absolute URL for mobile images (consistent with products list API)
+      image_url: `${baseUrl}/api/zoho/images/${item.item_id}`,
       stock: stock,
       in_stock: stock > 0,
       price: price,
