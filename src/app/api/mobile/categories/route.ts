@@ -53,7 +53,11 @@ export async function GET(_request: NextRequest) {
     return mobileSuccess({
       categories: activeCategories,
     }, {
-      total: activeCategories.length,
+      page: 1,
+      per_page: activeCategories.length,
+      total_items: activeCategories.length,
+      total_pages: 1,
+      has_more: false,
     });
 
   } catch (error) {
