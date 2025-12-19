@@ -188,9 +188,12 @@ export async function verifyOTPCode(
   code: string
 ): Promise<boolean> {
   const normalizedEmail = email.toLowerCase();
-  const storedCode = await redis.get<string>(`mobile:otp:${normalizedEmail}`);
+  const storedCodeRaw = await redis.get(`mobile:otp:${normalizedEmail}`);
 
-  console.log(`[OTP Verify] Email: ${normalizedEmail}, Input: ${code}, Stored: ${storedCode || 'none'}`);
+  // Redis may return the code as a number, so convert to string for comparison
+  const storedCode = storedCodeRaw !== null ? String(storedCodeRaw) : null;
+
+  console.log(`[OTP Verify] Email: ${normalizedEmail}, Input: "${code}", Stored: "${storedCode || 'none'}"`);
 
   if (storedCode && storedCode === code) {
     // Delete code after successful verification (one-time use)

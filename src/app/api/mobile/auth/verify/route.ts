@@ -107,19 +107,21 @@ export async function POST(request: NextRequest) {
 
     console.log(`[Mobile Verify] User authenticated: ${email}`);
 
+    // Return snake_case keys to match Swift Codable expectations
     return NextResponse.json({
       success: true,
       data: {
-        accessToken: tokens.accessToken,
-        refreshToken: tokens.refreshToken,
-        expiresIn: tokens.expiresIn,
+        access_token: tokens.accessToken,
+        refresh_token: tokens.refreshToken,
+        expires_at: Math.floor(Date.now() / 1000) + tokens.expiresIn,
         user: {
           id: mobileUser.id,
           email: mobileUser.email,
           name: mobileUser.name,
-          zohoContactId: mobileUser.zohoContactId,
-          priceListId: mobileUser.priceListId,
-          currencyCode: mobileUser.currencyCode,
+          company_name: null,  // Not available from Zoho contact
+          zoho_contact_id: mobileUser.zohoContactId,
+          price_list_id: mobileUser.priceListId,
+          currency_code: mobileUser.currencyCode,
         },
       },
     });
