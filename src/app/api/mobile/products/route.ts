@@ -11,7 +11,6 @@ import { NextRequest } from 'next/server';
 import { getMobileAuth, mobileSuccess, mobileError } from '@/lib/auth/mobile-middleware';
 import { getProductsWithPrices } from '@/lib/zoho/products';
 import { PRICE_LIST_IDS, PRICE_LIST_INFO } from '@/lib/zoho/price-lists';
-import type { ZohoItem } from '@/types';
 
 // Product with price type from getProductsWithPrices
 interface ProductWithPrice {

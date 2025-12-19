@@ -1,5 +1,4 @@
 import {
-  Network,
   Shield,
   Monitor,
   Smartphone,
@@ -11,19 +10,12 @@ import {
   Server,
   Cable,
   Package,
-  Cpu,
   Router,
-  Lock,
   Headphones,
   Keyboard,
   Mouse,
   Laptop,
-  Tablet,
-  Watch,
   Battery,
-  Usb,
-  Droplets,
-  Cctv,
   type LucideIcon,
 } from "lucide-react";
 

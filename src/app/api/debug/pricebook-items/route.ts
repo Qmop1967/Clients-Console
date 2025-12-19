@@ -14,7 +14,6 @@ export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
   const secret = searchParams.get('secret');
   const pricebookId = searchParams.get('pricebookId') || PRICE_LIST_IDS.WHOLESALE_A_IQD;
-  const sampleItemId = searchParams.get('itemId') || '2646610000004140367'; // Sample item
 
   // Verify secret
   if (secret !== DEBUG_SECRET) {
@@ -39,21 +38,6 @@ export async function GET(request: NextRequest) {
       { headers: { Authorization: `Zoho-oauthtoken ${token}` } }
     );
     const pricebookData = pricebookResponse.ok ? await pricebookResponse.json() : { error: `Failed: ${pricebookResponse.status}` };
-
-    // Method 2: Get pricebook rates for sample item using ACTUAL item IDs
-    const actualSampleId = actualItemIds[0] || sampleItemId;
-    const ratesResponse = await fetch(
-      `https://www.zohoapis.com/books/v3/items/pricebookrate?organization_id=${orgId}&pricebook_id=${pricebookId}&item_ids=${actualSampleId}&sales_or_purchase_type=sales`,
-      { headers: { Authorization: `Zoho-oauthtoken ${token}` } }
-    );
-    const ratesData = ratesResponse.ok ? await ratesResponse.json() : { error: `Failed: ${ratesResponse.status}` };
-
-    // Method 3: Get item-specific price from pricebook
-    const itemPriceResponse = await fetch(
-      `https://www.zohoapis.com/books/v3/items/${actualSampleId}?organization_id=${orgId}`,
-      { headers: { Authorization: `Zoho-oauthtoken ${token}` } }
-    );
-    const itemData = itemPriceResponse.ok ? await itemPriceResponse.json() : { error: `Failed: ${itemPriceResponse.status}` };
 
     // Get rates for ACTUAL item IDs (not hardcoded)
     const sampleItemIds = actualItemIds.length > 0 ? actualItemIds : ['2646610000004140367'];

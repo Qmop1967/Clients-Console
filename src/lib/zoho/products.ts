@@ -609,7 +609,7 @@ export const getAllProductsMetadata = unstable_cache(
 export async function getProductsMetadataSafe(): Promise<ZohoItem[]> {
   try {
     return await getAllProductsMetadata();
-  } catch (error) {
+  } catch {
     console.warn('[getProductsMetadataSafe] Cache miss or error, fetching directly from API...');
     const products = await fetchAllProductsFromBooks();
     return products;

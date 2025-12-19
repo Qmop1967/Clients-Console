@@ -180,7 +180,6 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const authHeader = request.headers.get('authorization');
   const cronSecret = process.env.CRON_SECRET;
-  const contentType = request.headers.get('content-type');
 
   // Check if this is a Vercel Cron request
   const isCronRequest = authHeader?.startsWith('Bearer ') && cronSecret;
@@ -239,7 +238,7 @@ export async function POST(request: NextRequest) {
                   imagesSynced++;
                   console.log(`[ImageSync] Synced image for ${product.item_id} (${product.sku})`);
                 }
-              } catch (error) {
+              } catch {
                 errors.push(`Sync failed for ${product.item_id}`);
               }
             }
@@ -252,7 +251,7 @@ export async function POST(request: NextRequest) {
               await deleteImageFromBlob(product.item_id);
               await clearImageCache(product.item_id);
               imagesDeleted++;
-            } catch (error) {
+            } catch {
               errors.push(`Delete failed for ${product.item_id}`);
             }
           }

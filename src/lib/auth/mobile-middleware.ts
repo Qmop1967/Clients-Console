@@ -3,7 +3,7 @@
 // ============================================
 
 import { NextRequest, NextResponse } from 'next/server';
-import { extractBearerToken, verifyToken, MobileJWTPayload } from './mobile-jwt';
+import { extractBearerToken, verifyToken } from './mobile-jwt';
 
 export interface MobileAuthContext {
   isAuthenticated: boolean;

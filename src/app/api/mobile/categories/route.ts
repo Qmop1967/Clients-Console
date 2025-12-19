@@ -3,7 +3,6 @@
 // GET /api/mobile/categories
 // ============================================
 
-import { NextRequest } from 'next/server';
 import { mobileSuccess, mobileError } from '@/lib/auth/mobile-middleware';
 import { zohoFetch, rateLimitedFetch } from '@/lib/zoho/client';
 import { unstable_cache } from 'next/cache';
@@ -36,7 +35,7 @@ const getCategoriesCached = unstable_cache(
   }
 );
 
-export async function GET(_request: NextRequest) {
+export async function GET() {
   try {
     const categories = await getCategoriesCached();
 

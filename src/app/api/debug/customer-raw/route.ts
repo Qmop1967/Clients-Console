@@ -6,13 +6,9 @@
 // ============================================
 
 import { NextRequest, NextResponse } from 'next/server';
-import { zohoFetch, getAccessToken } from '@/lib/zoho/client';
+import { getAccessToken } from '@/lib/zoho/client';
 
 const DEBUG_SECRET = process.env.DEBUG_SECRET || 'tsh-debug-2024';
-
-interface ZohoContactResponse {
-  contact: Record<string, unknown>;
-}
 
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;

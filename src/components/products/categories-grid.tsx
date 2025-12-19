@@ -115,9 +115,6 @@ export function CategoriesGrid({
     (a, b) => (productCounts[b.category_id] || 0) - (productCounts[a.category_id] || 0)
   );
 
-  // Calculate total products across all categories
-  const totalProducts = Object.values(productCounts).reduce((sum, count) => sum + count, 0);
-
   if (sortedCategories.length === 0) {
     return (
       <div className="py-16 text-center">
