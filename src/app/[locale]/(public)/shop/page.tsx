@@ -2,7 +2,8 @@ import { Suspense } from "react";
 import { getTranslations } from "next-intl/server";
 import { ShopContainer } from "@/components/products/shop-container";
 import { ProductsSkeleton } from "@/components/products/products-skeleton";
-import { getProductsWithPrices, getProductImageUrl, getCategories } from "@/lib/zoho/products";
+import { LCPImagePreload } from "@/components/products/lcp-image-preload";
+import { getProductsWithPrices, getProductImageUrl, getCategories, getDirectImageUrls } from "@/lib/zoho/products";
 import { auth } from "@/lib/auth/auth";
 import { PRICE_LIST_IDS } from "@/lib/zoho/price-lists";
 
@@ -10,6 +11,9 @@ import { PRICE_LIST_IDS } from "@/lib/zoho/price-lists";
 // Public visitors still get Consumer prices
 // This ensures customers see their negotiated wholesale/retail prices, not consumer prices
 export const dynamic = "force-dynamic"; // Required for auth() to work
+
+// Number of priority products to fetch direct Blob URLs for (improves LCP)
+const PRIORITY_PRODUCTS_COUNT = 8;
 
 export async function generateMetadata() {
   const t = await getTranslations("products");
@@ -25,6 +29,7 @@ export async function generateMetadata() {
  * - Public visitors see Consumer prices
  * - Stock is fresh from Redis on every call
  * - Fetches categories in parallel
+ * - LCP OPTIMIZATION: Fetches direct Blob URLs for priority products
  *
  * @param priceListId - Customer's price list ID (from session) or undefined for Consumer
  */
@@ -67,10 +72,33 @@ async function fetchShopData(priceListId?: string) {
     // Filter to only active categories
     const activeCategories = categories.filter(c => c.is_active);
 
+    // LCP OPTIMIZATION: Get direct Blob CDN URLs for priority products
+    // This eliminates the redirect chain (API → 302 → Blob) for above-the-fold images
+    const priorityProductIds = inStockProducts
+      .slice(0, PRIORITY_PRODUCTS_COUNT)
+      .map(p => p.item_id);
+
+    const directImageUrls = await getDirectImageUrls(priorityProductIds);
+
+    // Replace proxy URLs with direct Blob URLs for priority products
+    const optimizedProducts = inStockProducts.map((product, index) => {
+      if (index < PRIORITY_PRODUCTS_COUNT) {
+        const directUrl = directImageUrls.get(product.item_id);
+        if (directUrl) {
+          return { ...product, image_url: directUrl };
+        }
+      }
+      return product;
+    });
+
+    // Get LCP image URL (first product's image) for preloading
+    const lcpImageUrl = optimizedProducts[0]?.image_url || null;
+
     return {
-      products: inStockProducts,
+      products: optimizedProducts,
       categories: activeCategories,
       currencyCode: currency,
+      lcpImageUrl,
       error: null,
     };
   } catch (error) {
@@ -82,6 +110,7 @@ async function fetchShopData(priceListId?: string) {
       products: [],
       categories: [],
       currencyCode: "IQD",
+      lcpImageUrl: null,
       error: isRateLimit ? "rate_limit" : "general",
     };
   }
@@ -99,7 +128,7 @@ async function ShopLoader() {
     console.log(`[ShopLoader] Session priceListId: ${priceListId || 'Consumer (not logged in)'}`);
   }
 
-  const { products, categories, currencyCode, error } = await fetchShopData(priceListId);
+  const { products, categories, currencyCode, lcpImageUrl, error } = await fetchShopData(priceListId);
 
   // Error State
   if (error && products.length === 0) {
@@ -132,11 +161,15 @@ async function ShopLoader() {
   }
 
   return (
-    <ShopContainer
-      products={products}
-      categories={categories}
-      currencyCode={currencyCode}
-    />
+    <>
+      {/* LCP OPTIMIZATION: Preload the first product image for faster LCP */}
+      <LCPImagePreload imageUrl={lcpImageUrl} />
+      <ShopContainer
+        products={products}
+        categories={categories}
+        currencyCode={currencyCode}
+      />
+    </>
   );
 }
 

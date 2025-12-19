@@ -10,6 +10,7 @@
 import { unstable_cache } from 'next/cache';
 import { zohoFetch, CACHE_TAGS, rateLimitedFetch } from './client';
 import { getUnifiedStockBulk, getStockCacheStatus } from './stock-cache';
+import { getCachedImageUrls } from '@/lib/blob/image-cache';
 import type { ZohoItem, ZohoCategory, PaginatedResponse } from '@/types';
 
 // ============================================
@@ -515,6 +516,29 @@ export function getProductImageUrl(item: ZohoItem): string | null {
     return `/api/zoho/images/${item.item_id}?v=${version}`;
   }
   return null;
+}
+
+/**
+ * LCP OPTIMIZATION: Get direct Blob CDN URLs for priority products
+ *
+ * Instead of going through the proxy API (/api/zoho/images/[id] → 302 → Blob CDN),
+ * this function returns direct Blob CDN URLs for the specified product IDs.
+ * This eliminates the redirect chain and improves LCP by ~200-400ms.
+ *
+ * @param itemIds - Array of product IDs to get direct URLs for
+ * @returns Map of itemId → direct Blob CDN URL (only for items that have cached images)
+ */
+export async function getDirectImageUrls(itemIds: string[]): Promise<Map<string, string>> {
+  if (itemIds.length === 0) return new Map();
+
+  try {
+    // Get direct Blob CDN URLs from Redis cache
+    const directUrls = await getCachedImageUrls(itemIds);
+    return directUrls;
+  } catch (error) {
+    console.warn('[getDirectImageUrls] Failed to get direct URLs:', error);
+    return new Map();
+  }
 }
 
 // ============================================
