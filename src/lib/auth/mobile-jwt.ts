@@ -193,16 +193,12 @@ export async function verifyOTPCode(
   // Redis may return the code as a number, so convert to string for comparison
   const storedCode = storedCodeRaw !== null ? String(storedCodeRaw) : null;
 
-  console.log(`[OTP Verify] Email: ${normalizedEmail}, Input: "${code}", Stored: "${storedCode || 'none'}"`);
-
   if (storedCode && storedCode === code) {
     // Delete code after successful verification (one-time use)
     await redis.del(`mobile:otp:${normalizedEmail}`);
-    console.log(`[OTP Verify] SUCCESS - Code matched and deleted`);
     return true;
   }
 
-  console.log(`[OTP Verify] FAILED - Code mismatch or not found`);
   return false;
 }
 
