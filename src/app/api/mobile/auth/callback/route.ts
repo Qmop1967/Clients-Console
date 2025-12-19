@@ -5,7 +5,6 @@
 // ============================================
 
 import { NextRequest, NextResponse } from 'next/server';
-import { verifyMobileVerificationToken } from '@/lib/auth/mobile-jwt';
 
 export async function GET(request: NextRequest) {
   const token = request.nextUrl.searchParams.get('token');

@@ -7,9 +7,9 @@
 // - Authenticated: Customer's assigned price list
 // ============================================
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { getMobileAuth, mobileSuccess, mobileError } from '@/lib/auth/mobile-middleware';
-import { getProductsWithPrices, getProductImageUrl } from '@/lib/zoho/products';
+import { getProductsWithPrices } from '@/lib/zoho/products';
 import { PRICE_LIST_IDS, PRICE_LIST_INFO } from '@/lib/zoho/price-lists';
 import type { ZohoItem } from '@/types';
 

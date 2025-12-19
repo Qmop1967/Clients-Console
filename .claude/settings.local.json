@@ -78,7 +78,15 @@
       "Bash(__NEW_LINE__ sleep 1)",
       "Bash(xcrun xctrace:*)",
       "Bash(xcrun devicectl:*)",
-      "Bash(security find-identity:*)"
+      "Bash(security find-identity:*)",
+      "Bash(git init:*)",
+      "Bash(gh repo create:*)",
+      "Bash(claude skills install:*)",
+      "Skill(ios-swiftui-design)",
+      "WebFetch(domain:youtube.com)",
+      "Bash(ARCHIVE_PATH=\"/tmp/Tclients.xcarchive\")",
+      "Bash(/usr/bin/curl -s -X POST \"https://www.tsh.sale/api/mobile/auth/login\" )",
+      "Bash(/usr/bin/curl:*)"
     ],
     "deny": [],
     "ask": []

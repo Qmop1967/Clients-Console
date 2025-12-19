@@ -3,9 +3,8 @@
 // GET /api/mobile/products/[id]
 // ============================================
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { getMobileAuth, mobileSuccess, mobileError } from '@/lib/auth/mobile-middleware';
-import { getProductImageUrl } from '@/lib/zoho/products';
 import { getUnifiedStock } from '@/lib/zoho/stock-cache';
 import { getPriceListWithItems, PRICE_LIST_IDS, PRICE_LIST_INFO, getItemPriceFromList } from '@/lib/zoho/price-lists';
 import { zohoFetch, rateLimitedFetch } from '@/lib/zoho/client';
