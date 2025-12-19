@@ -139,7 +139,7 @@ export async function generateTokenPair(user: MobileUser): Promise<{
   };
 }
 
-// Store mobile verification token (for magic link)
+// Store mobile verification token (for magic link - deprecated, use OTP instead)
 export async function storeMobileVerificationToken(
   email: string,
   token: string
@@ -152,7 +152,7 @@ export async function storeMobileVerificationToken(
   );
 }
 
-// Verify mobile verification token
+// Verify mobile verification token (deprecated, use OTP instead)
 export async function verifyMobileVerificationToken(
   token: string
 ): Promise<string | null> {
@@ -162,6 +162,38 @@ export async function verifyMobileVerificationToken(
     await redis.del(`mobile:verify:${token}`);
   }
   return email;
+}
+
+// Generate 6-digit OTP code
+export function generateOTPCode(): string {
+  return Math.floor(100000 + Math.random() * 900000).toString();
+}
+
+// Store OTP code for email verification
+export async function storeOTPCode(
+  email: string,
+  code: string
+): Promise<void> {
+  // Store with 10 minute expiry
+  await redis.set(
+    `mobile:otp:${email.toLowerCase()}`,
+    code,
+    { ex: 10 * 60 } // 10 minutes
+  );
+}
+
+// Verify OTP code
+export async function verifyOTPCode(
+  email: string,
+  code: string
+): Promise<boolean> {
+  const storedCode = await redis.get<string>(`mobile:otp:${email.toLowerCase()}`);
+  if (storedCode && storedCode === code) {
+    // Delete code after successful verification (one-time use)
+    await redis.del(`mobile:otp:${email.toLowerCase()}`);
+    return true;
+  }
+  return false;
 }
 
 // Extract token from Authorization header

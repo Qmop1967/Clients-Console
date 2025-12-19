@@ -1,12 +1,12 @@
 // ============================================
-// Mobile Auth: Verify Magic Link Token
+// Mobile Auth: Verify OTP Code
 // POST /api/mobile/auth/verify
 // ============================================
 
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import {
-  verifyMobileVerificationToken,
+  verifyOTPCode,
   generateTokenPair,
   MobileUser,
 } from '@/lib/auth/mobile-jwt';
@@ -21,7 +21,8 @@ const redis = new Redis({
 
 // Request schema
 const verifySchema = z.object({
-  token: z.string().min(1),
+  email: z.string().email(),
+  code: z.string().length(6).regex(/^\d{6}$/),
 });
 
 export async function POST(request: NextRequest) {
@@ -34,28 +35,28 @@ export async function POST(request: NextRequest) {
         {
           success: false,
           error: {
-            code: 'INVALID_TOKEN',
-            message: 'Invalid or missing verification token',
-            message_ar: 'رمز التحقق غير صالح أو مفقود',
+            code: 'INVALID_CODE',
+            message: 'Please enter a valid 6-digit code',
+            message_ar: 'يرجى إدخال رمز صحيح مكون من 6 أرقام',
           },
         },
         { status: 400 }
       );
     }
 
-    const { token } = validation.data;
+    const { email, code } = validation.data;
 
-    // Verify the magic link token and get the email
-    const email = await verifyMobileVerificationToken(token);
+    // Verify the OTP code
+    const isValid = await verifyOTPCode(email, code);
 
-    if (!email) {
+    if (!isValid) {
       return NextResponse.json(
         {
           success: false,
           error: {
-            code: 'TOKEN_EXPIRED',
-            message: 'This link has expired or already been used. Please request a new one.',
-            message_ar: 'انتهت صلاحية هذا الرابط أو تم استخدامه بالفعل. يرجى طلب رابط جديد.',
+            code: 'INVALID_CODE',
+            message: 'Invalid or expired verification code. Please try again.',
+            message_ar: 'رمز التحقق غير صحيح أو منتهي الصلاحية. يرجى المحاولة مرة أخرى.',
           },
         },
         { status: 401 }
