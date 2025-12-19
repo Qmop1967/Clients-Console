@@ -30,7 +30,7 @@ interface ProductWithPrice {
 }
 
 // Transform product for mobile response (smaller payload)
-function transformProductForMobile(item: ProductWithPrice) {
+function transformProductForMobile(item: ProductWithPrice, baseUrl: string) {
   return {
     id: item.item_id,
     name: item.name,
@@ -40,7 +40,7 @@ function transformProductForMobile(item: ProductWithPrice) {
     category_id: item.category_id || null,
     category_name: item.category_name || null,
     unit: item.unit || null,
-    image_url: `/api/zoho/images/${item.item_id}`,
+    image_url: `${baseUrl}/api/zoho/images/${item.item_id}`,
     stock: item.available_stock || 0,
     in_stock: (item.available_stock || 0) > 0,
     price: item.display_price || null,
@@ -52,6 +52,11 @@ export async function GET(request: NextRequest) {
   try {
     // Get auth context (optional for products)
     const auth = await getMobileAuth(request);
+
+    // Get base URL for absolute image URLs
+    const protocol = request.headers.get('x-forwarded-proto') || 'https';
+    const host = request.headers.get('host') || 'staging.tsh.sale';
+    const baseUrl = `${protocol}://${host}`;
 
     // Get query parameters
     const searchParams = request.nextUrl.searchParams;
@@ -94,7 +99,7 @@ export async function GET(request: NextRequest) {
 
     // Transform and filter products
     let products = result.products.map(p =>
-      transformProductForMobile(p as unknown as ProductWithPrice)
+      transformProductForMobile(p as unknown as ProductWithPrice, baseUrl)
     );
 
     // Apply search filter
