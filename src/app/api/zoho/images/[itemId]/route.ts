@@ -52,14 +52,24 @@ export async function GET(
     const cachedBlobUrl = await getCachedImageUrl(itemId);
 
     if (cachedBlobUrl) {
-      // Redirect to CDN URL (fast, no Zoho API call)
-      return new NextResponse(null, {
-        status: 302,
-        headers: {
-          Location: cachedBlobUrl,
-          ...CDN_CACHE_HEADERS,
-        },
-      });
+      // Fetch from CDN and proxy the response (better iOS compatibility)
+      // Note: 302 redirects may not work well with iOS AsyncImage
+      try {
+        const cdnResponse = await fetch(cachedBlobUrl);
+        if (cdnResponse.ok) {
+          const imageBuffer = await cdnResponse.arrayBuffer();
+          const contentType = cdnResponse.headers.get('content-type') || 'image/jpeg';
+          return new NextResponse(imageBuffer, {
+            status: 200,
+            headers: {
+              'Content-Type': contentType,
+              ...CDN_CACHE_HEADERS,
+            },
+          });
+        }
+      } catch (cdnError) {
+        console.warn(`[Image API] CDN fetch failed for ${itemId}, falling back to Zoho`);
+      }
     }
 
     // ============================================
