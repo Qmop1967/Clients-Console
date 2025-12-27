@@ -22,7 +22,6 @@ export async function generateMetadata(): Promise<Metadata> {
 
 export default async function PublicSupportPage() {
   const t = await getTranslations("publicSupport");
-  const tCommon = await getTranslations("common");
 
   return (
     <div className="min-h-screen bg-background">

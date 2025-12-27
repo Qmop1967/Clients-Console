@@ -67,7 +67,7 @@ export async function GET(
             },
           });
         }
-      } catch (cdnError) {
+      } catch {
         console.warn(`[Image API] CDN fetch failed for ${itemId}, falling back to Zoho`);
       }
     }
