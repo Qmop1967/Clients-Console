@@ -478,14 +478,27 @@ export async function quickSyncStock(itemIds: string[]): Promise<{
         lastError = error instanceof Error ? error : new Error(String(error));
         const errorMsg = lastError.message;
 
+        // Handle 404 "not found" errors gracefully - item was likely deleted
+        if (errorMsg.includes('404') || errorMsg.includes('not found') || errorMsg.includes('does not exist')) {
+          console.log(`ℹ️ [quickSyncStock] Item ${itemId} not found (deleted?) - removing from cache`);
+          // Remove from cache if it exists (item was deleted)
+          delete stockMap[itemId];
+          break; // Not an error, just skip this item
+        }
+
         // Check if rate limited
         if (errorMsg.includes('429') || errorMsg.includes('rate') || errorMsg.includes('blocked')) {
           console.warn(`⚠️ [quickSyncStock] Rate limited on ${itemId}, waiting 3s (${retries - 1} retries left)...`);
           await new Promise(resolve => setTimeout(resolve, 3000));
           retries--;
+        } else if (errorMsg.includes('fetch failed') || errorMsg.includes('network') || errorMsg.includes('ECONNRESET')) {
+          // Network errors - retry with backoff
+          console.warn(`⚠️ [quickSyncStock] Network error on ${itemId}, retrying (${retries - 1} left)...`);
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          retries--;
         } else {
-          // Non-rate-limit error, don't retry
-          console.error(`❌ [quickSyncStock] Failed to fetch ${itemId}: ${errorMsg}`);
+          // Other errors - log but don't count as critical failure
+          console.warn(`⚠️ [quickSyncStock] Failed to fetch ${itemId}: ${errorMsg}`);
           errors.push(`${itemId}: ${errorMsg}`);
           break;
         }
@@ -493,8 +506,8 @@ export async function quickSyncStock(itemIds: string[]): Promise<{
     }
 
     if (retries === 0 && lastError) {
-      errors.push(`${itemId}: Rate limited after 3 retries`);
-      console.error(`❌ [quickSyncStock] Gave up on ${itemId} after rate limit retries`);
+      errors.push(`${itemId}: Retries exhausted`);
+      console.warn(`⚠️ [quickSyncStock] Gave up on ${itemId} after retries`);
     }
 
     // Small delay between requests to avoid rate limits

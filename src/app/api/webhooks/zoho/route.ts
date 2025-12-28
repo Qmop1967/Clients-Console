@@ -239,10 +239,18 @@ async function syncStockForItemsAndWait(itemIds: string[], reason: string): Prom
   }
 }
 
+// Result type for invoice line items fetch
+interface InvoiceLineItemsResult {
+  success: boolean;
+  itemIds: string[];
+  notFound?: boolean;  // true if invoice doesn't exist (404)
+  error?: string;
+}
+
 // Fetch invoice line items from Zoho Books API
 // Zoho webhooks don't include line_items, so we need to fetch the full invoice
-// THROWS on error instead of silent failure - caller must handle
-async function fetchInvoiceLineItems(invoiceId: string): Promise<string[]> {
+// Returns result object instead of throwing - handles 404 gracefully
+async function fetchInvoiceLineItems(invoiceId: string): Promise<InvoiceLineItemsResult> {
   const token = await getAccessToken();
   const orgId = process.env.ZOHO_ORGANIZATION_ID || '748369814';
 
@@ -259,17 +267,25 @@ async function fetchInvoiceLineItems(invoiceId: string): Promise<string[]> {
 
   if (!response.ok) {
     const errorText = await response.text().catch(() => 'Unknown error');
+
+    // Handle 404 "Resource does not exist" gracefully
+    // This happens when invoice was deleted or doesn't exist
+    if (response.status === 404) {
+      console.log(`[Webhook] ℹ️ Invoice ${invoiceId} not found (404) - likely deleted`);
+      return { success: true, itemIds: [], notFound: true };
+    }
+
     const errorMsg = `Zoho API returned ${response.status}: ${errorText}`;
     console.error(`[Webhook] ❌ Failed to fetch invoice ${invoiceId}: ${errorMsg}`);
-    throw new Error(errorMsg);
+    return { success: false, itemIds: [], error: errorMsg };
   }
 
   const data = await response.json();
   const lineItems = data.invoice?.line_items || [];
 
   if (lineItems.length === 0) {
-    console.warn(`[Webhook] ⚠️ Invoice ${invoiceId} has no line_items`);
-    return [];
+    console.log(`[Webhook] ℹ️ Invoice ${invoiceId} has no line_items`);
+    return { success: true, itemIds: [] };
   }
 
   const itemIds = lineItems
@@ -277,7 +293,7 @@ async function fetchInvoiceLineItems(invoiceId: string): Promise<string[]> {
     .map((item: { item_id: string }) => item.item_id);
 
   console.log(`[Webhook] ✅ Fetched ${itemIds.length} items from invoice ${invoiceId}: [${itemIds.join(', ')}]`);
-  return itemIds;
+  return { success: true, itemIds };
 }
 
 // Fetch item image info from Zoho API when webhook doesn't include it
@@ -602,32 +618,39 @@ export async function POST(request: NextRequest) {
         let stockSyncSuccess = false;
         let stockSyncError: string | null = null;
         let itemsSynced = 0;
+        let invoiceNotFound = false;
 
         // Zoho webhooks don't include line_items, so we need to fetch them from API
         const invoiceId = (data.invoice_id as string) || (data.id as string);
         if (invoiceId) {
           console.log(`[Webhook] 🧾 Processing invoice ${invoiceId}`);
-          try {
-            // Fetch line items from Zoho API - THROWS on error
-            const invoiceItemIds = await fetchInvoiceLineItems(invoiceId);
-            if (invoiceItemIds.length > 0) {
-              // IMPORTANT: Sync stock FIRST and WAIT for completion
-              // Then revalidate cache so it rebuilds with fresh stock data
-              const syncResult = await syncStockForItemsAndWait(invoiceItemIds, `invoice: ${eventType}`);
-              stockSyncSuccess = syncResult;
-              itemsSynced = invoiceItemIds.length;
-              if (!syncResult) {
-                stockSyncError = 'Stock sync returned false';
-                console.error(`[Webhook] ❌ Stock sync FAILED for invoice ${invoiceId}`);
-              }
-            } else {
-              // No line items is not an error, but note it
-              stockSyncSuccess = true;
-              console.log(`[Webhook] ℹ️ Invoice ${invoiceId} has no inventory items to sync`);
+
+          // Fetch line items from Zoho API - handles 404 gracefully
+          const fetchResult = await fetchInvoiceLineItems(invoiceId);
+
+          if (fetchResult.notFound) {
+            // Invoice was deleted - this is expected, not an error
+            stockSyncSuccess = true;
+            invoiceNotFound = true;
+            console.log(`[Webhook] ℹ️ Invoice ${invoiceId} was deleted - skipping stock sync`);
+          } else if (!fetchResult.success) {
+            // Actual API error (not 404)
+            stockSyncError = fetchResult.error || 'Unknown error';
+            console.error(`[Webhook] ❌ Invoice ${invoiceId} fetch failed: ${stockSyncError}`);
+          } else if (fetchResult.itemIds.length > 0) {
+            // IMPORTANT: Sync stock FIRST and WAIT for completion
+            // Then revalidate cache so it rebuilds with fresh stock data
+            const syncResult = await syncStockForItemsAndWait(fetchResult.itemIds, `invoice: ${eventType}`);
+            stockSyncSuccess = syncResult;
+            itemsSynced = fetchResult.itemIds.length;
+            if (!syncResult) {
+              stockSyncError = 'Stock sync returned false';
+              console.error(`[Webhook] ❌ Stock sync FAILED for invoice ${invoiceId}`);
             }
-          } catch (error) {
-            stockSyncError = error instanceof Error ? error.message : String(error);
-            console.error(`[Webhook] ❌ CRITICAL: Invoice ${invoiceId} processing FAILED:`, stockSyncError);
+          } else {
+            // No line items is not an error, but note it
+            stockSyncSuccess = true;
+            console.log(`[Webhook] ℹ️ Invoice ${invoiceId} has no inventory items to sync`);
           }
         } else {
           stockSyncError = 'Invoice webhook missing invoice_id';
@@ -650,14 +673,17 @@ export async function POST(request: NextRequest) {
           entity: entityType,
           handled: true,
           invoiceId,
+          invoiceNotFound,
           stockSync: {
             success: stockSyncSuccess,
             itemsSynced,
             error: stockSyncError,
           },
-          message: stockSyncSuccess
-            ? `Stock synced for ${itemsSynced} items`
-            : `Stock sync failed: ${stockSyncError}`,
+          message: invoiceNotFound
+            ? 'Invoice not found (deleted)'
+            : stockSyncSuccess
+              ? `Stock synced for ${itemsSynced} items`
+              : `Stock sync failed: ${stockSyncError}`,
         });
       }
 

@@ -1027,6 +1027,72 @@ curl "https://www.tsh.sale/api/revalidate?tag=all&secret=tsh-revalidate-2024"
 | Deploying without typecheck | TypeScript errors in prod | Run `npm run typecheck` first |
 | Using emoji console.log | Clutters production logs | Wrap in `NODE_ENV` check or remove |
 | Silent error returns | Hides real issues | Log error, return typed error object |
+| **Creating duplicate pages in route groups** | Build fails with "two parallel pages resolve to same path" | Check existing routes before creating pages in (main) or (public) |
+| Throwing on 404 API responses | CRITICAL errors for expected scenarios | Handle 404 gracefully - resources may be deleted |
+| Logging network errors as CRITICAL | Floods logs with noise | Use `warn` for transient errors, `error` for persistent |
+
+---
+
+## Build & Deployment Error Prevention
+
+### Duplicate Page Error (CRITICAL)
+```yaml
+ERROR: You cannot have two parallel pages that resolve to the same path.
+
+CAUSE: Next.js route groups like (main) and (public) create parallel routes.
+       If both have /support/page.tsx, they resolve to the same URL.
+
+PREVENTION:
+  1. Before creating a page, check ALL route groups for existing pages
+  2. Use command: find src/app -name "page.tsx" | grep -i "<pagename>"
+  3. Each page should exist in ONLY ONE route group
+
+EXAMPLE:
+  ❌ Both exist:
+     - src/app/[locale]/(main)/support/page.tsx
+     - src/app/[locale]/(public)/support/page.tsx
+  ✅ Only one:
+     - src/app/[locale]/(public)/support/page.tsx
+```
+
+### Webhook 404 Errors (Expected Behavior)
+```yaml
+SCENARIO: Zoho sends webhooks for invoice.updated, item.updated, etc.
+          But the resource may have been deleted by the time we fetch it.
+
+WRONG:
+  if (!response.ok) {
+    throw new Error(`API returned ${response.status}`);  // CRITICAL error logged
+  }
+
+CORRECT:
+  if (response.status === 404) {
+    console.log(`Resource ${id} not found (deleted?) - skipping`);
+    return { success: true, notFound: true };  // Graceful handling
+  }
+  if (!response.ok) {
+    console.error(`API error: ${response.status}`);
+    return { success: false, error: errorText };
+  }
+
+KEY PRINCIPLE: 404 "Resource does not exist" is NOT an error for webhooks.
+              It means the resource was deleted - handle gracefully.
+```
+
+### Error Logging Levels
+```yaml
+Use appropriate log levels to avoid log pollution:
+
+console.log():    Informational - normal flow, skipped operations
+console.warn():   Transient issues - network errors, retries, rate limits
+console.error():  Actual errors - API failures that affect functionality
+
+WRONG: console.error(`❌ CRITICAL: ${error}`);  // For every failure
+CORRECT:
+  - 404 responses → console.log() (expected for deleted resources)
+  - Network timeout → console.warn() (transient, will retry)
+  - Auth failure → console.error() (needs investigation)
+```
 
 ---
 
@@ -1089,10 +1155,25 @@ curl "https://www.tsh.sale/api/revalidate?tag=all&secret=tsh-revalidate-2024"
 
 ---
 
-**Last Updated:** 2025-12-19
-**Version:** 1.9.0
+**Last Updated:** 2025-12-28
+**Version:** 2.0.0
 
-## Recent Changes (v1.9.0)
+## Recent Changes (v2.0.0)
+- **Webhook 404 Error Handling**: Fixed CRITICAL errors for expected 404 responses
+  - Invoice webhooks now handle "Resource does not exist" gracefully
+  - Returns `{ success: true, notFound: true }` instead of throwing errors
+  - Reduces log noise from deleted invoices/items
+- **Stock Sync Resilience**: Improved quickSyncStock error handling
+  - 404 errors for deleted items handled gracefully (removed from cache)
+  - Network errors (fetch failed, ECONNRESET) retry with backoff
+  - Changed from `console.error` to `console.warn` for transient issues
+- **Build Error Prevention Documentation**: Added guidelines to prevent deployment failures
+  - Duplicate page error prevention (route groups conflict)
+  - Webhook 404 handling patterns
+  - Error logging level guidelines
+- **Common Mistakes Table**: Added 3 new entries for route groups, 404 handling, and logging levels
+
+## Previous Changes (v1.9.0)
 - **CRITICAL FIX: Order Warehouse Fulfillment**: Fixed stock being deducted from wrong location
   - Problem: Orders took stock from Main TSH Business instead of Main WareHouse
   - Solution: Set `location_id` on LINE ITEMS (not `warehouse_id` at order level)
