@@ -19,7 +19,7 @@ const JWT_SECRET = new TextEncoder().encode(
 );
 const JWT_ISSUER = 'tsh-mobile';
 const JWT_AUDIENCE = 'tsh-clients-console';
-const ACCESS_TOKEN_EXPIRY = '15m'; // 15 minutes
+const ACCESS_TOKEN_EXPIRY = '24h'; // 24 hours - increased from 15m for better shopping UX
 const REFRESH_TOKEN_EXPIRY = '30d'; // 30 days
 
 export interface MobileUser {
@@ -135,7 +135,7 @@ export async function generateTokenPair(user: MobileUser): Promise<{
   return {
     accessToken,
     refreshToken,
-    expiresIn: 15 * 60, // 15 minutes in seconds
+    expiresIn: 24 * 60 * 60, // 24 hours in seconds
   };
 }
 
