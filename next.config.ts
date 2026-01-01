@@ -58,14 +58,32 @@ const nextConfig: NextConfig = {
       bodySizeLimit: "2mb",
     },
     // Enable optimized package imports for smaller bundles
+    // This tree-shakes unused exports from these packages
     optimizePackageImports: [
+      // Icons - only imports used icons
       "lucide-react",
+      // Date utilities
       "date-fns",
+      // Radix UI components
       "@radix-ui/react-dialog",
       "@radix-ui/react-dropdown-menu",
       "@radix-ui/react-select",
       "@radix-ui/react-tabs",
       "@radix-ui/react-toast",
+      "@radix-ui/react-avatar",
+      "@radix-ui/react-checkbox",
+      "@radix-ui/react-label",
+      "@radix-ui/react-popover",
+      "@radix-ui/react-scroll-area",
+      "@radix-ui/react-separator",
+      "@radix-ui/react-switch",
+      // Analytics (tree-shake unused exports)
+      "@vercel/analytics",
+      "@vercel/speed-insights",
+      // Data fetching
+      "swr",
+      // Validation
+      "zod",
     ],
   },
 
