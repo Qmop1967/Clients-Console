@@ -168,6 +168,8 @@ Fix: Verify UPSTASH_REDIS_REST_* env vars in Vercel
 | Short mobile access token expiry | Keep ≥24h for browsing/checkout flow |
 | Unused variables after refactoring | Run `npm run lint` before committing |
 | Network errors in stock sync | Use retry with backoff (see stock-cache.ts) |
+| Sequential API calls in pages | Use `Promise.all()` for parallel fetching |
+| 503 errors on RSC prefetch | Configure `maxDuration` in vercel.json |
 
 ---
 
@@ -257,6 +259,45 @@ Component Variants:
 
 ---
 
+## Performance Patterns (Prevent 503 Errors)
+
+```yaml
+Problem: RSC prefetch requests return 503 Service Unavailable
+Cause: Next.js prefetches multiple pages concurrently, each spawning
+       a serverless function with sequential API calls → timeout
+
+Solutions Applied:
+  1. vercel.json maxDuration: Pages=30s, API routes=60s
+  2. Promise.all() for parallel API calls in pages
+  3. Redis caching for stock data (avoids Zoho API on every request)
+
+Page Data Fetching Pattern:
+  ✅ GOOD - Parallel fetching:
+  const [product, stock, prices] = await Promise.all([
+    getProduct(id),
+    getUnifiedStock(id),
+    getCustomerPriceList(priceListId, [id]),
+  ]);
+
+  ❌ BAD - Sequential fetching (causes timeouts):
+  const product = await getProduct(id);
+  const stock = await getUnifiedStock(id);
+  const prices = await getCustomerPriceList(priceListId, [id]);
+
+Function Duration Config (vercel.json):
+  - Pages (app/**/page.tsx): maxDuration 30s
+  - API routes (app/api/**/*.ts): maxDuration 60s
+
+Monitoring:
+  # Check TTFB (should be < 1s for cached pages)
+  curl -w "TTFB: %{time_starttransfer}s\n" -o /dev/null -s "URL"
+
+  # Check for 503 in browser DevTools Network tab
+  # Filter by RSC requests (_rsc query param)
+```
+
+---
+
 ## Error Handling Patterns
 
 ```yaml
@@ -314,6 +355,6 @@ grep -r "console.error" src/ | grep -v "node_modules"
 
 ---
 
-**Version:** 2.1.0 | **Last Updated:** 2025-12-28
+**Version:** 2.2.0 | **Last Updated:** 2026-01-01
 
 TSH = Tech Spider Hand

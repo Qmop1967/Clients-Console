@@ -61,28 +61,30 @@ type FetchResult = {
 
 async function fetchProductData(productId: string, priceListId?: string): Promise<FetchResult> {
   try {
-    // Fetch product metadata
-    const product = await getProduct(productId);
+    // PERFORMANCE: Run all API calls in parallel to reduce TTFB
+    // This prevents 503 errors on RSC prefetch by reducing function execution time
+    const effectivePriceListId = priceListId || PRICE_LIST_IDS.CONSUMER;
+
+    const [product, stockResult, priceList] = await Promise.all([
+      getProduct(productId),
+      getUnifiedStock(productId, {
+        fetchOnMiss: true,
+        context: 'product-detail',
+      }),
+      getCustomerPriceList(effectivePriceListId, [productId]),
+    ]);
 
     if (!product) {
       return { success: false, error: "not_found" };
     }
 
-    // Use UNIFIED stock retrieval - SAME source as shop list page
-    // This ensures consistent stock between list and detail views
-    const { stock: availableStock, source: stockSource } = await getUnifiedStock(productId, {
-      fetchOnMiss: true, // Detail page can afford the API call for fresh stock
-      context: 'product-detail',
-    });
+    const { stock: availableStock, source: stockSource } = stockResult;
 
     if (process.env.NODE_ENV === 'development') {
       console.log(`[ProductDetail] ${product.sku}: stock=${availableStock} (source: ${stockSource})`);
     }
 
-    // Fetch price list - use customer's if provided, otherwise Consumer
-    const effectivePriceListId = priceListId || PRICE_LIST_IDS.CONSUMER;
-    const priceList = await getCustomerPriceList(effectivePriceListId, [product.item_id]);
-    const priceInfo = getItemPriceFromList(product.item_id, priceList);
+    const priceInfo = getItemPriceFromList(productId, priceList);
 
     if (process.env.NODE_ENV === 'development') {
       console.log(`[ProductDetail] ${product.sku}: Final stock=${availableStock}, price=${priceInfo.rate} ${priceList?.currency_code}`);
