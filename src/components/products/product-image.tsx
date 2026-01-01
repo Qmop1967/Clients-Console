@@ -58,7 +58,9 @@ export const ProductImage = memo(function ProductImage({
         priority={priority}
         loading={priority ? "eager" : "lazy"}
         fetchPriority={priority ? "high" : "auto"}
-        quality={priority ? 80 : 75}
+        // LCP OPTIMIZATION: Reduced quality for faster load
+        // Thumbnails are small (~300px) so 70/60 is visually indistinguishable from 80/75
+        quality={priority ? 70 : 60}
         className={cn(
           "object-contain transition-opacity duration-150",
           isLoading ? "opacity-0" : "opacity-100"
