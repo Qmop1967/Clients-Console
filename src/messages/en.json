@@ -496,5 +496,15 @@
     "continueBrowsing": "Continue Browsing",
     "contactSales": "Contact Sales",
     "catalogModeDescription": "Contact our sales team for pricing and availability."
+  },
+  "catalogSplash": {
+    "title": "Important Notice",
+    "reason": "Dear valued customers, due to recent changes in customs duties and exchange rate fluctuations, we have temporarily disabled pricing and stock display on our online store to protect your interests.",
+    "youCanStill": "Don't worry! You can still:",
+    "browseProducts": "Browse all products, categories, and explore specifications",
+    "viewHistory": "Review your order history and previous invoices",
+    "contactSales": "Contact your sales representative for the latest prices",
+    "apology": "We apologize for any inconvenience and appreciate your understanding and continued trust.",
+    "understood": "Got it, continue browsing"
   }
 }

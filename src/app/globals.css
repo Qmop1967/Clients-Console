@@ -1293,3 +1293,22 @@
 .animate-logo-reveal {
   animation: logo-reveal 0.7s ease-out forwards;
 }
+
+/* Slow bounce for splash warning */
+@keyframes bounce-slow {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+.animate-bounce-slow {
+  animation: bounce-slow 3s ease-in-out infinite;
+}
+
+/* Delay helper */
+.delay-300 {
+  animation-delay: 300ms;
+}

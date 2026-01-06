@@ -89,7 +89,13 @@
       "Bash(gh auth:*)",
       "Bash(npx next info:*)",
       "Bash(du:*)",
-      "Bash(npx lighthouse:*)"
+      "Bash(npx lighthouse:*)",
+      "Bash(for i in 1 2 3)",
+      "Bash(do cd '/Users/khaleelal-mulla/General/ Projects/tsh-clients-console')",
+      "Bash(done)",
+      "Bash(printf:*)",
+      "WebFetch(domain:tsh-clients-console-fcdmtrwzf-tsh-03790822.vercel.app)",
+      "WebFetch(domain:tsh-clients-console-1m13cqyd0-tsh-03790822.vercel.app)"
     ],
     "deny": [],
     "ask": []
