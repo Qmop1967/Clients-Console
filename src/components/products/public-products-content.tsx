@@ -17,7 +17,8 @@ import {
 } from "@/components/ui/select";
 import { ProductImage } from "./product-image";
 import { useCart } from "@/components/providers/cart-provider";
-import { Search, ShoppingCart, Check, Eye, ChevronRight, X, SlidersHorizontal } from "lucide-react";
+import { useCatalogMode } from "@/components/providers/catalog-mode-provider";
+import { Search, ShoppingCart, Check, Eye, ChevronRight, X, SlidersHorizontal, MessageCircle } from "lucide-react";
 import { WholesaleQuantityInput } from "@/components/ui/wholesale-quantity-input";
 import { NumberedPagination } from "@/components/ui/pagination";
 import { cn } from "@/lib/utils/cn";
@@ -83,7 +84,9 @@ const ProductCardWithCart = memo(function ProductCardWithCart({
   priority?: boolean;
 }) {
   const t = useTranslations("products");
+  const tCatalog = useTranslations("catalogMode");
   const { addItem, getItemQuantity } = useCart();
+  const { isCatalogMode, showCatalogModal } = useCatalogMode();
   const [quantity, setQuantity] = useState(1);
   const [added, setAdded] = useState(false);
 
@@ -181,45 +184,66 @@ const ProductCardWithCart = memo(function ProductCardWithCart({
             )}
           </div>
 
-          {/* Price & Stock - Enhanced Layout */}
-          <div className="pt-2 sm:pt-3 border-t border-border/50">
-            <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-1">
-              {/* Price */}
-              <div>
-                {hasPrice ? (
-                  <>
-                    <span className="price-tag text-base sm:text-xl text-primary">
-                      {formatCurrency(product.rate, currencyCode)}
+          {/* Price & Stock - Hidden in catalog mode */}
+          {!isCatalogMode && (
+            <div className="pt-2 sm:pt-3 border-t border-border/50">
+              <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-1">
+                {/* Price */}
+                <div>
+                  {hasPrice ? (
+                    <>
+                      <span className="price-tag text-base sm:text-xl text-primary">
+                        {formatCurrency(product.rate, currencyCode)}
+                      </span>
+                    </>
+                  ) : (
+                    <span className="text-xs sm:text-sm text-muted-foreground italic">
+                      {t("contactForPrice")}
                     </span>
-                  </>
-                ) : (
-                  <span className="text-xs sm:text-sm text-muted-foreground italic">
-                    {t("contactForPrice")}
-                  </span>
-                )}
-              </div>
+                  )}
+                </div>
 
-              {/* Stock Count */}
-              <div
-                className={cn(
-                  "stock-indicator text-[10px] sm:text-xs font-medium",
-                  isInStock
-                    ? isLowStock
-                      ? "stock-low text-amber-600 dark:text-amber-400"
-                      : "stock-in text-emerald-600 dark:text-emerald-400"
-                    : "stock-out text-red-500"
-                )}
-              >
-                {isInStock
-                  ? t("stockCount", { count: product.available_stock })
-                  : t("outOfStock")}
+                {/* Stock Count */}
+                <div
+                  className={cn(
+                    "stock-indicator text-[10px] sm:text-xs font-medium",
+                    isInStock
+                      ? isLowStock
+                        ? "stock-low text-amber-600 dark:text-amber-400"
+                        : "stock-in text-emerald-600 dark:text-emerald-400"
+                      : "stock-out text-red-500"
+                  )}
+                >
+                  {isInStock
+                    ? t("stockCount", { count: product.available_stock })
+                    : t("outOfStock")}
+                </div>
               </div>
             </div>
-          </div>
+          )}
         </div>
 
-        {/* Add to Cart Section - Wholesale Enhanced */}
-        {hasPrice && isInStock && maxQuantity > 0 && (
+        {/* Catalog Mode - Contact Sales Button */}
+        {isCatalogMode && (
+          <div className="mt-3 sm:mt-4 pt-2 sm:pt-3 border-t border-border/50">
+            <Button
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                showCatalogModal();
+              }}
+              variant="outline"
+              className="w-full btn-press"
+              size="sm"
+            >
+              <MessageCircle className="h-4 w-4 me-2" />
+              {tCatalog("contactSales")}
+            </Button>
+          </div>
+        )}
+
+        {/* Add to Cart Section - Wholesale Enhanced (hidden in catalog mode) */}
+        {!isCatalogMode && hasPrice && isInStock && maxQuantity > 0 && (
           <div className="mt-3 sm:mt-4 pt-2 sm:pt-3 border-t border-border/50 space-y-2 sm:space-y-3">
             {/* Wholesale Quantity Input */}
             <WholesaleQuantityInput
@@ -261,8 +285,8 @@ const ProductCardWithCart = memo(function ProductCardWithCart({
           </div>
         )}
 
-        {/* View Details for non-purchasable items */}
-        {(!hasPrice || !isInStock) && (
+        {/* View Details for non-purchasable items (hidden in catalog mode) */}
+        {!isCatalogMode && (!hasPrice || !isInStock) && (
           <div className="mt-3 sm:mt-4 pt-2 sm:pt-3 border-t border-border/50">
             <Button
               variant="outline"

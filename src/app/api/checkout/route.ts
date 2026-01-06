@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth/auth';
 import { createSalesOrder, confirmSalesOrder, createInvoiceFromSalesOrder, confirmInvoice } from '@/lib/zoho/orders';
 import { z } from 'zod';
+import { isCatalogModeEnabled, CATALOG_MODE_ERROR } from '@/lib/utils/catalog-mode';
 
 // Validation schema for checkout request
 const checkoutSchema = z.object({
@@ -17,6 +18,11 @@ const checkoutSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
+    // Block orders when catalog mode is enabled
+    if (isCatalogModeEnabled()) {
+      return NextResponse.json(CATALOG_MODE_ERROR, { status: 403 });
+    }
+
     // Check authentication
     const session = await auth();
 

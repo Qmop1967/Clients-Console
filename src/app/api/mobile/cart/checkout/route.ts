@@ -20,6 +20,7 @@ import {
   createInvoiceFromSalesOrder,
   confirmInvoice,
 } from '@/lib/zoho/orders';
+import { isCatalogModeEnabled, CATALOG_MODE_ERROR } from '@/lib/utils/catalog-mode';
 
 // Validation schema
 const checkoutSchema = z.object({
@@ -35,6 +36,16 @@ const checkoutSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
+    // Block orders when catalog mode is enabled
+    if (isCatalogModeEnabled()) {
+      return mobileError(
+        CATALOG_MODE_ERROR.error,
+        CATALOG_MODE_ERROR.message,
+        CATALOG_MODE_ERROR.message_ar,
+        403
+      );
+    }
+
     // Require authentication
     const authResult = await requireMobileAuth(request);
     if (isAuthError(authResult)) {

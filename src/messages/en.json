@@ -489,5 +489,12 @@
       "name": "Tech Spider Hand (TSH)",
       "tagline": "Your trusted B2B wholesale partner for IT products and security systems"
     }
+  },
+  "catalogMode": {
+    "title": "Contact Sales",
+    "message": "Thank you for your interest in our products.\n\nPrices and orders are currently not available through the online store.\n\nPlease contact your regional sales representative for pricing, availability, and the best offers.\n\nWe are always at your service.",
+    "continueBrowsing": "Continue Browsing",
+    "contactSales": "Contact Sales",
+    "catalogModeDescription": "Contact our sales team for pricing and availability."
   }
 }

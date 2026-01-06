@@ -5,10 +5,11 @@ import { useTranslations } from "next-intl";
 import Image from "next/image";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ShoppingCart, Check, Package } from "lucide-react";
+import { ShoppingCart, Check, Package, MessageCircle } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { formatCurrency } from "@/lib/utils/format";
 import { useCart } from "@/components/providers/cart-provider";
+import { useCatalogMode } from "@/components/providers/catalog-mode-provider";
 
 interface ProductCardProps {
   product: {
@@ -27,8 +28,10 @@ interface ProductCardProps {
 // Memoized ProductCard for better performance - prevents unnecessary re-renders
 export const ProductCard = memo(function ProductCard({ product, currencyCode }: ProductCardProps) {
   const t = useTranslations("products");
+  const tCatalog = useTranslations("catalogMode");
   const [added, setAdded] = useState(false);
   const { addItem } = useCart();
+  const { isCatalogMode, showCatalogModal } = useCatalogMode();
 
   const isInStock = product.available_stock > 0;
 
@@ -88,39 +91,53 @@ export const ProductCard = memo(function ProductCard({ product, currencyCode }: 
         {/* SKU - Subtle */}
         <p className="mb-3 text-xs text-muted-foreground/70">{product.sku}</p>
 
-        {/* Price - Prominent with serif font */}
-        <div className="mb-4 flex items-baseline gap-1.5">
-          <span className="price-tag text-xl text-foreground">
-            {formatCurrency(product.rate, currencyCode)}
-          </span>
-          {product.unit && (
-            <span className="text-xs text-muted-foreground">/ {product.unit}</span>
-          )}
-        </div>
+        {/* Price - Hidden in catalog mode */}
+        {!isCatalogMode && (
+          <div className="mb-4 flex items-baseline gap-1.5">
+            <span className="price-tag text-xl text-foreground">
+              {formatCurrency(product.rate, currencyCode)}
+            </span>
+            {product.unit && (
+              <span className="text-xs text-muted-foreground">/ {product.unit}</span>
+            )}
+          </div>
+        )}
 
-        {/* Add to Cart Button - Gold accent */}
-        <Button
-          onClick={handleAddToCart}
-          disabled={!isInStock || added}
-          variant={added ? "success" : "gold"}
-          className={cn(
-            "w-full transition-all",
-            added && "bg-emerald-600 hover:bg-emerald-600"
-          )}
-          size="default"
-        >
-          {added ? (
-            <>
-              <Check className="h-4 w-4" />
-              {t("addedToCart")}
-            </>
-          ) : (
-            <>
-              <ShoppingCart className="h-4 w-4" />
-              {t("addToCart")}
-            </>
-          )}
-        </Button>
+        {/* Action Button - Contact Sales in catalog mode, Add to Cart otherwise */}
+        {isCatalogMode ? (
+          <Button
+            onClick={showCatalogModal}
+            variant="outline"
+            className="w-full"
+            size="default"
+          >
+            <MessageCircle className="h-4 w-4" />
+            {tCatalog("contactSales")}
+          </Button>
+        ) : (
+          <Button
+            onClick={handleAddToCart}
+            disabled={!isInStock || added}
+            variant={added ? "success" : "gold"}
+            className={cn(
+              "w-full transition-all",
+              added && "bg-emerald-600 hover:bg-emerald-600"
+            )}
+            size="default"
+          >
+            {added ? (
+              <>
+                <Check className="h-4 w-4" />
+                {t("addedToCart")}
+              </>
+            ) : (
+              <>
+                <ShoppingCart className="h-4 w-4" />
+                {t("addToCart")}
+              </>
+            )}
+          </Button>
+        )}
       </CardContent>
     </Card>
   );

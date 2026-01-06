@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useSession } from "next-auth/react";
 import { useCart } from "@/components/providers/cart-provider";
+import { useCatalogMode } from "@/components/providers/catalog-mode-provider";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
@@ -18,6 +19,7 @@ import {
   Loader2,
   CheckCircle,
   LogIn,
+  MessageCircle,
 } from "lucide-react";
 import { WholesaleQuantityInput } from "@/components/ui/wholesale-quantity-input";
 import Image from "next/image";
@@ -28,9 +30,11 @@ export default function CartPage() {
   const t = useTranslations("cart");
   const tProducts = useTranslations("products");
   const tCommon = useTranslations("common");
+  const tCatalog = useTranslations("catalogMode");
   const { locale } = useParams();
   const { data: session, status } = useSession();
   const { items, currencyCode, removeItem, updateQuantity, clearCart } = useCart();
+  const { isCatalogMode, showCatalogModal } = useCatalogMode();
 
   const [isCheckingOut, setIsCheckingOut] = useState(false);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
@@ -154,6 +158,34 @@ export default function CartPage() {
           <Link href={`/${locale}/orders`}>
             <Button variant="outline">
               {t("viewAllOrders")}
+            </Button>
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  // Catalog Mode view - orders temporarily disabled
+  if (isCatalogMode) {
+    return (
+      <div className="flex min-h-[60vh] flex-col items-center justify-center space-y-6 px-4">
+        <div className="rounded-full bg-primary/10 p-6">
+          <MessageCircle className="h-12 w-12 text-primary" />
+        </div>
+        <div className="text-center space-y-4" dir="rtl">
+          <h2 className="text-2xl font-semibold">{tCatalog("title")}</h2>
+          <p className="text-muted-foreground max-w-md whitespace-pre-line">
+            {tCatalog("message")}
+          </p>
+        </div>
+        <div className="flex gap-3">
+          <Button onClick={showCatalogModal} variant="gold">
+            <MessageCircle className="me-2 h-4 w-4" />
+            {tCatalog("contactSales")}
+          </Button>
+          <Link href={`/${locale}/shop`}>
+            <Button variant="outline">
+              {t("continueShopping")}
             </Button>
           </Link>
         </div>

@@ -9,6 +9,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { ProductImage } from "./product-image";
 import { useCart } from "@/components/providers/cart-provider";
+import { useCatalogMode } from "@/components/providers/catalog-mode-provider";
 import {
   ShoppingCart,
   Check,
@@ -23,6 +24,7 @@ import {
   Zap,
   Copy,
   CheckCircle,
+  MessageCircle,
 } from "lucide-react";
 import { WholesaleQuantityInput } from "@/components/ui/wholesale-quantity-input";
 import { cn } from "@/lib/utils/cn";
@@ -51,10 +53,12 @@ export function ProductDetailContent({ product, locale }: ProductDetailProps) {
   const t = useTranslations("products");
   const tCart = useTranslations("cart");
   const tCommon = useTranslations("common");
+  const tCatalog = useTranslations("catalogMode");
   const [quantity, setQuantity] = useState(1);
   const [added, setAdded] = useState(false);
   const [copied, setCopied] = useState(false);
   const { addItem, getItemQuantity } = useCart();
+  const { isCatalogMode, showCatalogModal } = useCatalogMode();
 
   const isInStock = product.available_stock > 0;
   const isLowStock = product.available_stock > 0 && product.available_stock <= 5;
@@ -143,20 +147,22 @@ export function ProductDetailContent({ product, locale }: ProductDetailProps) {
               priority
             />
 
-            {/* Stock Badge */}
-            <Badge
-              variant={isInStock ? "success" : "destructive"}
-              className={cn(
-                "absolute right-4 top-4 text-sm px-3 py-1",
-                isLowStock && "animate-pulse"
-              )}
-            >
-              {isInStock
-                ? isLowStock
-                  ? t("lowStock")
-                  : t("stockCount", { count: product.available_stock })
-                : t("outOfStock")}
-            </Badge>
+            {/* Stock Badge - Hidden in catalog mode */}
+            {!isCatalogMode && (
+              <Badge
+                variant={isInStock ? "success" : "destructive"}
+                className={cn(
+                  "absolute right-4 top-4 text-sm px-3 py-1",
+                  isLowStock && "animate-pulse"
+                )}
+              >
+                {isInStock
+                  ? isLowStock
+                    ? t("lowStock")
+                    : t("stockCount", { count: product.available_stock })
+                  : t("outOfStock")}
+              </Badge>
+            )}
 
             {/* Action Buttons */}
             <div className="absolute left-4 top-4 flex flex-col gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -252,29 +258,31 @@ export function ProductDetailContent({ product, locale }: ProductDetailProps) {
             </button>
           </div>
 
-          {/* Price Section */}
-          <div className="p-4 rounded-xl bg-gradient-to-r from-primary/5 to-primary/10 border border-primary/20">
-            {hasPrice ? (
-              <div className="space-y-1">
-                <p className="text-sm text-muted-foreground">{t("price")}</p>
-                <div className="flex items-baseline gap-2">
-                  <span className="text-4xl font-bold text-primary">
-                    {formatCurrency(product.rate, product.currencyCode)}
-                  </span>
-                  <span className="text-sm text-muted-foreground">/ {product.unit}</span>
+          {/* Price Section - Hidden in catalog mode */}
+          {!isCatalogMode && (
+            <div className="p-4 rounded-xl bg-gradient-to-r from-primary/5 to-primary/10 border border-primary/20">
+              {hasPrice ? (
+                <div className="space-y-1">
+                  <p className="text-sm text-muted-foreground">{t("price")}</p>
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-4xl font-bold text-primary">
+                      {formatCurrency(product.rate, product.currencyCode)}
+                    </span>
+                    <span className="text-sm text-muted-foreground">/ {product.unit}</span>
+                  </div>
                 </div>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                <p className="text-lg font-semibold text-muted-foreground">
-                  {t("contactForPrice")}
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  {t("contactForPriceDescription")}
-                </p>
-              </div>
-            )}
-          </div>
+              ) : (
+                <div className="space-y-2">
+                  <p className="text-lg font-semibold text-muted-foreground">
+                    {t("contactForPrice")}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    {t("contactForPriceDescription")}
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Description */}
           {product.description && (
@@ -289,7 +297,7 @@ export function ProductDetailContent({ product, locale }: ProductDetailProps) {
           {/* Product Specs */}
           <div className="space-y-3">
             <h3 className="font-semibold">{t("specifications")}</h3>
-            <div className="grid grid-cols-2 gap-3">
+            <div className={cn("grid gap-3", isCatalogMode ? "grid-cols-1" : "grid-cols-2")}>
               <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
                 <Package className="h-5 w-5 text-muted-foreground" />
                 <div>
@@ -297,25 +305,50 @@ export function ProductDetailContent({ product, locale }: ProductDetailProps) {
                   <p className="font-medium">{product.unit}</p>
                 </div>
               </div>
-              <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
-                <Box className="h-5 w-5 text-muted-foreground" />
-                <div>
-                  <p className="text-xs text-muted-foreground">{t("availability")}</p>
-                  <p className={cn(
-                    "font-medium",
-                    isInStock ? "text-green-600 dark:text-green-400" : "text-red-500"
-                  )}>
-                    {isInStock ? t("inStock") : t("outOfStock")}
-                  </p>
+              {/* Availability - Hidden in catalog mode */}
+              {!isCatalogMode && (
+                <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
+                  <Box className="h-5 w-5 text-muted-foreground" />
+                  <div>
+                    <p className="text-xs text-muted-foreground">{t("availability")}</p>
+                    <p className={cn(
+                      "font-medium",
+                      isInStock ? "text-green-600 dark:text-green-400" : "text-red-500"
+                    )}>
+                      {isInStock ? t("inStock") : t("outOfStock")}
+                    </p>
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           </div>
 
           <Separator />
 
-          {/* Add to Cart Section */}
-          {hasPrice && isInStock && (
+          {/* Catalog Mode CTA */}
+          {isCatalogMode && (
+            <Card className="border-2 border-primary/20">
+              <CardContent className="p-5 space-y-4 text-center">
+                <div className="mx-auto w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
+                  <MessageCircle className="h-6 w-6 text-primary" />
+                </div>
+                <p className="text-muted-foreground">
+                  {tCatalog("catalogModeDescription")}
+                </p>
+                <Button
+                  className="w-full h-14 text-lg font-semibold rounded-xl gradient-primary hover:opacity-90"
+                  onClick={showCatalogModal}
+                  size="lg"
+                >
+                  <MessageCircle className="h-5 w-5" />
+                  {tCatalog("contactSales")}
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Add to Cart Section - Hidden in catalog mode */}
+          {!isCatalogMode && hasPrice && isInStock && (
             <Card className="border-2 border-primary/20 bg-gradient-to-br from-background to-muted/30">
               <CardContent className="p-5 space-y-5">
                 {/* Quantity Header */}
@@ -381,8 +414,8 @@ export function ProductDetailContent({ product, locale }: ProductDetailProps) {
             </Card>
           )}
 
-          {/* Contact for Price CTA */}
-          {!hasPrice && (
+          {/* Contact for Price CTA - Hidden in catalog mode */}
+          {!isCatalogMode && !hasPrice && (
             <Card className="border-yellow-500/50 bg-yellow-500/10">
               <CardContent className="p-5 space-y-3">
                 <p className="text-yellow-600 dark:text-yellow-400">
@@ -395,8 +428,8 @@ export function ProductDetailContent({ product, locale }: ProductDetailProps) {
             </Card>
           )}
 
-          {/* Out of Stock CTA */}
-          {!isInStock && hasPrice && (
+          {/* Out of Stock CTA - Hidden in catalog mode */}
+          {!isCatalogMode && !isInStock && hasPrice && (
             <Card className="border-red-500/50 bg-red-500/10">
               <CardContent className="p-5">
                 <p className="text-red-600 dark:text-red-400">
