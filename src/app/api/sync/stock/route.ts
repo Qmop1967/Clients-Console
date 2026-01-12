@@ -52,8 +52,9 @@ export async function GET(request: NextRequest) {
       // Only use limit param for manual chunked sync when explicitly set
       const limitParam = searchParams.get('limit');
       const limit = limitParam ? parseInt(limitParam, 10) : undefined;
-      // DEFAULT to 'books' - Books API has higher rate limits AND returns warehouse-specific stock
-      const source = searchParams.get('source') || 'books';
+      // DEFAULT to 'inventory' - Inventory API supports warehouse_id filtering and returns all warehouse items
+      // Books API list endpoint doesn't support warehouse filtering (only returns ~22 items)
+      const source = searchParams.get('source') || 'inventory';
 
       // Check if sync is needed (unless force=true or doing chunked sync)
       const isChunkedSync = offset > 0;
