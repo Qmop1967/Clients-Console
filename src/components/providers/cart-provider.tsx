@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { createContext, useContext, useEffect, useState, useCallback } from "react";
+import { createContext, useContext, useEffect, useState, useCallback, useMemo, useRef } from "react";
 
 export interface CartItem {
   item_id: string;
@@ -30,6 +30,7 @@ interface CartContextType {
 const CartContext = createContext<CartContextType | undefined>(undefined);
 
 const CART_STORAGE_KEY = "tsh-cart";
+const SAVE_DEBOUNCE_MS = 300; // Debounce localStorage writes
 
 interface CartProviderProps {
   children: React.ReactNode;
@@ -39,6 +40,7 @@ interface CartProviderProps {
 export function CartProvider({ children, currencyCode = "IQD" }: CartProviderProps) {
   const [items, setItems] = useState<CartItem[]>([]);
   const [isHydrated, setIsHydrated] = useState(false);
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Load cart from localStorage on mount
   useEffect(() => {
@@ -56,16 +58,40 @@ export function CartProvider({ children, currencyCode = "IQD" }: CartProviderPro
     setIsHydrated(true);
   }, []);
 
-  // Save cart to localStorage whenever items change
+  // Debounced save to localStorage - prevents blocking UI on rapid updates
   useEffect(() => {
-    if (isHydrated) {
+    if (!isHydrated) return;
+
+    // Clear any pending save
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+    }
+
+    // Schedule new save after debounce period
+    saveTimeoutRef.current = setTimeout(() => {
       try {
         localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(items));
       } catch (error) {
         console.error("Error saving cart to localStorage:", error);
       }
-    }
+    }, SAVE_DEBOUNCE_MS);
+
+    // Cleanup on unmount
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+    };
   }, [items, isHydrated]);
+
+  // Create a Map for O(1) lookups instead of O(n) array.find()
+  const itemsMap = useMemo(() => {
+    const map = new Map<string, CartItem>();
+    for (const item of items) {
+      map.set(item.item_id, item);
+    }
+    return map;
+  }, [items]);
 
   const addItem = useCallback((item: Omit<CartItem, "quantity">, quantity = 1) => {
     setItems((prevItems) => {
@@ -108,33 +134,42 @@ export function CartProvider({ children, currencyCode = "IQD" }: CartProviderPro
     setItems([]);
   }, []);
 
+  // Use Map for O(1) lookup
   const isInCart = useCallback((itemId: string) => {
-    return items.some((item) => item.item_id === itemId);
-  }, [items]);
+    return itemsMap.has(itemId);
+  }, [itemsMap]);
 
+  // Use Map for O(1) lookup
   const getItemQuantity = useCallback((itemId: string) => {
-    const item = items.find((i) => i.item_id === itemId);
-    return item?.quantity || 0;
-  }, [items]);
+    return itemsMap.get(itemId)?.quantity || 0;
+  }, [itemsMap]);
 
-  const itemCount = items.length; // Number of unique items, not total quantity
-  const subtotal = items.reduce((total, item) => total + item.rate * item.quantity, 0);
+  // Memoize computed values to prevent recalculation on every render
+  const itemCount = useMemo(() => items.length, [items]);
+  const subtotal = useMemo(
+    () => items.reduce((total, item) => total + item.rate * item.quantity, 0),
+    [items]
+  );
+
+  // Memoize the context value to prevent unnecessary re-renders of consumers
+  const contextValue = useMemo(
+    () => ({
+      items,
+      itemCount,
+      subtotal,
+      currencyCode,
+      addItem,
+      removeItem,
+      updateQuantity,
+      clearCart,
+      isInCart,
+      getItemQuantity,
+    }),
+    [items, itemCount, subtotal, currencyCode, addItem, removeItem, updateQuantity, clearCart, isInCart, getItemQuantity]
+  );
 
   return (
-    <CartContext.Provider
-      value={{
-        items,
-        itemCount,
-        subtotal,
-        currencyCode,
-        addItem,
-        removeItem,
-        updateQuantity,
-        clearCart,
-        isInCart,
-        getItemQuantity,
-      }}
-    >
+    <CartContext.Provider value={contextValue}>
       {children}
     </CartContext.Provider>
   );
