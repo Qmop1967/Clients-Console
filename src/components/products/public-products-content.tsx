@@ -459,9 +459,9 @@ export function PublicProductsContent({
 
           {/* Sort Dropdown */}
           <div className="flex items-center gap-2">
-            <SlidersHorizontal className="h-4 w-4 text-muted-foreground hidden sm:block" />
+            <SlidersHorizontal className="h-4 w-4 text-muted-foreground hidden sm:block" aria-hidden="true" />
             <Select value={sortBy} onValueChange={(value) => setSortBy(value as SortOption)}>
-              <SelectTrigger className="w-full sm:w-[180px]">
+              <SelectTrigger className="w-full sm:w-[180px]" aria-label={t("sortBy")}>
                 <SelectValue placeholder={t("sortBy")} />
               </SelectTrigger>
               <SelectContent>

@@ -91,15 +91,15 @@ export function PublicHeader({ locale }: PublicHeaderProps) {
           {/* Auth Button - Premium styling */}
           {isAuthenticated ? (
             <Button asChild variant="luxury" size="default">
-              <Link href={`/${locale}/dashboard`}>
-                <LayoutDashboard className="h-4 w-4" />
+              <Link href={`/${locale}/dashboard`} aria-label={tNav("dashboard")}>
+                <LayoutDashboard className="h-4 w-4" aria-hidden="true" />
                 <span className="hidden sm:inline">{tNav("dashboard")}</span>
               </Link>
             </Button>
           ) : (
             <Button asChild variant="gold" size="default">
-              <Link href={`/${locale}/login`}>
-                <User className="h-4 w-4" />
+              <Link href={`/${locale}/login`} aria-label={t("login")}>
+                <User className="h-4 w-4" aria-hidden="true" />
                 <span className="hidden sm:inline">{t("login")}</span>
               </Link>
             </Button>
