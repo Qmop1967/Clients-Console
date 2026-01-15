@@ -153,12 +153,13 @@ const ProductCardWithCart = memo(function ProductCardWithCart({
     >
       {/* Product Image with overlay */}
       <div className="relative overflow-hidden">
+        {/* LCP OPTIMIZATION: sizes must match grid layout (grid-cols-2 on mobile = 50vw) */}
         <ProductImage
           src={product.image_url}
           alt={product.name}
           className="aspect-square"
           priority={priority}
-          sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, (max-width: 1280px) 33vw, 25vw"
+          sizes="(max-width: 1024px) 50vw, (max-width: 1280px) 33vw, 25vw"
         />
 
         {/* Gradient overlay on hover */}

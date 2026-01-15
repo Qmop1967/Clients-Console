@@ -30,7 +30,8 @@ export const ProductImage = memo(function ProductImage({
   alt,
   className,
   priority = false,
-  sizes = "(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw",
+  // LCP OPTIMIZATION: Default sizes match 2-column mobile grid (50vw)
+  sizes = "(max-width: 1024px) 50vw, (max-width: 1280px) 33vw, 25vw",
 }: ProductImageProps) {
   const [hasError, setHasError] = useState(false);
   const [isLoading, setIsLoading] = useState(true);

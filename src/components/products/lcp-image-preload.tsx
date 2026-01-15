@@ -23,16 +23,11 @@ interface LCPImagePreloadProps {
 export function LCPImagePreload({ imageUrl }: LCPImagePreloadProps) {
   if (!imageUrl) return null;
 
-  // For Next.js Image optimization, we need to construct the optimized URL
-  // But for direct Blob CDN URLs, we can use them directly
-  const isDirectBlobUrl = imageUrl.startsWith('https://');
-
-  // Use the direct URL or construct Next.js optimized URL
+  // CRITICAL: Always use /_next/image URL because that's what the <img> will request
+  // Preloading raw blob URL is useless - browser needs the exact URL it will fetch
   // LCP OPTIMIZATION: Quality 55 matches ProductImage priority quality
   // Width 384 is optimal for mobile 2-column grid (192px * 2 for retina)
-  const preloadUrl = isDirectBlobUrl
-    ? imageUrl
-    : `/_next/image?url=${encodeURIComponent(imageUrl)}&w=384&q=55`;
+  const preloadUrl = `/_next/image?url=${encodeURIComponent(imageUrl)}&w=384&q=55`;
 
   return (
     <link
@@ -41,9 +36,8 @@ export function LCPImagePreload({ imageUrl }: LCPImagePreloadProps) {
       href={preloadUrl}
       // @ts-expect-error - fetchpriority is valid but not in React types yet
       fetchpriority="high"
-      // LCP OPTIMIZATION: Mobile-first sizing - most LCP tests use mobile
-      // 2-column grid on mobile = ~50vw per image
-      imagesizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
+      // LCP OPTIMIZATION: sizes must match component (50vw on mobile 2-col grid)
+      imagesizes="(max-width: 1024px) 50vw, (max-width: 1280px) 33vw, 25vw"
       imagesrcset={`${preloadUrl} 384w`}
     />
   );
