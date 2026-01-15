@@ -58,8 +58,9 @@ export async function POST(request: NextRequest) {
     }
 
     // Generate reference number (e.g., WEB-20241128-123456)
-    const timestamp = new Date();
-    const referenceNumber = `WEB-${timestamp.getFullYear()}${String(timestamp.getMonth() + 1).padStart(2, '0')}${String(timestamp.getDate()).padStart(2, '0')}-${String(timestamp.getTime()).slice(-6)}`;
+    const now = new Date();
+    const dateStr = now.toISOString().slice(0, 10).replace(/-/g, '');
+    const referenceNumber = `WEB-${dateStr}-${String(now.getTime()).slice(-6)}`;
 
     // Prepare line items for Zoho
     const lineItems = items.map(item => ({
@@ -112,20 +113,16 @@ export async function POST(request: NextRequest) {
 
     // Step 3: Create invoice from the sales order
     const invoice = await createInvoiceFromSalesOrder(order.salesorder_id);
-    let invoiceNumber = null;
-    let invoiceId = null;
 
     if (invoice) {
-      invoiceNumber = invoice.invoice_number;
-      invoiceId = invoice.invoice_id;
-      console.log(`[Checkout] Invoice ${invoiceNumber} created for order ${order.salesorder_number}`);
+      console.log(`[Checkout] Invoice ${invoice.invoice_number} created for order ${order.salesorder_number}`);
 
       // Step 4: Confirm the invoice (mark as sent)
       const invoiceConfirmed = await confirmInvoice(invoice.invoice_id);
-      if (!invoiceConfirmed) {
-        console.warn(`[Checkout] Failed to confirm invoice ${invoiceNumber}, continuing anyway`);
+      if (invoiceConfirmed) {
+        console.log(`[Checkout] Invoice ${invoice.invoice_number} confirmed (sent)`);
       } else {
-        console.log(`[Checkout] Invoice ${invoiceNumber} confirmed (sent)`);
+        console.warn(`[Checkout] Failed to confirm invoice ${invoice.invoice_number}, continuing anyway`);
       }
     } else {
       console.warn(`[Checkout] Failed to create invoice for order ${order.salesorder_number}`);
@@ -141,10 +138,9 @@ export async function POST(request: NextRequest) {
         status: confirmed ? 'confirmed' : order.status,
         date: order.date,
       },
-      invoice: invoice ? {
-        invoice_id: invoiceId,
-        invoice_number: invoiceNumber,
-      } : null,
+      invoice: invoice
+        ? { invoice_id: invoice.invoice_id, invoice_number: invoice.invoice_number }
+        : null,
     });
 
   } catch (error) {
