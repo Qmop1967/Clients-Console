@@ -149,7 +149,11 @@ const ProductCardWithCart = memo(function ProductCardWithCart({
     <Link
       href={`/${locale}/shop/${product.item_id}`}
       onClick={handleCardClick}
-      className="group block rounded-2xl border bg-card overflow-hidden native-press transition-all duration-200 active:scale-[0.98] hover:shadow-lg hover:-translate-y-0.5"
+      className={cn(
+        "group block rounded-2xl border bg-card overflow-hidden native-press transition-all duration-200 active:scale-[0.98] hover:shadow-lg hover:-translate-y-0.5",
+        // LCP OPTIMIZATION: Skip rendering below-fold cards until scrolled into view
+        !priority && "content-auto"
+      )}
     >
       {/* Product Image with overlay */}
       <div className="relative overflow-hidden">

@@ -363,6 +363,17 @@
     text-wrap: balance;
   }
 
+  /* ========================================
+     LCP Performance Utilities
+     ======================================== */
+
+  /* Content visibility optimization for below-fold content */
+  /* Tells browser to skip rendering off-screen content until needed */
+  .content-auto {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 400px; /* Estimated card height */
+  }
+
   /* Hide scrollbar */
   .scrollbar-hide {
     -ms-overflow-style: none;

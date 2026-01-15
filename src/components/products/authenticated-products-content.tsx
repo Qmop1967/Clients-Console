@@ -53,15 +53,20 @@ interface AuthenticatedProductsContentProps {
   error?: string | null;
 }
 
+// LCP OPTIMIZATION: Only first 2 products get priority (above-fold on mobile)
+const PRIORITY_PRODUCTS_COUNT = 2;
+
 // Memoized Product Card Component with Add to Cart - Enhanced Design (Same as Public)
 const ProductCardWithCart = memo(function ProductCardWithCart({
   product,
   currencyCode,
   locale,
+  priority = false,
 }: {
   product: AuthenticatedProduct;
   currencyCode: string;
   locale: string;
+  priority?: boolean;
 }) {
   const t = useTranslations("products");
   const { addItem, getItemQuantity } = useCart();
@@ -115,7 +120,11 @@ const ProductCardWithCart = memo(function ProductCardWithCart({
   return (
     <Link
       href={`/${locale}/shop/${product.item_id}`}
-      className="group block rounded-xl border bg-card card-hover overflow-hidden"
+      className={cn(
+        "group block rounded-xl border bg-card card-hover overflow-hidden",
+        // LCP OPTIMIZATION: Skip rendering below-fold cards until scrolled into view
+        !priority && "content-auto"
+      )}
     >
       {/* Product Image with overlay */}
       <div className="relative img-hover-zoom">
@@ -123,7 +132,7 @@ const ProductCardWithCart = memo(function ProductCardWithCart({
           src={product.image_url}
           alt={product.name}
           className="aspect-square"
-          priority={false}
+          priority={priority}
         />
 
         {/* Gradient overlay on hover */}
@@ -350,12 +359,13 @@ export function AuthenticatedProductsContent({
 
           {/* Product Grid */}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {paginatedProducts.map((product) => (
+            {paginatedProducts.map((product, index) => (
               <ProductCardWithCart
                 key={product.item_id}
                 product={product}
                 currencyCode={currencyCode}
                 locale={locale}
+                priority={currentPage === 1 && index < PRIORITY_PRODUCTS_COUNT}
               />
             ))}
           </div>
