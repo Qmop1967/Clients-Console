@@ -173,9 +173,9 @@ const ProductCardWithCart = memo(function ProductCardWithCart({
                   "stock-indicator text-xs font-medium",
                   isInStock
                     ? isLowStock
-                      ? "stock-low text-amber-600 dark:text-amber-400"
-                      : "stock-in text-emerald-600 dark:text-emerald-400"
-                    : "stock-out text-red-500"
+                      ? "stock-low text-amber-700 dark:text-amber-400"
+                      : "stock-in text-emerald-700 dark:text-emerald-400"
+                    : "stock-out text-red-600"
                 )}
               >
                 {isInStock
