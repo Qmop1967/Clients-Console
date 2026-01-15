@@ -25,6 +25,17 @@ const verifySchema = z.object({
   code: z.string().length(6).regex(/^\d{6}$/),
 });
 
+// Demo account for Apple App Store review
+const DEMO_EMAIL = 'demo@tsh.sale';
+const DEMO_USER: MobileUser = {
+  id: 'mobile:demo-user',
+  email: DEMO_EMAIL,
+  name: 'Demo User',
+  zohoContactId: 'demo-contact-id',
+  priceListId: '2646610000049149103', // Consumer price list (public prices)
+  currencyCode: 'IQD',
+};
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -61,6 +72,40 @@ export async function POST(request: NextRequest) {
         },
         { status: 400 }  // Use 400, not 401, so Swift client reads the error message
       );
+    }
+
+    // Handle demo account for Apple App Store review
+    const emailLower = email.toLowerCase();
+    if (emailLower === DEMO_EMAIL) {
+      // Store demo user in Redis
+      await redis.set(
+        `mobile:user:${DEMO_USER.id}`,
+        JSON.stringify(DEMO_USER),
+        { ex: 30 * 24 * 60 * 60 } // 30 days
+      );
+
+      // Generate JWT token pair for demo user
+      const tokens = await generateTokenPair(DEMO_USER);
+
+      console.log(`[Mobile Verify] Demo account authenticated: ${emailLower}`);
+
+      return NextResponse.json({
+        success: true,
+        data: {
+          access_token: tokens.accessToken,
+          refresh_token: tokens.refreshToken,
+          expires_at: Math.floor(Date.now() / 1000) + tokens.expiresIn,
+          user: {
+            id: DEMO_USER.id,
+            email: DEMO_USER.email,
+            name: DEMO_USER.name,
+            company_name: 'Demo Company',
+            zoho_contact_id: DEMO_USER.zohoContactId,
+            price_list_id: DEMO_USER.priceListId,
+            currency_code: DEMO_USER.currencyCode,
+          },
+        },
+      });
     }
 
     // Get customer from Zoho
