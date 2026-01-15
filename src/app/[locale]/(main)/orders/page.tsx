@@ -7,6 +7,9 @@ import { OrdersSkeleton } from "@/components/orders/orders-skeleton";
 import { getCustomerOrders, getOrderSummaryStats, type OrderSummaryStats } from "@/lib/zoho/orders";
 import type { ZohoSalesOrder, PaginatedResponse } from "@/types";
 
+// ISR: Revalidate every 60 seconds for fresher order data
+export const revalidate = 60;
+
 export async function generateMetadata() {
   const t = await getTranslations("orders");
   return {

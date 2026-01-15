@@ -9,6 +9,9 @@ import { Button } from "@/components/ui/button";
 import { getCustomerPayments } from "@/lib/zoho/payments";
 import type { ZohoPayment, PaginatedResponse } from "@/types";
 
+// ISR: Revalidate every 60 seconds for fresher payment data
+export const revalidate = 60;
+
 export async function generateMetadata() {
   const t = await getTranslations("payments");
   return {

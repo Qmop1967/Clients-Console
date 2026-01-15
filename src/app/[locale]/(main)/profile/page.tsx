@@ -9,6 +9,9 @@ import { User, Mail, Phone, Building, MapPin, CreditCard, AlertCircle } from "lu
 import { getZohoCustomer } from "@/lib/zoho/customers";
 import { getPriceList } from "@/lib/zoho/price-lists";
 
+// ISR: Revalidate every 5 minutes (profile data changes less frequently)
+export const revalidate = 300;
+
 export async function generateMetadata() {
   const t = await getTranslations("profile");
   return {
@@ -24,15 +27,16 @@ export default async function ProfilePage() {
     redirect("/login");
   }
 
-  // Fetch real Zoho customer data if linked
-  const zohoCustomer = session.user.zohoContactId
-    ? await getZohoCustomer(session.user.zohoContactId)
-    : null;
-
-  // Fetch price list info if available
-  const priceList = zohoCustomer?.price_list_id
-    ? await getPriceList(zohoCustomer.price_list_id)
-    : null;
+  // Fetch customer and price list in parallel for better performance
+  // Use session.user.priceListId (already stored) to avoid waiting for customer fetch
+  const [zohoCustomer, priceList] = await Promise.all([
+    session.user.zohoContactId
+      ? getZohoCustomer(session.user.zohoContactId)
+      : Promise.resolve(null),
+    session.user.priceListId
+      ? getPriceList(session.user.priceListId)
+      : Promise.resolve(null),
+  ]);
 
   // Build profile from Zoho data or fallback to session data
   const profile = {

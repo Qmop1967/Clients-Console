@@ -9,6 +9,9 @@ import { Button } from "@/components/ui/button";
 import { getCustomerCreditNotes, getAvailableCreditBalance } from "@/lib/zoho/credit-notes";
 import type { ZohoCreditNote, PaginatedResponse } from "@/types";
 
+// ISR: Revalidate every 60 seconds for fresher credit note data
+export const revalidate = 60;
+
 export async function generateMetadata() {
   const t = await getTranslations("creditNotes");
   return {

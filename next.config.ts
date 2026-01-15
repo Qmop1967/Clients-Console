@@ -128,7 +128,7 @@ const nextConfig: NextConfig = {
       },
       // PERFORMANCE: Short cache for authenticated pages (dashboard, orders, etc.)
       {
-        source: "/:locale(en|ar)/(dashboard|orders|invoices|payments)",
+        source: "/:locale(en|ar)/(dashboard|orders|invoices|payments|credit-notes|profile|account-statement)",
         headers: [
           {
             key: "Cache-Control",

@@ -4,6 +4,9 @@ import { createSalesOrder, confirmSalesOrder, createInvoiceFromSalesOrder, confi
 import { z } from 'zod';
 import { isCatalogModeEnabled, CATALOG_MODE_ERROR } from '@/lib/utils/catalog-mode';
 
+// Allow 60 seconds for checkout (creates order + invoice with multiple API calls)
+export const maxDuration = 60;
+
 // Validation schema for checkout request
 const checkoutSchema = z.object({
   items: z.array(z.object({

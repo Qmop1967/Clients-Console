@@ -4,6 +4,9 @@ import { redirect } from "next/navigation";
 import { getAccountStatement } from "@/lib/zoho/statements";
 import { AccountStatementContent } from "@/components/statements/account-statement-content";
 
+// ISR: Revalidate every 60 seconds for fresher statement data
+export const revalidate = 60;
+
 export async function generateMetadata() {
   const t = await getTranslations("accountStatement");
   return {

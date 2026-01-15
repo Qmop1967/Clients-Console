@@ -8,6 +8,9 @@
 // ============================================
 
 import { NextRequest } from 'next/server';
+
+// Allow 60 seconds for product fetching with prices
+export const maxDuration = 60;
 import { getMobileAuth, mobileSuccess, mobileError } from '@/lib/auth/mobile-middleware';
 import { getProductsWithPrices } from '@/lib/zoho/products';
 import { PRICE_LIST_IDS, PRICE_LIST_INFO } from '@/lib/zoho/price-lists';

@@ -5,6 +5,9 @@ import { getCustomerInvoices, getInvoiceSummaryStats, type InvoiceSummaryStats }
 import { InvoicesContent } from "@/components/invoices/invoices-content";
 import type { ZohoInvoice, PaginatedResponse } from "@/types";
 
+// ISR: Revalidate every 60 seconds for fresher invoice data
+export const revalidate = 60;
+
 export async function generateMetadata() {
   const t = await getTranslations("invoices");
   return {

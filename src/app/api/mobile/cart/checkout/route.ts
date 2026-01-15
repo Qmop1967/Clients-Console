@@ -8,6 +8,9 @@
 
 import { NextRequest } from 'next/server';
 import { z } from 'zod';
+
+// Allow 60 seconds for checkout (creates order + invoice with multiple API calls)
+export const maxDuration = 60;
 import {
   requireMobileAuth,
   isAuthError,
