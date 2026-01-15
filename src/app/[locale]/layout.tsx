@@ -36,23 +36,24 @@ const cormorantGaramond = Cormorant_Garamond({
 });
 
 // Arabic display font
-// PERFORMANCE: Reduced weights from 4 to 3 for faster loading
+// PERFORMANCE: Enable preload for Arabic fonts to fix LCP on /ar/* pages
+// Without preload, Arabic text causes 2+ second render delay
 const cairo = Cairo({
   subsets: ["arabic", "latin"],
-  weight: ["400", "600", "700"], // Removed 500 - use 600 instead
+  weight: ["400", "600", "700"],
   variable: "--font-cairo",
   display: "swap",
-  preload: false, // Preloaded only for Arabic locale
+  preload: true, // Enable preload - critical for Arabic LCP
 });
 
 // Arabic body font
-// PERFORMANCE: Reduced weights from 5 to 3 for faster loading
+// PERFORMANCE: Enable preload for Arabic fonts
 const ibmPlexSansArabic = IBM_Plex_Sans_Arabic({
   subsets: ["arabic", "latin"],
-  weight: ["400", "500", "600"], // Removed 300 and 700 - rarely used
+  weight: ["400", "500", "600"],
   variable: "--font-ibm-arabic",
   display: "swap",
-  preload: false, // Preloaded only for Arabic locale
+  preload: true, // Enable preload - critical for Arabic LCP
 });
 
 export const metadata: Metadata = {

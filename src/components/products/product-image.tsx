@@ -50,9 +50,10 @@ export const ProductImage = memo(function ProductImage({
         priority={priority}
         loading={priority ? "eager" : "lazy"}
         fetchPriority={priority ? "high" : "auto"}
-        // LCP OPTIMIZATION: Reduced quality for faster load
-        // Thumbnails are small (~300px) so 70/60 is visually indistinguishable from 80/75
-        quality={priority ? 70 : 60}
+        // LCP OPTIMIZATION: Aggressive quality reduction for mobile
+        // Mobile thumbnails are ~150-200px, so 50/40 quality is visually acceptable
+        // Desktop gets slightly higher quality via responsive sizing
+        quality={priority ? 55 : 45}
         className={cn(
           "object-contain transition-opacity duration-150",
           isLoading ? "opacity-0" : "opacity-100"

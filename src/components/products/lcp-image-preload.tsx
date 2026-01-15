@@ -28,10 +28,11 @@ export function LCPImagePreload({ imageUrl }: LCPImagePreloadProps) {
   const isDirectBlobUrl = imageUrl.startsWith('https://');
 
   // Use the direct URL or construct Next.js optimized URL
-  // LCP OPTIMIZATION: Reduced quality from 80 to 70 to match ProductImage component
+  // LCP OPTIMIZATION: Quality 55 matches ProductImage priority quality
+  // Width 384 is optimal for mobile 2-column grid (192px * 2 for retina)
   const preloadUrl = isDirectBlobUrl
     ? imageUrl
-    : `/_next/image?url=${encodeURIComponent(imageUrl)}&w=640&q=70`;
+    : `/_next/image?url=${encodeURIComponent(imageUrl)}&w=384&q=55`;
 
   return (
     <link
@@ -40,10 +41,10 @@ export function LCPImagePreload({ imageUrl }: LCPImagePreloadProps) {
       href={preloadUrl}
       // @ts-expect-error - fetchpriority is valid but not in React types yet
       fetchpriority="high"
-      type="image/webp"
-      // LCP OPTIMIZATION: Add imagesizes hint for responsive preload
-      // Mobile: ~50vw (2 columns), Desktop: ~25vw (4 columns)
-      imagesizes="(max-width: 640px) 50vw, 25vw"
+      // LCP OPTIMIZATION: Mobile-first sizing - most LCP tests use mobile
+      // 2-column grid on mobile = ~50vw per image
+      imagesizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
+      imagesrcset={`${preloadUrl} 384w`}
     />
   );
 }
