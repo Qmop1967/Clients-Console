@@ -62,6 +62,9 @@ const nextConfig: NextConfig = {
     serverActions: {
       bodySizeLimit: "2mb",
     },
+    // LCP OPTIMIZATION: Inline critical CSS to eliminate render-blocking
+    // Uses critters to extract and inline above-the-fold CSS
+    optimizeCss: true,
     // Enable optimized package imports for smaller bundles
     // This tree-shakes unused exports from these packages
     optimizePackageImports: [
