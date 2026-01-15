@@ -66,10 +66,10 @@ interface PublicProductsContentProps {
   onClearCategory?: () => void;
 }
 
-// LCP OPTIMIZATION: Reduced from 8 to 4 priority products
-// Only first row is truly above-the-fold (4 desktop, 2 mobile)
+// LCP OPTIMIZATION: Reduced from 4 to 2 priority products
+// On mobile, only 2 products are above-the-fold
 // Fewer priority images = less bandwidth contention = faster LCP
-const PRIORITY_PRODUCTS_COUNT = 4;
+const PRIORITY_PRODUCTS_COUNT = 2;
 
 // Memoized Product Card Component with Add to Cart - Enhanced Design
 const ProductCardWithCart = memo(function ProductCardWithCart({

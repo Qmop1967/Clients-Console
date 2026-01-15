@@ -118,9 +118,10 @@ export default async function RootLayout({
   return (
     <html lang={locale} dir={dir} suppressHydrationWarning className={fontVariables}>
       <head>
-        {/* Preconnect to Zoho domains for faster API and image loading */}
+        {/* Preconnect to Vercel Blob storage for faster image loading (LCP optimization) */}
+        <link rel="preconnect" href="https://lansoqc5n02d04nj.public.blob.vercel-storage.com" crossOrigin="anonymous" />
+        {/* Preconnect to Zoho domains for faster API loading */}
         <link rel="preconnect" href="https://www.zohoapis.com" crossOrigin="anonymous" />
-        <link rel="preconnect" href="https://books.zoho.com" crossOrigin="anonymous" />
         <link rel="dns-prefetch" href="https://www.zohoapis.com" />
         <link rel="dns-prefetch" href="https://books.zoho.com" />
         <link rel="dns-prefetch" href="https://inventory.zoho.com" />
