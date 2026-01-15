@@ -15,45 +15,44 @@ import "../globals.css";
 import { Plus_Jakarta_Sans, Cormorant_Garamond, Cairo, IBM_Plex_Sans_Arabic } from "next/font/google";
 
 // Body font - Latin (used for most UI text)
-// PERFORMANCE: Reduced weights from 5 to 3 for faster loading
+// PERF: Minimal weights - 400 for body, 600 for emphasis (use CSS font-weight for 500)
 const plusJakartaSans = Plus_Jakarta_Sans({
   subsets: ["latin"],
-  weight: ["400", "500", "600"], // Removed 300 and 700 - rarely used
+  weight: ["400", "600"],
   variable: "--font-jakarta",
   display: "swap",
   preload: true,
 });
 
 // Display font - Latin (used for headings, prices)
-// PERFORMANCE: Enable preload for display font - prices are key LCP elements
+// PERF: Single weight - CSS can fake lighter/heavier with font-synthesis
 const cormorantGaramond = Cormorant_Garamond({
   subsets: ["latin"],
-  weight: ["500", "600"], // Only preload weights actually used for prices
+  weight: ["600"],
   style: ["normal"],
   variable: "--font-cormorant",
   display: "swap",
-  preload: true, // Preload display font for faster LCP on price elements
+  preload: true,
 });
 
-// Arabic display font
-// PERFORMANCE: Enable preload for Arabic fonts to fix LCP on /ar/* pages
-// Without preload, Arabic text causes 2+ second render delay
+// Arabic display font - headings only
+// PERF: 600 for regular headings, 700 for emphasis - skip 400
 const cairo = Cairo({
   subsets: ["arabic", "latin"],
-  weight: ["400", "600", "700"],
+  weight: ["600", "700"],
   variable: "--font-cairo",
   display: "swap",
-  preload: true, // Enable preload - critical for Arabic LCP
+  preload: true,
 });
 
 // Arabic body font
-// PERFORMANCE: Enable preload for Arabic fonts
+// PERF: 400 for body, 600 for emphasis - skip 500 (use 600 instead)
 const ibmPlexSansArabic = IBM_Plex_Sans_Arabic({
   subsets: ["arabic", "latin"],
-  weight: ["400", "500", "600"],
+  weight: ["400", "600"],
   variable: "--font-ibm-arabic",
   display: "swap",
-  preload: true, // Enable preload - critical for Arabic LCP
+  preload: true,
 });
 
 export const metadata: Metadata = {

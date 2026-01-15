@@ -5,6 +5,7 @@ import { useTranslations, useLocale } from "next-intl";
 import { useSearchParams, usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -19,10 +20,15 @@ import { ProductImage } from "./product-image";
 import { useCart } from "@/components/providers/cart-provider";
 import { useCatalogMode } from "@/components/providers/catalog-mode-provider";
 import { Search, ShoppingCart, Check, Eye, ChevronRight, X, SlidersHorizontal, MessageCircle } from "lucide-react";
-import { WholesaleQuantityInput } from "@/components/ui/wholesale-quantity-input";
 import { NumberedPagination } from "@/components/ui/pagination";
 import { cn } from "@/lib/utils/cn";
 import { formatCurrency } from "@/lib/utils/format";
+
+// PERF: Lazy load quantity input - not needed for LCP, reduces initial JS bundle
+const WholesaleQuantityInput = dynamic(
+  () => import("@/components/ui/wholesale-quantity-input").then(mod => ({ default: mod.WholesaleQuantityInput })),
+  { ssr: false, loading: () => <div className="h-[120px]" /> }
+);
 
 // Session storage key for scroll position
 const SCROLL_POSITION_KEY = "shop_scroll_position";

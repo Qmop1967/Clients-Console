@@ -3,14 +3,20 @@
 import { useState, useMemo, useEffect, useCallback, memo } from "react";
 import { useTranslations, useLocale } from "next-intl";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ProductImage } from "./product-image";
 import { useCart } from "@/components/providers/cart-provider";
 import { Search, ShoppingCart, Check, Eye, ChevronLeft, ChevronRight } from "lucide-react";
-import { WholesaleQuantityInput } from "@/components/ui/wholesale-quantity-input";
 import { cn } from "@/lib/utils/cn";
 import { formatCurrency } from "@/lib/utils/format";
+
+// PERF: Lazy load quantity input - not needed for LCP, reduces initial JS bundle
+const WholesaleQuantityInput = dynamic(
+  () => import("@/components/ui/wholesale-quantity-input").then(mod => ({ default: mod.WholesaleQuantityInput })),
+  { ssr: false, loading: () => <div className="h-[120px]" /> }
+);
 
 // Pagination configuration
 const PRODUCTS_PER_PAGE = 24;
