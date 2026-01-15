@@ -16,9 +16,6 @@ interface ProductImageProps {
 // Simple gray placeholder - minimal data URL for fast initial render
 const PLACEHOLDER_BLUR = "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjQwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iNDAwIiBoZWlnaHQ9IjQwMCIgZmlsbD0iI2YwZjBmMCIvPjwvc3ZnPg==";
 
-// Check if URL is a direct Blob CDN URL (already optimized)
-const isDirectBlobUrl = (url: string) => url.startsWith('https://');
-
 // Memoized placeholder component for fast render
 const ImagePlaceholder = memo(function ImagePlaceholder({ className }: { className?: string }) {
   return (
@@ -42,11 +39,6 @@ export const ProductImage = memo(function ProductImage({
   if (!src || hasError) {
     return <ImagePlaceholder className={className} />;
   }
-
-  // LCP OPTIMIZATION: Direct Blob CDN URLs are already optimized
-  // Skip Next.js image optimization for these to avoid double processing
-  // This reduces latency by ~50-100ms per image
-  const shouldSkipOptimization = isDirectBlobUrl(src);
 
   return (
     <div className={cn("relative overflow-hidden bg-muted", className)}>
@@ -72,9 +64,6 @@ export const ProductImage = memo(function ProductImage({
           setHasError(true);
           setIsLoading(false);
         }}
-        // LCP OPTIMIZATION: Skip Next.js optimization for direct Blob URLs
-        // They're already optimized via Vercel Blob CDN
-        unoptimized={shouldSkipOptimization}
       />
       {/* Show placeholder only while loading - no animation for performance */}
       {isLoading && (

@@ -39,6 +39,11 @@ const nextConfig: NextConfig = {
         protocol: "https",
         hostname: "books.zoho.com",
       },
+      // Vercel Blob storage for product images (LCP optimization)
+      {
+        protocol: "https",
+        hostname: "*.public.blob.vercel-storage.com",
+      },
     ],
     // Prefer WebP over AVIF for faster encoding (better LCP)
     formats: ["image/webp"],
