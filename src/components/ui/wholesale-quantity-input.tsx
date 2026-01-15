@@ -181,8 +181,9 @@ export function WholesaleQuantityInput({
           className="h-9 w-9 shrink-0 rounded-lg"
           onClick={(e) => handleDecrement(e, 1)}
           disabled={disabled || value <= min}
+          aria-label="Decrease quantity"
         >
-          <Minus className="h-4 w-4" />
+          <Minus className="h-4 w-4" aria-hidden="true" />
         </Button>
 
         {/* Editable input */}
@@ -198,6 +199,7 @@ export function WholesaleQuantityInput({
           onKeyDown={handleKeyDown}
           onClick={handleWrapperClick}
           disabled={disabled}
+          aria-label="Quantity"
           className={cn(
             "h-9 w-full min-w-[60px] flex-1 rounded-lg border bg-background px-2 text-center text-lg font-semibold tabular-nums",
             "transition-all duration-200",
@@ -215,8 +217,9 @@ export function WholesaleQuantityInput({
           className="h-9 w-9 shrink-0 rounded-lg"
           onClick={(e) => handleIncrement(e, 1)}
           disabled={disabled || value >= max}
+          aria-label="Increase quantity"
         >
-          <Plus className="h-4 w-4" />
+          <Plus className="h-4 w-4" aria-hidden="true" />
         </Button>
       </div>
 
@@ -227,6 +230,7 @@ export function WholesaleQuantityInput({
           type="button"
           onClick={(e) => handleIncrement(e, 10)}
           disabled={disabled || value >= max}
+          aria-label="Add 10 to quantity"
           className={cn(
             "h-10 px-2 rounded-xl text-sm font-bold tabular-nums whitespace-nowrap",
             "bg-gradient-to-b from-muted/90 to-muted",
@@ -247,6 +251,7 @@ export function WholesaleQuantityInput({
           type="button"
           onClick={(e) => handleIncrement(e, 100)}
           disabled={disabled || value >= max}
+          aria-label="Add 100 to quantity"
           className={cn(
             "h-10 px-2 rounded-xl text-sm font-bold tabular-nums whitespace-nowrap",
             "bg-gradient-to-b from-muted/90 to-muted",
@@ -267,6 +272,7 @@ export function WholesaleQuantityInput({
           type="button"
           onClick={handleSetMax}
           disabled={disabled || value >= max}
+          aria-label="Set to maximum quantity"
           className={cn(
             "h-10 px-2 rounded-xl text-sm font-bold whitespace-nowrap",
             "inline-flex items-center justify-center gap-1",
@@ -281,7 +287,7 @@ export function WholesaleQuantityInput({
             "disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:shadow-[0_3px_0_0_rgba(180,120,30,0.5),inset_0_1px_0_0_rgba(255,255,255,0.15)]"
           )}
         >
-          <ChevronsUp className="h-3.5 w-3.5" />
+          <ChevronsUp className="h-3.5 w-3.5" aria-hidden="true" />
           <span>{translations.max}</span>
         </button>
       </div>

@@ -172,9 +172,9 @@ const ProductCardWithCart = memo(function ProductCardWithCart({
         {/* Product Info */}
         <div className="space-y-1.5 sm:space-y-2">
           {/* Product Name */}
-          <h3 className="font-semibold text-xs sm:text-sm line-clamp-2 min-h-[2rem] sm:min-h-[2.5rem] group-hover:text-primary transition-colors duration-200">
+          <h2 className="font-semibold text-xs sm:text-sm line-clamp-2 min-h-[2rem] sm:min-h-[2.5rem] group-hover:text-primary transition-colors duration-200">
             {product.name}
-          </h3>
+          </h2>
 
           {/* SKU & Brand */}
           <div className="flex items-center justify-between text-[10px] sm:text-xs text-muted-foreground">
@@ -447,12 +447,13 @@ export function PublicProductsContent({
             <Search className={cn(
               "absolute left-3 rtl:left-auto rtl:right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground transition-opacity",
               isSearching && "animate-pulse"
-            )} />
+            )} aria-hidden="true" />
             <Input
               placeholder={t("searchPlaceholder")}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="ps-10"
+              aria-label={t("searchPlaceholder")}
             />
           </div>
 
@@ -490,6 +491,7 @@ export function PublicProductsContent({
                   onClearCategory();
                 }}
                 className="hover:bg-white/20 rounded-full p-0.5 transition-colors"
+                aria-label={t("clearFilter")}
               >
                 <X className="h-3 w-3" />
               </button>
@@ -561,9 +563,9 @@ export function PublicProductsContent({
               {t("wholesaleCta")}
             </div>
 
-            <h3 className="text-2xl md:text-3xl font-bold mb-3">
+            <h2 className="text-2xl md:text-3xl font-bold mb-3">
               <span className="text-gradient">{t("wholesaleCta")}</span>
-            </h3>
+            </h2>
 
             <p className="text-muted-foreground max-w-lg mx-auto mb-6">
               {t("wholesaleCtaDescription")}

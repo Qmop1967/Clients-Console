@@ -95,7 +95,8 @@
       "Bash(done)",
       "Bash(printf:*)",
       "WebFetch(domain:tsh-clients-console-fcdmtrwzf-tsh-03790822.vercel.app)",
-      "WebFetch(domain:tsh-clients-console-1m13cqyd0-tsh-03790822.vercel.app)"
+      "WebFetch(domain:tsh-clients-console-1m13cqyd0-tsh-03790822.vercel.app)",
+      "Bash(__NEW_LINE_80bdf1e0d8d3fe76__ echo \"\")"
     ],
     "deny": [],
     "ask": []
@@ -103,5 +104,8 @@
   "enableAllProjectMcpServers": true,
   "enabledMcpjsonServers": [
     "zoho"
-  ]
+  ],
+  "enabledPlugins": {
+    "code-simplifier@claude-plugins-official": true
+  }
 }

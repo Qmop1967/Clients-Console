@@ -84,9 +84,9 @@ export const ProductCard = memo(function ProductCard({ product, currencyCode }: 
         )}
 
         {/* Name - Serif font for luxury */}
-        <h3 className="mb-1.5 line-clamp-2 font-display text-base font-medium leading-snug text-foreground">
+        <h2 className="mb-1.5 line-clamp-2 font-display text-base font-medium leading-snug text-foreground">
           {product.name}
-        </h3>
+        </h2>
 
         {/* SKU - Subtle */}
         <p className="mb-3 text-xs text-muted-foreground/70">{product.sku}</p>

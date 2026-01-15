@@ -137,9 +137,9 @@ const ProductCardWithCart = memo(function ProductCardWithCart({
         {/* Product Info */}
         <div className="space-y-2">
           {/* Product Name */}
-          <h3 className="font-semibold text-sm line-clamp-2 min-h-[2.5rem] group-hover:text-primary transition-colors duration-200">
+          <h2 className="font-semibold text-sm line-clamp-2 min-h-[2.5rem] group-hover:text-primary transition-colors duration-200">
             {product.name}
-          </h3>
+          </h2>
 
           {/* SKU & Brand */}
           <div className="flex items-center justify-between text-xs text-muted-foreground">

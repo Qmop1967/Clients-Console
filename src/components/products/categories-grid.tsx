@@ -121,9 +121,9 @@ export function CategoriesGrid({
         <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-muted mb-4">
           <Layers className="h-8 w-8 text-muted-foreground" />
         </div>
-        <h3 className="text-lg font-medium text-muted-foreground mb-2">
+        <h2 className="text-lg font-medium text-muted-foreground mb-2">
           {t("noCategoriesFound")}
-        </h3>
+        </h2>
         <p className="text-sm text-muted-foreground">
           {t("noCategoriesDescription")}
         </p>

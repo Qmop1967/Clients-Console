@@ -163,7 +163,8 @@
     "totalCategories": "{count} فئة",
     "noCategoriesFound": "لا توجد فئات",
     "noCategoriesDescription": "ستظهر الفئات هنا عند توفر المنتجات.",
-    "activeFilters": "الفلاتر النشطة"
+    "activeFilters": "الفلاتر النشطة",
+    "clearFilter": "مسح الفلتر"
   },
   "orders": {
     "title": "الطلبات",

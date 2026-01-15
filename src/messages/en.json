@@ -163,7 +163,8 @@
     "totalCategories": "{count} categories",
     "noCategoriesFound": "No categories found",
     "noCategoriesDescription": "Categories will appear here once products are available.",
-    "activeFilters": "Active filters"
+    "activeFilters": "Active filters",
+    "clearFilter": "Clear filter"
   },
   "orders": {
     "title": "Orders",
