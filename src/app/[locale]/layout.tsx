@@ -7,6 +7,7 @@ import { SessionProvider } from "@/components/providers/session-provider";
 import { CartSessionProvider } from "@/components/providers/cart-session-provider";
 import { CatalogModeProvider } from "@/components/providers/catalog-mode-provider";
 import { Toaster } from "@/components/ui/toaster";
+import { ChatWidget } from "@/components/ai/ChatWidget";
 import { locales, localeDirection, type Locale } from "@/i18n/config";
 import "../globals.css";
 
@@ -139,6 +140,7 @@ export default async function RootLayout({
               <CatalogModeProvider>
                 <CartSessionProvider>
                   {children}
+                  <ChatWidget />
                   <Toaster />
                 </CartSessionProvider>
               </CatalogModeProvider>

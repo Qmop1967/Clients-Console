@@ -507,5 +507,32 @@
     "contactSales": "Contact your sales representative for the latest prices",
     "apology": "We apologize for any inconvenience and appreciate your understanding and continued trust.",
     "understood": "Got it, continue browsing"
+  },
+  "ai": {
+    "assistant": {
+      "title": "AI Assistant",
+      "subtitle": "Your TSH shopping assistant",
+      "openChat": "Open AI Assistant",
+      "closeChat": "Close chat",
+      "sendMessage": "Send message",
+      "inputPlaceholder": "Type your message here...",
+      "inputHint": "Type in Iraqi dialect or English",
+      "welcome": "Hello! 👋\nI'm your TSH AI assistant. How can I help you today?",
+      "loadingResponse": "Thinking...",
+      "errorMessage": "Sorry, something went wrong. Please try again. 🙏",
+      "offlineMessage": "AI assistant is currently unavailable. Please try again later.",
+      "sessionExpired": "Your chat session has expired. Starting a new conversation."
+    },
+    "features": {
+      "semanticSearch": "Smart product search in Iraqi dialect",
+      "stockCheck": "Real-time stock availability",
+      "priceInquiry": "Personalized pricing",
+      "orderAssistance": "Guided order creation"
+    },
+    "limitations": {
+      "noNegotiation": "Prices are fixed per customer type",
+      "noEditing": "Orders cannot be edited after confirmation",
+      "noPaymentTerms": "Payment terms are set by admin"
+    }
   }
 }
