@@ -19,13 +19,12 @@ import {
   Search,
   ArrowUpRight,
   ArrowDownLeft,
-  ChevronDown,
-  ChevronUp,
   Banknote,
   ScrollText,
 } from "lucide-react";
-import type { AccountStatementData } from "@/lib/zoho/statements";
+import type { AccountStatementData, StatementTransaction } from "@/lib/zoho/statements";
 import { cn } from "@/lib/utils/cn";
+import { Link } from "@/i18n/navigation";
 
 interface AccountStatementContentProps {
   statement: AccountStatementData;
@@ -41,7 +40,6 @@ export function AccountStatementContent({
   const t = useTranslations("accountStatement");
   const [searchQuery, setSearchQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState<FilterType>("all");
-  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
 
   const currency = statement.currency_code || currencyCode;
 
@@ -146,16 +144,17 @@ export function AccountStatementContent({
     }
   };
 
-  const toggleRow = (id: string) => {
-    setExpandedRows((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
-      return next;
-    });
+  const getTransactionLink = (tx: StatementTransaction) => {
+    switch (tx.transaction_type) {
+      case "invoice":
+        return `/invoices/${tx.transaction_id}`;
+      case "payment":
+        return `/payments/${tx.transaction_id}`;
+      case "credit_note":
+        return `/credit-notes/${tx.transaction_id}`;
+      default:
+        return null;
+    }
   };
 
   return (
@@ -382,7 +381,63 @@ export function AccountStatementContent({
               {filteredTransactions.map((tx) => {
                 const Icon = getTransactionIcon(tx.transaction_type);
                 const colors = getTransactionColor(tx.transaction_type);
-                const isExpanded = expandedRows.has(tx.transaction_id);
+                const txLink = getTransactionLink(tx);
+                const DesktopContent = (
+                  <div className="hidden md:grid grid-cols-12 gap-4 px-4 py-4 items-center">
+                    {/* Date */}
+                    <div className="col-span-2 flex items-center gap-2">
+                      <div className="text-xs text-muted-foreground">
+                        <Calendar className="h-3.5 w-3.5 inline mr-1" />
+                        {formatDate(tx.date)}
+                      </div>
+                    </div>
+
+                    {/* Transaction */}
+                    <div className="col-span-4 flex items-center gap-3">
+                      <div className={cn("rounded-full p-2", colors.bg)}>
+                        <Icon className={cn("h-4 w-4", colors.text)} />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold truncate">{tx.transaction_number}</span>
+                          <Badge className={cn("text-[10px] border shrink-0", colors.badge)}>
+                            {tx.transaction_type === "invoice" && t("invoice")}
+                            {tx.transaction_type === "payment" && t("payment")}
+                            {tx.transaction_type === "credit_note" && t("creditNote")}
+                          </Badge>
+                        </div>
+                        <p className="text-xs text-muted-foreground truncate">{tx.description}</p>
+                      </div>
+                    </div>
+
+                    {/* Debit */}
+                    <div className="col-span-2 text-right">
+                      {tx.debit > 0 ? (
+                        <span className="font-medium text-red-600 dark:text-red-400">
+                          {formatCurrency(tx.debit)}
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground">-</span>
+                      )}
+                    </div>
+
+                    {/* Credit */}
+                    <div className="col-span-2 text-right">
+                      {tx.credit > 0 ? (
+                        <span className="font-medium text-green-600 dark:text-green-400">
+                          {formatCurrency(tx.credit)}
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground">-</span>
+                      )}
+                    </div>
+
+                    {/* Balance */}
+                    <div className="col-span-2 text-right">
+                      <span className="font-bold">{formatCurrency(tx.balance)}</span>
+                    </div>
+                  </div>
+                );
 
                 return (
                   <div
@@ -393,139 +448,113 @@ export function AccountStatementContent({
                     )}
                   >
                     {/* Desktop View */}
-                    <div className="hidden md:grid grid-cols-12 gap-4 px-4 py-4 items-center">
-                      {/* Date */}
-                      <div className="col-span-2 flex items-center gap-2">
-                        <div className="text-xs text-muted-foreground">
-                          <Calendar className="h-3.5 w-3.5 inline mr-1" />
-                          {formatDate(tx.date)}
-                        </div>
-                      </div>
-
-                      {/* Transaction */}
-                      <div className="col-span-4 flex items-center gap-3">
-                        <div className={cn("rounded-full p-2", colors.bg)}>
-                          <Icon className={cn("h-4 w-4", colors.text)} />
-                        </div>
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2">
-                            <span className="font-semibold truncate">{tx.transaction_number}</span>
-                            <Badge className={cn("text-[10px] border shrink-0", colors.badge)}>
-                              {tx.transaction_type === "invoice" && t("invoice")}
-                              {tx.transaction_type === "payment" && t("payment")}
-                              {tx.transaction_type === "credit_note" && t("creditNote")}
-                            </Badge>
-                          </div>
-                          <p className="text-xs text-muted-foreground truncate">{tx.description}</p>
-                        </div>
-                      </div>
-
-                      {/* Debit */}
-                      <div className="col-span-2 text-right">
-                        {tx.debit > 0 ? (
-                          <span className="font-medium text-red-600 dark:text-red-400">
-                            {formatCurrency(tx.debit)}
-                          </span>
-                        ) : (
-                          <span className="text-muted-foreground">-</span>
-                        )}
-                      </div>
-
-                      {/* Credit */}
-                      <div className="col-span-2 text-right">
-                        {tx.credit > 0 ? (
-                          <span className="font-medium text-green-600 dark:text-green-400">
-                            {formatCurrency(tx.credit)}
-                          </span>
-                        ) : (
-                          <span className="text-muted-foreground">-</span>
-                        )}
-                      </div>
-
-                      {/* Balance */}
-                      <div className="col-span-2 text-right">
-                        <span className="font-bold">{formatCurrency(tx.balance)}</span>
-                      </div>
-                    </div>
+                    {txLink ? (
+                      <Link href={txLink} className="block">
+                        {DesktopContent}
+                      </Link>
+                    ) : (
+                      DesktopContent
+                    )}
 
                     {/* Mobile View */}
-                    <div
-                      className="md:hidden p-4 cursor-pointer"
-                      onClick={() => toggleRow(tx.transaction_id)}
-                    >
-                      <div className="flex items-start gap-3">
-                        {/* Status Bar */}
-                        <div className={cn("w-1 h-full min-h-[4rem] rounded-full", colors.bar)} />
+                    {txLink ? (
+                      <Link href={txLink} className="md:hidden block p-4">
+                        <div className="flex items-start gap-3">
+                          {/* Status Bar */}
+                          <div className={cn("w-1 h-full min-h-[4rem] rounded-full", colors.bar)} />
 
-                        {/* Icon */}
-                        <div className={cn("rounded-full p-2 shrink-0", colors.bg)}>
-                          <Icon className={cn("h-4 w-4", colors.text)} />
-                        </div>
-
-                        {/* Content */}
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center justify-between gap-2">
-                            <div className="flex items-center gap-2 min-w-0">
-                              <span className="font-semibold truncate">{tx.transaction_number}</span>
-                              <Badge className={cn("text-[10px] border shrink-0", colors.badge)}>
-                                {tx.transaction_type === "invoice" && t("invoice")}
-                                {tx.transaction_type === "payment" && t("payment")}
-                                {tx.transaction_type === "credit_note" && t("creditNote")}
-                              </Badge>
-                            </div>
-                            {isExpanded ? (
-                              <ChevronUp className="h-4 w-4 text-muted-foreground" />
-                            ) : (
-                              <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                            )}
+                          {/* Icon */}
+                          <div className={cn("rounded-full p-2 shrink-0", colors.bg)}>
+                            <Icon className={cn("h-4 w-4", colors.text)} />
                           </div>
 
-                          <p className="text-xs text-muted-foreground mt-0.5">{tx.description}</p>
-
-                          <div className="flex items-center justify-between mt-2">
-                            <span className="text-xs text-muted-foreground">
-                              {formatDateShort(tx.date)}
-                            </span>
-                            <div className="flex items-center gap-3">
-                              {tx.debit > 0 && (
-                                <span className="text-sm font-medium text-red-600 dark:text-red-400 flex items-center gap-1">
-                                  <ArrowUpRight className="h-3 w-3" />
-                                  {formatCurrency(tx.debit)}
-                                </span>
-                              )}
-                              {tx.credit > 0 && (
-                                <span className="text-sm font-medium text-green-600 dark:text-green-400 flex items-center gap-1">
-                                  <ArrowDownLeft className="h-3 w-3" />
-                                  {formatCurrency(tx.credit)}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-
-                          {/* Expanded Details */}
-                          {isExpanded && (
-                            <div className="mt-3 pt-3 border-t border-border/50 space-y-2">
-                              <div className="flex justify-between text-sm">
-                                <span className="text-muted-foreground">{t("balance")}:</span>
-                                <span className="font-bold">{formatCurrency(tx.balance)}</span>
+                          {/* Content */}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <span className="font-semibold truncate">{tx.transaction_number}</span>
+                                <Badge className={cn("text-[10px] border shrink-0", colors.badge)}>
+                                  {tx.transaction_type === "invoice" && t("invoice")}
+                                  {tx.transaction_type === "payment" && t("payment")}
+                                  {tx.transaction_type === "credit_note" && t("creditNote")}
+                                </Badge>
                               </div>
-                              {tx.due_date && (
-                                <div className="flex justify-between text-sm">
-                                  <span className="text-muted-foreground">{t("dueDate")}:</span>
-                                  <span>{formatDate(tx.due_date)}</span>
-                                </div>
-                              )}
-                              {tx.reference_number && (
-                                <div className="flex justify-between text-sm">
-                                  <span className="text-muted-foreground">{t("reference")}:</span>
-                                  <span>{tx.reference_number}</span>
-                                </div>
-                              )}
+                              <ArrowUpRight className="h-4 w-4 text-muted-foreground shrink-0" />
                             </div>
-                          )}
+
+                            <p className="text-xs text-muted-foreground mt-0.5">{tx.description}</p>
+
+                            <div className="flex items-center justify-between mt-2">
+                              <span className="text-xs text-muted-foreground">
+                                {formatDateShort(tx.date)}
+                              </span>
+                              <div className="flex items-center gap-3">
+                                {tx.debit > 0 && (
+                                  <span className="text-sm font-medium text-red-600 dark:text-red-400 flex items-center gap-1">
+                                    <ArrowUpRight className="h-3 w-3" />
+                                    {formatCurrency(tx.debit)}
+                                  </span>
+                                )}
+                                {tx.credit > 0 && (
+                                  <span className="text-sm font-medium text-green-600 dark:text-green-400 flex items-center gap-1">
+                                    <ArrowDownLeft className="h-3 w-3" />
+                                    {formatCurrency(tx.credit)}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </Link>
+                    ) : (
+                      <div className="md:hidden p-4">
+                        <div className="flex items-start gap-3">
+                          {/* Status Bar */}
+                          <div className={cn("w-1 h-full min-h-[4rem] rounded-full", colors.bar)} />
+
+                          {/* Icon */}
+                          <div className={cn("rounded-full p-2 shrink-0", colors.bg)}>
+                            <Icon className={cn("h-4 w-4", colors.text)} />
+                          </div>
+
+                          {/* Content */}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <span className="font-semibold truncate">{tx.transaction_number}</span>
+                                <Badge className={cn("text-[10px] border shrink-0", colors.badge)}>
+                                  {tx.transaction_type === "invoice" && t("invoice")}
+                                  {tx.transaction_type === "payment" && t("payment")}
+                                  {tx.transaction_type === "credit_note" && t("creditNote")}
+                                </Badge>
+                              </div>
+                            </div>
+
+                            <p className="text-xs text-muted-foreground mt-0.5">{tx.description}</p>
+
+                            <div className="flex items-center justify-between mt-2">
+                              <span className="text-xs text-muted-foreground">
+                                {formatDateShort(tx.date)}
+                              </span>
+                              <div className="flex items-center gap-3">
+                                {tx.debit > 0 && (
+                                  <span className="text-sm font-medium text-red-600 dark:text-red-400 flex items-center gap-1">
+                                    <ArrowUpRight className="h-3 w-3" />
+                                    {formatCurrency(tx.debit)}
+                                  </span>
+                                )}
+                                {tx.credit > 0 && (
+                                  <span className="text-sm font-medium text-green-600 dark:text-green-400 flex items-center gap-1">
+                                    <ArrowDownLeft className="h-3 w-3" />
+                                    {formatCurrency(tx.credit)}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
                         </div>
                       </div>
-                    </div>
+                    )}
                   </div>
                 );
               })}
