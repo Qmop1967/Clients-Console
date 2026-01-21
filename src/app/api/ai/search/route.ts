@@ -98,7 +98,7 @@ export async function POST(request: NextRequest) {
           .filter((p) => p !== null)
           .filter((p) => {
             if (filters?.inStockOnly) {
-              return (p!.available_stock || 0) > 0;
+              return (p!.available_stock?.stock || 0) > 0;
             }
             return true;
           });

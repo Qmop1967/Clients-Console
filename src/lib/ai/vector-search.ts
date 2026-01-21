@@ -326,14 +326,14 @@ export async function getRecommendations(
     // Fetch the product's embedding from the index
     const product = await vectorIndex.fetch([itemId]);
 
-    if (!product || product.length === 0) {
+    if (!product || product.length === 0 || !product[0]?.vector) {
       console.warn(`⚠️ Product ${itemId} not found in vector index`);
       return [];
     }
 
     // Search for similar products
     const results = await vectorIndex.query({
-      vector: product[0].vector!,
+      vector: product[0].vector,
       topK: topK + 1, // +1 to exclude the product itself
       includeMetadata: true,
     });

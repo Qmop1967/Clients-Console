@@ -160,10 +160,14 @@ async function handleFunctionCall(
 
         console.log(`🔍 Function call: searchProducts("${query}")`);
 
-        const preparedQuery = prepareQueryForSearch(query);
+        const preparedQuery = prepareQueryForSearch(String(query));
         const results = await searchProducts(
           preparedQuery,
-          { category, brand, inStockOnly },
+          {
+            category: category ? String(category) : undefined,
+            brand: brand ? String(brand) : undefined,
+            inStockOnly: Boolean(inStockOnly)
+          },
           10
         );
 
@@ -201,13 +205,13 @@ async function handleFunctionCall(
 
         console.log(`📦 Function call: getProductDetails("${itemId}")`);
 
-        const product = await getProduct(itemId);
+        const product = await getProduct(String(itemId));
 
         if (!product) {
           return JSON.stringify({ error: 'Product not found' });
         }
 
-        const stock = await getUnifiedStock(itemId);
+        const stock = await getUnifiedStock(String(itemId));
 
         return JSON.stringify({
           item_id: product.item_id,
@@ -227,14 +231,14 @@ async function handleFunctionCall(
 
         console.log(`📊 Function call: getStock("${itemId}")`);
 
-        const stock = await getUnifiedStock(itemId);
-        const product = await getProduct(itemId);
+        const stockData = await getUnifiedStock(String(itemId));
+        const product = await getProduct(String(itemId));
 
         return JSON.stringify({
-          item_id: itemId,
+          item_id: String(itemId),
           name: product?.name,
-          stock: stock,
-          available: stock > 0,
+          stock: stockData.stock,
+          available: stockData.stock > 0,
         });
       }
 
@@ -320,6 +324,8 @@ export async function POST(request: NextRequest) {
       );
 
       for (const toolCall of assistantMessage.tool_calls) {
+        if (toolCall.type !== 'function') continue;
+
         const functionName = toolCall.function.name;
         const functionArgs = JSON.parse(toolCall.function.arguments);
 
