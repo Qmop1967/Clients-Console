@@ -137,6 +137,17 @@ export function WholesaleQuantityInput({
     [value, min, onChange, onPreventNavigation]
   );
 
+  // Set to specific quantity (for quick action buttons)
+  const handleSetQuantity = useCallback(
+    (e: React.MouseEvent, amount: number) => {
+      onPreventNavigation?.(e);
+      const newValue = Math.min(amount, max);
+      setInputValue(String(newValue));
+      onChange(newValue);
+    },
+    [max, onChange, onPreventNavigation]
+  );
+
   // Set to max quantity
   const handleSetMax = useCallback(
     (e: React.MouseEvent) => {
@@ -225,12 +236,12 @@ export function WholesaleQuantityInput({
 
       {/* Quick actions row - Physical button style */}
       <div className="grid grid-cols-3 gap-2">
-        {/* +10 Button */}
+        {/* 10 Button */}
         <button
           type="button"
-          onClick={(e) => handleIncrement(e, 10)}
+          onClick={(e) => handleSetQuantity(e, 10)}
           disabled={disabled || value >= max}
-          aria-label="Add 10 to quantity"
+          aria-label="Set quantity to 10"
           className={cn(
             "h-10 px-2 rounded-xl text-sm font-bold tabular-nums whitespace-nowrap",
             "bg-gradient-to-b from-muted/90 to-muted",
@@ -243,15 +254,15 @@ export function WholesaleQuantityInput({
             "disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:shadow-[0_3px_0_0_hsl(var(--border)),inset_0_1px_0_0_rgba(255,255,255,0.08)]"
           )}
         >
-          +10
+          10
         </button>
 
-        {/* +100 Button */}
+        {/* 100 Button */}
         <button
           type="button"
-          onClick={(e) => handleIncrement(e, 100)}
+          onClick={(e) => handleSetQuantity(e, 100)}
           disabled={disabled || value >= max}
-          aria-label="Add 100 to quantity"
+          aria-label="Set quantity to 100"
           className={cn(
             "h-10 px-2 rounded-xl text-sm font-bold tabular-nums whitespace-nowrap",
             "bg-gradient-to-b from-muted/90 to-muted",
@@ -264,7 +275,7 @@ export function WholesaleQuantityInput({
             "disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:shadow-[0_3px_0_0_hsl(var(--border)),inset_0_1px_0_0_rgba(255,255,255,0.08)]"
           )}
         >
-          +100
+          100
         </button>
 
         {/* Max Button - Gold accent */}
