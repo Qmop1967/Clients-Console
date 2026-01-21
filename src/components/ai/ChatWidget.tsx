@@ -22,11 +22,26 @@ import { cn } from '@/lib/utils';
 // Types
 // ============================================
 
+interface ProductAttachment {
+  itemId: string;
+  name: string;
+  imageUrl: string;
+  price?: number;
+  stock?: number;
+}
+
+interface QuickReply {
+  label: string;
+  value: string;
+}
+
 interface Message {
   id: string;
   role: 'user' | 'assistant';
   content: string;
   timestamp: number;
+  products?: ProductAttachment[];
+  quickReplies?: QuickReply[];
 }
 
 // ============================================
@@ -57,10 +72,76 @@ export function ChatWidget() {
           role: 'assistant',
           content: 'هلا وغلا! 👋\nأنا المساعد الذكي حق TSH. شلون أساعدك اليوم؟',
           timestamp: Date.now(),
+          quickReplies: [
+            { label: 'ابي محول سريع', value: 'ابي محول سريع' },
+            { label: 'شنو عندكم بطاريات؟', value: 'شنو عندكم من بطاريات؟' },
+            { label: 'وريني جنط فونات', value: 'ابي جنطة للموبايل' },
+          ],
         },
       ]);
     }
   }, [isOpen, messages.length]);
+
+  const handleQuickReply = async (value: string) => {
+    if (isLoading) return;
+
+    const userMessage: Message = {
+      id: `user-${Date.now()}`,
+      role: 'user',
+      content: value,
+      timestamp: Date.now(),
+    };
+
+    setMessages((prev) => [...prev, userMessage]);
+    setIsLoading(true);
+
+    try {
+      const response = await fetch('/api/ai/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          message: value,
+          sessionId,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to get response');
+      }
+
+      const data = await response.json();
+
+      if (data.sessionId) {
+        setSessionId(data.sessionId);
+      }
+
+      const assistantMessage: Message = {
+        id: `assistant-${Date.now()}`,
+        role: 'assistant',
+        content: data.message || 'عذراً، حصل خطأ. حاول مرة ثانية.',
+        timestamp: Date.now(),
+        products: data.products,
+        quickReplies: data.quickReplies,
+      };
+
+      setMessages((prev) => [...prev, assistantMessage]);
+    } catch (error) {
+      console.error('Chat error:', error);
+
+      const errorMessage: Message = {
+        id: `error-${Date.now()}`,
+        role: 'assistant',
+        content: 'آسف، صار مشكلة بالاتصال. حاول مرة ثانية. 🙏',
+        timestamp: Date.now(),
+      };
+
+      setMessages((prev) => [...prev, errorMessage]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const handleSend = async () => {
     if (!input.trim() || isLoading) return;
@@ -73,6 +154,7 @@ export function ChatWidget() {
     };
 
     setMessages((prev) => [...prev, userMessage]);
+    const messageText = input;
     setInput('');
     setIsLoading(true);
 
@@ -103,6 +185,8 @@ export function ChatWidget() {
         role: 'assistant',
         content: data.message || 'عذراً، حصل خطأ. حاول مرة ثانية.',
         timestamp: Date.now(),
+        products: data.products,
+        quickReplies: data.quickReplies,
       };
 
       setMessages((prev) => [...prev, assistantMessage]);
@@ -187,24 +271,86 @@ export function ChatWidget() {
           <ScrollArea className="flex-1 px-6 py-4" ref={scrollAreaRef}>
             <div className="space-y-4">
               {messages.map((message) => (
-                <div
-                  key={message.id}
-                  className={cn(
-                    'flex',
-                    message.role === 'user' ? 'justify-start' : 'justify-end'
-                  )}
-                >
+                <div key={message.id} className="space-y-2">
                   <div
                     className={cn(
-                      'max-w-[80%] rounded-lg px-4 py-2.5',
-                      'whitespace-pre-wrap break-words',
-                      message.role === 'user'
-                        ? 'bg-muted text-right'
-                        : 'bg-gradient-to-br from-gold to-amber-600 text-white text-right'
+                      'flex',
+                      message.role === 'user' ? 'justify-start' : 'justify-end'
                     )}
                   >
-                    <p className="text-sm leading-relaxed">{message.content}</p>
+                    <div
+                      className={cn(
+                        'max-w-[80%] rounded-lg px-4 py-2.5',
+                        'whitespace-pre-wrap break-words',
+                        message.role === 'user'
+                          ? 'bg-muted text-right'
+                          : 'bg-gradient-to-br from-gold to-amber-600 text-white text-right'
+                      )}
+                    >
+                      <p className="text-sm leading-relaxed">
+                        {message.content}
+                      </p>
+                    </div>
                   </div>
+
+                  {/* Product Images */}
+                  {message.products && message.products.length > 0 && (
+                    <div className="flex justify-end">
+                      <div className="max-w-[80%] space-y-2">
+                        {message.products.map((product) => (
+                          <div
+                            key={product.itemId}
+                            className="bg-card border rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow"
+                          >
+                            {product.imageUrl && (
+                              <img
+                                src={product.imageUrl}
+                                alt={product.name}
+                                className="w-full h-32 object-contain bg-white"
+                              />
+                            )}
+                            <div className="p-3 text-right">
+                              <p className="font-medium text-sm">
+                                {product.name}
+                              </p>
+                              {product.price && (
+                                <p className="text-gold font-semibold text-xs mt-1">
+                                  {product.price.toLocaleString('ar-IQ')} د.ع
+                                </p>
+                              )}
+                              {product.stock !== undefined && (
+                                <p className="text-xs text-muted-foreground mt-1">
+                                  {product.stock > 0
+                                    ? `متوفر ${product.stock}`
+                                    : 'غير متوفر'}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Quick Reply Buttons */}
+                  {message.quickReplies && message.quickReplies.length > 0 && (
+                    <div className="flex justify-end">
+                      <div className="max-w-[80%] flex flex-wrap gap-2 justify-end">
+                        {message.quickReplies.map((reply, idx) => (
+                          <Button
+                            key={idx}
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleQuickReply(reply.value)}
+                            disabled={isLoading}
+                            className="text-xs border-gold/50 hover:bg-gold/10 hover:border-gold"
+                          >
+                            {reply.label}
+                          </Button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               ))}
 

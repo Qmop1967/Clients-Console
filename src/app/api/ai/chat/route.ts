@@ -322,6 +322,8 @@ export async function POST(request: NextRequest) {
     });
 
     let assistantMessage = completion.choices[0].message;
+    let products: any[] = [];
+    let lastFunctionName = '';
 
     // Handle function calls
     if (assistantMessage.tool_calls) {
@@ -334,11 +336,39 @@ export async function POST(request: NextRequest) {
 
         const functionName = toolCall.function.name;
         const functionArgs = JSON.parse(toolCall.function.arguments);
+        lastFunctionName = functionName;
 
         const functionResult = await handleFunctionCall(
           functionName,
           functionArgs
         );
+
+        // Extract products from function results
+        if (functionName === 'searchProducts' || functionName === 'getProductDetails') {
+          try {
+            const result = JSON.parse(functionResult);
+            if (result.products && Array.isArray(result.products)) {
+              products = result.products.slice(0, 3).map((p: any) => ({
+                itemId: p.item_id,
+                name: p.name,
+                imageUrl: p.image_url,
+                price: p.price,
+                stock: p.stock,
+              }));
+            } else if (result.item_id) {
+              // Single product from getProductDetails
+              products = [{
+                itemId: result.item_id,
+                name: result.name,
+                imageUrl: result.image_url,
+                price: result.price,
+                stock: result.stock,
+              }];
+            }
+          } catch (e) {
+            console.error('Failed to parse function result for products:', e);
+          }
+        }
 
         // Second completion with function results
         const secondCompletion = await openai.chat.completions.create({
@@ -363,6 +393,29 @@ export async function POST(request: NextRequest) {
 
     const responseContent = assistantMessage.content || 'عذراً، حصل خطأ';
 
+    // Generate quick replies based on context
+    const quickReplies: Array<{ label: string; value: string }> = [];
+
+    if (lastFunctionName === 'searchProducts' && products.length > 0) {
+      quickReplies.push(
+        { label: 'شنو مواصفاته؟', value: 'شنو مواصفات المنتج؟' },
+        { label: 'ابي كمية أكبر', value: 'شكد السعر إذا أخذت كمية أكبر؟' },
+        { label: 'في منتجات ثانية؟', value: 'وريني منتجات مشابهة' }
+      );
+    } else if (lastFunctionName === 'getProductDetails') {
+      quickReplies.push(
+        { label: 'ضيفه للسلة', value: 'أضف هذا المنتج للسلة' },
+        { label: 'في بديل؟', value: 'في منتج بديل؟' },
+        { label: 'شنو السعر بالجملة؟', value: 'شكد سعره بالجملة؟' }
+      );
+    } else if (products.length === 0) {
+      quickReplies.push(
+        { label: 'ابي محولات', value: 'ابي محول سريع' },
+        { label: 'بطاريات', value: 'شنو عندكم من بطاريات؟' },
+        { label: 'جنط فونات', value: 'ابي جنطة للموبايل' }
+      );
+    }
+
     // Save assistant message
     await saveMessage(sessionId, 'assistant', responseContent);
 
@@ -371,6 +424,8 @@ export async function POST(request: NextRequest) {
         success: true,
         message: responseContent,
         sessionId,
+        products: products.length > 0 ? products : undefined,
+        quickReplies: quickReplies.length > 0 ? quickReplies : undefined,
       }),
       {
         headers: { 'Content-Type': 'application/json' },
