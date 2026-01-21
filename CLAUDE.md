@@ -170,6 +170,8 @@ Fix: Verify UPSTASH_REDIS_REST_* env vars in Vercel
 | Network errors in stock sync | Use retry with backoff (see stock-cache.ts) |
 | Sequential API calls in pages | Use `Promise.all()` for parallel fetching |
 | 503 errors on RSC prefetch | Configure `maxDuration` in vercel.json |
+| Fire-and-forget webhook stock sync | ALWAYS await `syncStockForItemsAndWait()` before revalidate |
+| Webhooks not updating stock | Check logs for "[quickSyncStock]" errors, verify Redis env vars |
 
 ---
 
@@ -224,6 +226,74 @@ curl "https://www.tsh.sale/api/revalidate?tag=all&secret=tsh-revalidate-2024"
 
 # Check TTFB
 curl -w "TTFB: %{time_starttransfer}s\n" -o /dev/null -s "https://www.tsh.sale/ar/shop"
+```
+
+---
+
+## Webhook Real-Time Stock Sync
+
+```yaml
+Problem: Webhooks not updating stock in real-time
+Root Cause: Stock sync was fire-and-forget (didn't wait for completion)
+Solution: All stock-affecting events now WAIT for sync before cache revalidation
+
+CRITICAL PATTERN:
+  1. Webhook receives event
+  2. Extract affected item IDs
+  3. WAIT for stock sync to complete: await syncStockForItemsAndWait()
+  4. THEN revalidate cache (so cache rebuilds with fresh stock)
+  5. Return detailed response with sync status
+
+Stock-Affecting Events (ALL now wait for sync):
+  - Bills (purchases) - increases stock
+  - Sales Orders - decreases available (committed stock)
+  - Packages/Shipments - releases committed stock
+  - Sales Returns - may increase stock when received
+  - Inventory Adjustments - direct stock changes
+  - Credit Notes - may increase stock (returned items)
+  - Item Updates - may change stock levels
+  - Invoices - decreases stock
+
+Webhook Response Format:
+  {
+    "success": true,
+    "event": "salesorder.created",
+    "entity": "salesorder",
+    "handled": true,
+    "stockSync": {
+      "success": true,      # false if sync failed
+      "itemsSynced": 3      # number of items synced
+    }
+  }
+
+Debugging Webhook Stock Sync:
+  1. Check Vercel logs for webhook execution
+  2. Search for "[quickSyncStock]" to see stock sync details
+  3. Look for "✅" (success) or "❌" (error) in logs
+  4. Check Redis cache status after webhook
+  5. Verify UPSTASH_REDIS_REST_* env vars are set
+
+Common Issues:
+  - Redis connection failed → Check UPSTASH_REDIS_REST_* env vars
+  - Rate limit errors → Webhook retries with backoff (see logs)
+  - Item not found (404) → Item was deleted, removed from cache
+  - Network errors → Webhook retries 3x with backoff
+
+Testing Webhooks Locally:
+  # Send test webhook to local server
+  curl -X POST http://localhost:3000/api/webhooks/zoho \
+    -H "Content-Type: application/json" \
+    -H "x-zoho-webhook-signature: YOUR_SECRET" \
+    -d '{"event_type":"salesorder.created","data":{"line_items":[{"item_id":"123"}]}}'
+
+  # Check response for stockSync status
+  # Should see: {"success":true,"stockSync":{"success":true,"itemsSynced":1}}
+
+Webhook Configuration in Zoho:
+  URL: https://www.tsh.sale/api/webhooks/zoho
+  Events: All stock-affecting events
+  Secret: Set in ZOHO_WEBHOOK_SECRET env var
+  Format: JSON
 ```
 
 ---

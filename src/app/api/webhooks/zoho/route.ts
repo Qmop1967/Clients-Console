@@ -194,24 +194,6 @@ function extractItemIds(data: Record<string, unknown>): string[] {
   return [...new Set(itemIds)]; // Remove duplicates
 }
 
-// Sync stock for affected items (fire-and-forget, don't block webhook response)
-async function syncStockForItems(itemIds: string[], reason: string) {
-  if (itemIds.length === 0) return;
-
-  console.log(`[Webhook] 📦 Triggering stock sync for ${itemIds.length} items: ${reason}`);
-
-  // Fire-and-forget - don't await, let it run in background
-  quickSyncStock(itemIds)
-    .then((result) => {
-      if (result.success) {
-        console.log(`[Webhook] ✅ Stock synced for ${result.itemsUpdated} items`);
-      }
-    })
-    .catch((error) => {
-      console.error(`[Webhook] ❌ Stock sync failed:`, error);
-    });
-}
-
 // Sync stock for affected items AND WAIT for completion
 // Use this when you need cache revalidation AFTER stock sync
 async function syncStockForItemsAndWait(itemIds: string[], reason: string): Promise<boolean> {
@@ -447,11 +429,16 @@ export async function POST(request: NextRequest) {
       // ============================================
       // PURCHASE/STOCK EVENTS - Affect inventory
       // ============================================
-      case "bill":
-        // Purchase bills receive inventory - MUST revalidate stock
+      case "bill": {
+        // Purchase bills receive inventory - MUST sync stock FIRST, then revalidate
+        console.log(`[Webhook] 📦 Processing bill: ${eventType}`);
+
+        // CRITICAL: Sync stock FIRST and WAIT for completion
+        const billStockResult = await syncStockForItemsAndWait(affectedItemIds, `bill: ${eventType}`);
+
+        // NOW revalidate cache (so it rebuilds with fresh stock)
         await revalidateProducts(`bill received: ${eventType}`);
-        // Sync stock cache for affected items
-        syncStockForItems(affectedItemIds, `bill: ${eventType}`);
+
         // Check if line items have item IDs to sync images (only if not already cached)
         if (Array.isArray(data.line_items)) {
           for (const item of data.line_items as Array<{ item_id?: string }>) {
@@ -460,14 +447,41 @@ export async function POST(request: NextRequest) {
             }
           }
         }
-        break;
 
-      case "purchaseorder":
+        // Return detailed response for bill events
+        return NextResponse.json({
+          success: true,
+          event: eventType,
+          entity: entityType,
+          handled: true,
+          stockSync: {
+            success: billStockResult,
+            itemsSynced: affectedItemIds.length,
+          },
+        });
+      }
+
+      case "purchaseorder": {
         // Purchase orders may affect committed stock
+        console.log(`[Webhook] 📦 Processing purchase order: ${eventType}`);
+
+        // CRITICAL: Sync stock FIRST and WAIT
+        const poStockResult = await syncStockForItemsAndWait(affectedItemIds, `purchase order: ${eventType}`);
+
+        // NOW revalidate cache
         await revalidateProducts(`purchase order: ${eventType}`);
-        // Sync stock cache for affected items
-        syncStockForItems(affectedItemIds, `purchase order: ${eventType}`);
-        break;
+
+        return NextResponse.json({
+          success: true,
+          event: eventType,
+          entity: entityType,
+          handled: true,
+          stockSync: {
+            success: poStockResult,
+            itemsSynced: affectedItemIds.length,
+          },
+        });
+      }
 
       case "vendorpayment":
       case "expense":
@@ -479,9 +493,13 @@ export async function POST(request: NextRequest) {
       // ITEM/PRODUCT EVENTS
       // ============================================
       case "item": {
+        console.log(`[Webhook] 📦 Processing item: ${eventType}`);
+
+        // CRITICAL: Sync stock FIRST and WAIT
+        const itemStockResult = await syncStockForItemsAndWait(affectedItemIds, `item: ${eventType}`);
+
+        // NOW revalidate cache
         await revalidateProducts(`item ${eventType}`);
-        // Sync stock cache for this item
-        syncStockForItems(affectedItemIds, `item: ${eventType}`);
 
         // Handle image sync with deletion detection
         const itemId = (data.item_id as string) || (data.id as string);
@@ -520,7 +538,18 @@ export async function POST(request: NextRequest) {
             }).catch(() => {});
           }
         }
-        break;
+
+        // Return detailed response for item events
+        return NextResponse.json({
+          success: true,
+          event: eventType,
+          entity: entityType,
+          handled: true,
+          stockSync: {
+            success: itemStockResult,
+            itemsSynced: affectedItemIds.length,
+          },
+        });
       }
 
       // ============================================
@@ -528,59 +557,136 @@ export async function POST(request: NextRequest) {
       // ============================================
       case "inventory":
       case "stock":
-      case "shipmentorder":
+      case "shipmentorder": {
+        console.log(`[Webhook] 📦 Processing stock change: ${eventType}`);
+
+        // CRITICAL: Sync stock FIRST and WAIT
+        const stockChangeResult = await syncStockForItemsAndWait(affectedItemIds, `stock: ${eventType}`);
+
+        // NOW revalidate cache
         await revalidateProducts(`stock changed: ${eventType}`);
-        // Sync stock cache for affected items
-        syncStockForItems(affectedItemIds, `stock: ${eventType}`);
-        break;
+
+        return NextResponse.json({
+          success: true,
+          event: eventType,
+          entity: entityType,
+          handled: true,
+          stockSync: {
+            success: stockChangeResult,
+            itemsSynced: affectedItemIds.length,
+          },
+        });
+      }
 
       // ============================================
       // PACKAGE/SHIPMENT EVENTS
       // ============================================
-      case "package":
+      case "package": {
         // Packages affect order fulfillment and may release committed stock
+        console.log(`[Webhook] 📦 Processing package: ${eventType}`);
+
+        // CRITICAL: Sync stock FIRST and WAIT
+        const pkgStockResult = await syncStockForItemsAndWait(affectedItemIds, `package: ${eventType}`);
+
+        // NOW revalidate cache
         await revalidateProducts(`package shipped: ${eventType}`);
-        // Sync stock cache for affected items (shipped items release committed stock)
-        syncStockForItems(affectedItemIds, `package: ${eventType}`);
+
         const pkgCustomerId = (data.customer_id as string) || (data.contact_id as string);
         if (pkgCustomerId) {
           await safeRevalidate(CACHE_TAGS.ORDERS(pkgCustomerId), eventType);
         }
-        break;
+
+        return NextResponse.json({
+          success: true,
+          event: eventType,
+          entity: entityType,
+          handled: true,
+          stockSync: {
+            success: pkgStockResult,
+            itemsSynced: affectedItemIds.length,
+          },
+        });
+      }
 
       // ============================================
       // SALES RETURN EVENTS (CRITICAL for stock)
       // ============================================
-      case "salesreturn":
+      case "salesreturn": {
         // Sales returns affect stock (items potentially coming back)
+        console.log(`[Webhook] 📦 Processing sales return: ${eventType}`);
+
+        // CRITICAL: Sync stock FIRST and WAIT
+        const srStockResult = await syncStockForItemsAndWait(affectedItemIds, `sales return: ${eventType}`);
+
+        // NOW revalidate cache
         await revalidateProducts(`sales return: ${eventType}`);
-        // Sync stock cache for returned items
-        syncStockForItems(affectedItemIds, `sales return: ${eventType}`);
+
         const srCustomerId = (data.customer_id as string) || (data.contact_id as string);
         if (srCustomerId) {
           await safeRevalidate(CACHE_TAGS.ORDERS(srCustomerId), eventType);
         }
-        break;
+
+        return NextResponse.json({
+          success: true,
+          event: eventType,
+          entity: entityType,
+          handled: true,
+          stockSync: {
+            success: srStockResult,
+            itemsSynced: affectedItemIds.length,
+          },
+        });
+      }
 
       // ============================================
       // SALES RETURN RECEIVE EVENTS (CRITICAL for stock)
       // ============================================
-      case "salesreturnreceive":
+      case "salesreturnreceive": {
         // When return is physically received, stock increases
+        console.log(`[Webhook] 📦 Processing sales return receive: ${eventType}`);
+
+        // CRITICAL: Sync stock FIRST and WAIT
+        const srrStockResult = await syncStockForItemsAndWait(affectedItemIds, `sales return received: ${eventType}`);
+
+        // NOW revalidate cache
         await revalidateProducts(`sales return received: ${eventType}`);
-        // Sync stock cache - stock has increased
-        syncStockForItems(affectedItemIds, `sales return received: ${eventType}`);
-        break;
+
+        return NextResponse.json({
+          success: true,
+          event: eventType,
+          entity: entityType,
+          handled: true,
+          stockSync: {
+            success: srrStockResult,
+            itemsSynced: affectedItemIds.length,
+          },
+        });
+      }
 
       // ============================================
       // INVENTORY ADJUSTMENT EVENTS (CRITICAL for stock)
       // ============================================
-      case "inventoryadjustment":
+      case "inventoryadjustment": {
         // Direct stock adjustments (damage, theft, count corrections)
+        console.log(`[Webhook] 📦 Processing inventory adjustment: ${eventType}`);
+
+        // CRITICAL: Sync stock FIRST and WAIT
+        const iaStockResult = await syncStockForItemsAndWait(affectedItemIds, `inventory adjustment: ${eventType}`);
+
+        // NOW revalidate cache
         await revalidateProducts(`inventory adjusted: ${eventType}`);
-        // Sync stock cache for adjusted items
-        syncStockForItems(affectedItemIds, `inventory adjustment: ${eventType}`);
-        break;
+
+        return NextResponse.json({
+          success: true,
+          event: eventType,
+          entity: entityType,
+          handled: true,
+          stockSync: {
+            success: iaStockResult,
+            itemsSynced: affectedItemIds.length,
+          },
+        });
+      }
 
       // ============================================
       // CATEGORY EVENTS
@@ -599,16 +705,32 @@ export async function POST(request: NextRequest) {
       // ============================================
       // SALES ORDER EVENTS
       // ============================================
-      case "salesorder":
+      case "salesorder": {
         // Sales orders affect both stock (committed) and customer orders
+        console.log(`[Webhook] 📦 Processing sales order: ${eventType}`);
+
+        // CRITICAL: Sync stock FIRST and WAIT
+        const soStockResult = await syncStockForItemsAndWait(affectedItemIds, `sales order: ${eventType}`);
+
+        // NOW revalidate cache
         await revalidateProducts(`sales order: ${eventType}`);
-        // Sync stock cache for ordered items (committed stock changes)
-        syncStockForItems(affectedItemIds, `sales order: ${eventType}`);
+
         const soCustomerId = (data.customer_id as string) || (data.contact_id as string);
         if (soCustomerId) {
           await safeRevalidate(CACHE_TAGS.ORDERS(soCustomerId), eventType);
         }
-        break;
+
+        return NextResponse.json({
+          success: true,
+          event: eventType,
+          entity: entityType,
+          handled: true,
+          stockSync: {
+            success: soStockResult,
+            itemsSynced: affectedItemIds.length,
+          },
+        });
+      }
 
       // ============================================
       // INVOICE EVENTS
@@ -702,17 +824,33 @@ export async function POST(request: NextRequest) {
       // CREDIT NOTE EVENTS
       // Credit notes with returned items affect stock levels
       // ============================================
-      case "creditnote":
+      case "creditnote": {
         // Credit notes may include returned items that increase stock
+        console.log(`[Webhook] 📦 Processing credit note: ${eventType}`);
+
+        // CRITICAL: Sync stock FIRST and WAIT
+        const cnStockResult = await syncStockForItemsAndWait(affectedItemIds, `credit note: ${eventType}`);
+
+        // NOW revalidate cache
         await revalidateProducts(`credit note: ${eventType}`);
-        // Sync stock cache for returned items
-        syncStockForItems(affectedItemIds, `credit note: ${eventType}`);
+
         // Also revalidate customer credit notes list
         const cnCustomerId = (data.customer_id as string) || (data.contact_id as string);
         if (cnCustomerId) {
           await safeRevalidate(CACHE_TAGS.CREDIT_NOTES(cnCustomerId), eventType);
         }
-        break;
+
+        return NextResponse.json({
+          success: true,
+          event: eventType,
+          entity: entityType,
+          handled: true,
+          stockSync: {
+            success: cnStockResult,
+            itemsSynced: affectedItemIds.length,
+          },
+        });
+      }
 
       // ============================================
       // CONTACT/CUSTOMER EVENTS
