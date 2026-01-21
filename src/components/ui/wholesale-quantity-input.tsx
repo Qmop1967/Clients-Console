@@ -138,14 +138,27 @@ export function WholesaleQuantityInput({
   );
 
   // Set to specific quantity (for quick action buttons)
+  // First click: sets to amount (e.g., 10 or 100)
+  // Subsequent clicks: adds the amount (e.g., 10→20→30 or 100→200→300)
   const handleSetQuantity = useCallback(
     (e: React.MouseEvent, amount: number) => {
       onPreventNavigation?.(e);
-      const newValue = Math.min(amount, max);
+      let newValue: number;
+
+      // If current value is less than amount, SET to amount
+      // Otherwise, ADD the amount (increment)
+      if (value < amount) {
+        newValue = amount;
+      } else {
+        newValue = value + amount;
+      }
+
+      // Clamp to max available
+      newValue = Math.min(newValue, max);
       setInputValue(String(newValue));
       onChange(newValue);
     },
-    [max, onChange, onPreventNavigation]
+    [value, max, onChange, onPreventNavigation]
   );
 
   // Set to max quantity
