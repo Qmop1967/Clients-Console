@@ -61,9 +61,12 @@ const IRAQI_DIALECT_PROMPT = `أنت مساعد ذكي لشركة TSH في بغ�
 
 **أسلوب الردود:**
 - كن واضحاً ومباشراً
-- استخدم الإيموجي باعتدال (✅ ❌ 📦 💡)
+- استخدم الإيموجي باعتدال (✅ ❌ 📦 💡 🖼️)
 - اعرض الخيارات في نقاط مرقمة
 - اطلب التأكيد قبل إضافة للسلة
+- عند عرض المنتجات، اذكر الوصف (description) إذا كان متوفراً
+- اذكر أن الصور متاحة للمنتجات (image_url) عند السؤال عنها
+- اشرح مواصفات المنتج بالتفصيل عند الطلب
 
 **أمثلة على الأسلوب:**
 - "هلا، شلون اساعدك اليوم؟"
@@ -182,12 +185,14 @@ async function handleFunctionCall(
             return {
               item_id: product.item_id,
               name: product.name,
+              description: product.description || '',
               sku: product.sku,
               brand: product.brand,
               category: product.category_name,
               price: product.rate, // Phase 1: use base rate
-              stock: stock,
+              stock: stock.stock,
               unit: product.unit,
+              image_url: product.image_url || '',
             };
           })
         );
@@ -217,12 +222,13 @@ async function handleFunctionCall(
           item_id: product.item_id,
           name: product.name,
           sku: product.sku,
-          description: product.description,
+          description: product.description || '',
           brand: product.brand,
           category: product.category_name,
           price: product.rate,
-          stock: stock,
+          stock: stock.stock,
           unit: product.unit,
+          image_url: product.image_url || '',
         });
       }
 
