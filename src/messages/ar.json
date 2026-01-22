@@ -440,7 +440,16 @@
     "orderPlacedDescription": "شكراً لطلبك. سنقوم بمعالجته قريباً وإشعارك بأي تحديثات.",
     "orderNumber": "رقم الطلب",
     "viewOrder": "عرض الطلب",
-    "viewAllOrders": "عرض جميع الطلبات"
+    "viewAllOrders": "عرض جميع الطلبات",
+    "itemNote": "إضافة ملاحظة لهذا المنتج",
+    "itemNotePlaceholder": "اختياري: أضف تعليمات خاصة أو ملاحظات لهذا المنتج...",
+    "orderNote": "ملاحظات الطلب",
+    "orderNotePlaceholder": "اختياري: أضف أي تعليمات خاصة أو ملاحظات لهذا الطلب...",
+    "minimumQuantity": "الحد الأدنى للكمية",
+    "minimumQuantityRequired": "الحد الأدنى للطلب: {quantity} {unit}",
+    "minimumQuantityError": "هذا المنتج له حد أدنى للطلب هو {quantity} {unit}. يرجى إضافة {quantity} {unit} على الأقل إلى سلتك.",
+    "minimumQuantityNotMet": "لم يتم تحقيق الحد الأدنى للكمية",
+    "minimumQuantityWarning": "أنت تحاول إضافة {attempted} {unit}، ولكن الحد الأدنى للطلب هو {minimum} {unit}."
   },
   "footer": {
     "copyright": "© {year} TSH. جميع الحقوق محفوظة.",

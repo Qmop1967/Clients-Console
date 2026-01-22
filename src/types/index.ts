@@ -77,6 +77,14 @@ export interface ZohoItem {
   reorder_level?: number;
   created_time?: string;
   last_modified_time?: string;
+  // Custom fields
+  custom_fields?: Array<{
+    customfield_id: string;
+    label: string;
+    value: string | number;
+  }>;
+  // Minimum quantity restriction (from custom field)
+  minimum_quantity?: number;
 }
 
 // Zoho Price List (Zoho Inventory uses pricebook)
@@ -342,6 +350,7 @@ export interface CartItem {
   image_url?: string | null;
   available_stock: number;
   unit: string;
+  minimum_quantity?: number;
 }
 
 export interface Cart {

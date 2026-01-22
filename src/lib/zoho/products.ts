@@ -68,6 +68,14 @@ interface ZohoBooksItem {
     warehouse_actual_available_stock?: number;
     warehouse_committed_stock?: number;
   }>;
+  // Minimum order quantity - built-in Zoho Books field
+  minimum_order_quantity?: number;
+  // Custom fields
+  custom_fields?: Array<{
+    customfield_id: string;
+    label: string;
+    value: string | number;
+  }>;
 }
 
 interface ZohoBooksItemsResponse {
@@ -103,6 +111,25 @@ interface ZohoBooksCategoriesResponse {
 // ============================================
 // HELPER FUNCTIONS
 // ============================================
+
+/**
+ * Extract minimum quantity from Zoho Books item
+ * Uses the built-in minimum_order_quantity field from Zoho Books API
+ * This is a standard field in Zoho Books, not a custom field
+ */
+function getMinimumQuantityFromItem(item: ZohoBooksItem): number | undefined {
+  // Zoho Books has a built-in minimum_order_quantity field
+  if (!item.minimum_order_quantity) {
+    return undefined;
+  }
+
+  const value = typeof item.minimum_order_quantity === 'number'
+    ? item.minimum_order_quantity
+    : parseInt(String(item.minimum_order_quantity), 10);
+
+  // Return undefined if invalid or <= 0
+  return !isNaN(value) && value > 0 ? value : undefined;
+}
 
 /**
  * Extract available stock from warehouse array (if present)
@@ -162,6 +189,8 @@ function booksItemToZohoItem(item: ZohoBooksItem): ZohoItem {
     category_id: item.category_id,
     category_name: item.category_name,
     brand: item.brand ?? item.manufacturer,
+    custom_fields: item.custom_fields,
+    minimum_quantity: getMinimumQuantityFromItem(item),
   };
 }
 

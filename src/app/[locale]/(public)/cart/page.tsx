@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
+import { Textarea } from "@/components/ui/textarea";
 import {
   ShoppingBag,
   Trash2,
@@ -33,7 +34,7 @@ export default function CartPage() {
   const tCatalog = useTranslations("catalogMode");
   const { locale } = useParams();
   const { data: session, status } = useSession();
-  const { items, currencyCode, removeItem, updateQuantity, clearCart } = useCart();
+  const { items, currencyCode, orderNote, removeItem, updateQuantity, updateItemNote, updateOrderNote, clearCart } = useCart();
   const { isCatalogMode, showCatalogModal } = useCatalogMode();
 
   const [isCheckingOut, setIsCheckingOut] = useState(false);
@@ -92,6 +93,14 @@ export default function CartPage() {
     setCheckoutError(null);
 
     try {
+      // Collect all notes (item notes + order note)
+      const itemNotesText = validItems
+        .filter(item => item.note && item.note.trim())
+        .map(item => `${item.name} (${item.sku}): ${item.note}`)
+        .join('\n');
+
+      const combinedNotes = [orderNote, itemNotesText].filter(Boolean).join('\n\n');
+
       const response = await fetch('/api/checkout', {
         method: 'POST',
         headers: {
@@ -105,6 +114,7 @@ export default function CartPage() {
             name: item.name,
             sku: item.sku,
           })),
+          notes: combinedNotes,
         }),
       });
 
@@ -437,6 +447,20 @@ export default function CartPage() {
                               exceededMax: tProducts("exceededMaxQuantity", { count: item.available_stock }),
                             }}
                           />
+
+                          {/* Item Note */}
+                          <div className="space-y-1">
+                            <label htmlFor={`note-${item.item_id}`} className="text-xs text-muted-foreground">
+                              {t("itemNote")}
+                            </label>
+                            <Textarea
+                              id={`note-${item.item_id}`}
+                              placeholder={t("itemNotePlaceholder")}
+                              value={item.note || ""}
+                              onChange={(e) => updateItemNote(item.item_id, e.target.value)}
+                              className="min-h-[60px] text-sm"
+                            />
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -490,6 +514,22 @@ export default function CartPage() {
                   * {t("excludesPendingItems")}
                 </p>
               )}
+
+              <Separator />
+
+              {/* Order Note */}
+              <div className="space-y-2">
+                <label htmlFor="order-note" className="text-sm font-medium">
+                  {t("orderNote")}
+                </label>
+                <Textarea
+                  id="order-note"
+                  placeholder={t("orderNotePlaceholder")}
+                  value={orderNote}
+                  onChange={(e) => updateOrderNote(e.target.value)}
+                  className="min-h-[80px] text-sm"
+                />
+              </div>
             </CardContent>
             <CardFooter className="flex-col gap-3 pt-2">
               {/* Checkout Button */}

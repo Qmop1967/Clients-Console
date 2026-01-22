@@ -12,6 +12,15 @@ export interface CartItem {
   image_url: string | null;
   available_stock: number;
   unit: string;
+  note?: string;
+  minimum_quantity?: number;
+}
+
+export interface MinimumQuantityError {
+  hasError: boolean;
+  message?: string;
+  minimumQuantity?: number;
+  attemptedQuantity?: number;
 }
 
 interface CartContextType {
@@ -19,17 +28,22 @@ interface CartContextType {
   itemCount: number;
   subtotal: number;
   currencyCode: string;
-  addItem: (item: Omit<CartItem, "quantity">, quantity?: number) => void;
+  orderNote: string;
+  addItem: (item: Omit<CartItem, "quantity">, quantity?: number) => MinimumQuantityError;
   removeItem: (itemId: string) => void;
   updateQuantity: (itemId: string, quantity: number) => void;
+  updateItemNote: (itemId: string, note: string) => void;
+  updateOrderNote: (note: string) => void;
   clearCart: () => void;
   isInCart: (itemId: string) => boolean;
   getItemQuantity: (itemId: string) => number;
+  validateMinimumQuantity: (item: Omit<CartItem, "quantity">, quantity: number) => MinimumQuantityError;
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
 
 const CART_STORAGE_KEY = "tsh-cart";
+const ORDER_NOTE_STORAGE_KEY = "tsh-cart-order-note";
 const SAVE_DEBOUNCE_MS = 300; // Debounce localStorage writes
 
 interface CartProviderProps {
@@ -39,10 +53,12 @@ interface CartProviderProps {
 
 export function CartProvider({ children, currencyCode = "IQD" }: CartProviderProps) {
   const [items, setItems] = useState<CartItem[]>([]);
+  const [orderNote, setOrderNote] = useState("");
   const [isHydrated, setIsHydrated] = useState(false);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const orderNoteSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Load cart from localStorage on mount
+  // Load cart and order note from localStorage on mount
   useEffect(() => {
     try {
       const stored = localStorage.getItem(CART_STORAGE_KEY);
@@ -51,6 +67,11 @@ export function CartProvider({ children, currencyCode = "IQD" }: CartProviderPro
         if (Array.isArray(parsed)) {
           setItems(parsed);
         }
+      }
+
+      const storedNote = localStorage.getItem(ORDER_NOTE_STORAGE_KEY);
+      if (storedNote) {
+        setOrderNote(storedNote);
       }
     } catch (error) {
       console.error("Error loading cart from localStorage:", error);
@@ -84,6 +105,32 @@ export function CartProvider({ children, currencyCode = "IQD" }: CartProviderPro
     };
   }, [items, isHydrated]);
 
+  // Debounced save order note to localStorage
+  useEffect(() => {
+    if (!isHydrated) return;
+
+    // Clear any pending save
+    if (orderNoteSaveTimeoutRef.current) {
+      clearTimeout(orderNoteSaveTimeoutRef.current);
+    }
+
+    // Schedule new save after debounce period
+    orderNoteSaveTimeoutRef.current = setTimeout(() => {
+      try {
+        localStorage.setItem(ORDER_NOTE_STORAGE_KEY, orderNote);
+      } catch (error) {
+        console.error("Error saving order note to localStorage:", error);
+      }
+    }, SAVE_DEBOUNCE_MS);
+
+    // Cleanup on unmount
+    return () => {
+      if (orderNoteSaveTimeoutRef.current) {
+        clearTimeout(orderNoteSaveTimeoutRef.current);
+      }
+    };
+  }, [orderNote, isHydrated]);
+
   // Create a Map for O(1) lookups instead of O(n) array.find()
   const itemsMap = useMemo(() => {
     const map = new Map<string, CartItem>();
@@ -93,7 +140,37 @@ export function CartProvider({ children, currencyCode = "IQD" }: CartProviderPro
     return map;
   }, [items]);
 
-  const addItem = useCallback((item: Omit<CartItem, "quantity">, quantity = 1) => {
+  // Validate minimum quantity for an item
+  const validateMinimumQuantity = useCallback((item: Omit<CartItem, "quantity">, quantity: number): MinimumQuantityError => {
+    // Check if item has minimum quantity requirement
+    if (!item.minimum_quantity || item.minimum_quantity <= 0) {
+      return { hasError: false };
+    }
+
+    // Get current quantity in cart
+    const currentQuantity = itemsMap.get(item.item_id)?.quantity || 0;
+    const totalQuantity = currentQuantity + quantity;
+
+    // Check if total quantity meets minimum
+    if (totalQuantity < item.minimum_quantity) {
+      return {
+        hasError: true,
+        minimumQuantity: item.minimum_quantity,
+        attemptedQuantity: totalQuantity,
+        message: `Minimum order quantity for this item is ${item.minimum_quantity} ${item.unit}`,
+      };
+    }
+
+    return { hasError: false };
+  }, [itemsMap]);
+
+  const addItem = useCallback((item: Omit<CartItem, "quantity">, quantity = 1): MinimumQuantityError => {
+    // Validate minimum quantity first
+    const validation = validateMinimumQuantity(item, quantity);
+    if (validation.hasError) {
+      return validation;
+    }
+
     setItems((prevItems) => {
       const existingIndex = prevItems.findIndex((i) => i.item_id === item.item_id);
 
@@ -109,7 +186,9 @@ export function CartProvider({ children, currencyCode = "IQD" }: CartProviderPro
       // Add new item
       return [...prevItems, { ...item, quantity: Math.min(quantity, item.available_stock) }];
     });
-  }, []);
+
+    return { hasError: false };
+  }, [validateMinimumQuantity]);
 
   const removeItem = useCallback((itemId: string) => {
     setItems((prevItems) => prevItems.filter((item) => item.item_id !== itemId));
@@ -130,8 +209,25 @@ export function CartProvider({ children, currencyCode = "IQD" }: CartProviderPro
     );
   }, [removeItem]);
 
+  const updateItemNote = useCallback((itemId: string, note: string) => {
+    setItems((prevItems) =>
+      prevItems.map((item) =>
+        item.item_id === itemId
+          ? { ...item, note }
+          : item
+      )
+    );
+  }, []);
+
+  const updateOrderNote = useCallback((note: string) => {
+    setOrderNote(note);
+  }, []);
+
   const clearCart = useCallback(() => {
     setItems([]);
+    setOrderNote("");
+    // Clear from localStorage immediately
+    localStorage.removeItem(ORDER_NOTE_STORAGE_KEY);
   }, []);
 
   // Use Map for O(1) lookup
@@ -158,14 +254,18 @@ export function CartProvider({ children, currencyCode = "IQD" }: CartProviderPro
       itemCount,
       subtotal,
       currencyCode,
+      orderNote,
       addItem,
       removeItem,
       updateQuantity,
+      updateItemNote,
+      updateOrderNote,
       clearCart,
       isInCart,
       getItemQuantity,
+      validateMinimumQuantity,
     }),
-    [items, itemCount, subtotal, currencyCode, addItem, removeItem, updateQuantity, clearCart, isInCart, getItemQuantity]
+    [items, itemCount, subtotal, currencyCode, orderNote, addItem, removeItem, updateQuantity, updateItemNote, updateOrderNote, clearCart, isInCart, getItemQuantity, validateMinimumQuantity]
   );
 
   return (
