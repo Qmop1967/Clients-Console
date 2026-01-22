@@ -113,15 +113,19 @@ interface ZohoBooksCategoriesResponse {
 /**
  * Extract minimum quantity from custom fields
  * Looks for "Minimum Quantity Limitation" custom field
+ * API field name: cf_minimum_quantity_limitation
  */
 function getMinimumQuantityFromItem(item: ZohoBooksItem): number | undefined {
   if (!item.custom_fields || item.custom_fields.length === 0) {
     return undefined;
   }
 
-  // Look for the custom field by label (case-insensitive)
+  // Look for the custom field by customfield_id (API field name)
+  // Zoho returns custom fields with API names like "cf_minimum_quantity_limitation"
   const minQtyField = item.custom_fields.find(
-    (field) => field.label?.toLowerCase() === 'minimum quantity limitation'
+    (field) =>
+      field.customfield_id === 'cf_minimum_quantity_limitation' ||
+      field.label?.toLowerCase() === 'minimum quantity limitation'
   );
 
   if (!minQtyField) {
