@@ -116,7 +116,10 @@
       "Bash(cd /Users/khaleelal-mulla/General/\\\\ Projects/tsh-clients-console && npm run lint:*)",
       "Bash(npx tsc:*)",
       "Bash(git reset:*)",
-      "Bash(npm run lint:*)"
+      "Bash(npm run lint:*)",
+      "Bash(git restore:*)",
+      "Skill(zoho-debug)",
+      "Bash(kill:*)"
     ],
     "deny": [],
     "ask": []

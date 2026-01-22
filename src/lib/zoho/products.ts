@@ -68,6 +68,8 @@ interface ZohoBooksItem {
     warehouse_actual_available_stock?: number;
     warehouse_committed_stock?: number;
   }>;
+  // Minimum order quantity - built-in Zoho Books field
+  minimum_order_quantity?: number;
   // Custom fields
   custom_fields?: Array<{
     customfield_id: string;
@@ -111,31 +113,19 @@ interface ZohoBooksCategoriesResponse {
 // ============================================
 
 /**
- * Extract minimum quantity from custom fields
- * Looks for "Minimum Quantity Limitation" custom field
- * API field name: cf_minimum_quantity_limitation
+ * Extract minimum quantity from Zoho Books item
+ * Uses the built-in minimum_order_quantity field from Zoho Books API
+ * This is a standard field in Zoho Books, not a custom field
  */
 function getMinimumQuantityFromItem(item: ZohoBooksItem): number | undefined {
-  if (!item.custom_fields || item.custom_fields.length === 0) {
+  // Zoho Books has a built-in minimum_order_quantity field
+  if (!item.minimum_order_quantity) {
     return undefined;
   }
 
-  // Look for the custom field by customfield_id (API field name)
-  // Zoho returns custom fields with API names like "cf_minimum_quantity_limitation"
-  const minQtyField = item.custom_fields.find(
-    (field) =>
-      field.customfield_id === 'cf_minimum_quantity_limitation' ||
-      field.label?.toLowerCase() === 'minimum quantity limitation'
-  );
-
-  if (!minQtyField) {
-    return undefined;
-  }
-
-  // Parse the value (could be string or number)
-  const value = typeof minQtyField.value === 'number'
-    ? minQtyField.value
-    : parseInt(String(minQtyField.value), 10);
+  const value = typeof item.minimum_order_quantity === 'number'
+    ? item.minimum_order_quantity
+    : parseInt(String(item.minimum_order_quantity), 10);
 
   // Return undefined if invalid or <= 0
   return !isNaN(value) && value > 0 ? value : undefined;
