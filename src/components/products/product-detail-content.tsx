@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { ProductImage } from "./product-image";
 import { useCart } from "@/components/providers/cart-provider";
 import { useCatalogMode } from "@/components/providers/catalog-mode-provider";
@@ -25,6 +26,7 @@ import {
   Copy,
   CheckCircle,
   MessageCircle,
+  AlertCircle,
 } from "lucide-react";
 import { WholesaleQuantityInput } from "@/components/ui/wholesale-quantity-input";
 import { cn } from "@/lib/utils/cn";
@@ -45,6 +47,7 @@ interface ProductDetailProps {
     unit: string;
     inPriceList: boolean;
     currencyCode: string;
+    minimum_quantity?: number;
   };
   locale: string;
 }
@@ -57,6 +60,7 @@ export function ProductDetailContent({ product, locale }: ProductDetailProps) {
   const [quantity, setQuantity] = useState(1);
   const [added, setAdded] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [minimumQtyError, setMinimumQtyError] = useState<string | null>(null);
   const { addItem, getItemQuantity } = useCart();
   const { isCatalogMode, showCatalogModal } = useCatalogMode();
 
@@ -73,7 +77,10 @@ export function ProductDetailContent({ product, locale }: ProductDetailProps) {
   const handleAddToCart = () => {
     if (!hasPrice || !isInStock || maxQuantity <= 0) return;
 
-    addItem(
+    // Clear any previous error
+    setMinimumQtyError(null);
+
+    const result = addItem(
       {
         item_id: product.item_id,
         name: product.name,
@@ -82,9 +89,23 @@ export function ProductDetailContent({ product, locale }: ProductDetailProps) {
         image_url: product.image_url,
         available_stock: product.available_stock,
         unit: product.unit,
+        minimum_quantity: product.minimum_quantity,
       },
       quantity
     );
+
+    // Check if validation failed
+    if (result.hasError) {
+      setMinimumQtyError(
+        tCart("minimumQuantityError", {
+          quantity: result.minimumQuantity,
+          unit: product.unit,
+        })
+      );
+      // Auto-hide error after 5 seconds
+      setTimeout(() => setMinimumQtyError(null), 5000);
+      return;
+    }
 
     setAdded(true);
     setTimeout(() => {
@@ -347,13 +368,32 @@ export function ProductDetailContent({ product, locale }: ProductDetailProps) {
             </Card>
           )}
 
+          {/* Minimum Quantity Error Alert */}
+          {minimumQtyError && (
+            <Alert variant="destructive" className="animate-in fade-in slide-in-from-top-2">
+              <AlertCircle className="h-4 w-4" />
+              <AlertTitle>{tCart("minimumQuantityNotMet")}</AlertTitle>
+              <AlertDescription>{minimumQtyError}</AlertDescription>
+            </Alert>
+          )}
+
           {/* Add to Cart Section - Hidden in catalog mode */}
           {!isCatalogMode && hasPrice && isInStock && (
             <Card className="border-2 border-primary/20 bg-gradient-to-br from-background to-muted/30">
               <CardContent className="p-5 space-y-5">
-                {/* Quantity Header */}
-                <div className="text-center">
+                {/* Quantity Header with Minimum Quantity Info */}
+                <div className="text-center space-y-1">
                   <span className="text-sm font-medium text-muted-foreground">{tCart("quantity")}</span>
+                  {product.minimum_quantity && product.minimum_quantity > 0 && (
+                    <div className="flex items-center justify-center gap-1.5">
+                      <Badge variant="outline" className="text-xs">
+                        {tCart("minimumQuantityRequired", {
+                          quantity: product.minimum_quantity,
+                          unit: product.unit,
+                        })}
+                      </Badge>
+                    </div>
+                  )}
                 </div>
 
                 {/* Wholesale Quantity Input */}

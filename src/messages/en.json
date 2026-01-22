@@ -444,7 +444,12 @@
     "itemNote": "Add note for this item",
     "itemNotePlaceholder": "Optional: Add special instructions or notes for this item...",
     "orderNote": "Order Notes",
-    "orderNotePlaceholder": "Optional: Add any special instructions or notes for this order..."
+    "orderNotePlaceholder": "Optional: Add any special instructions or notes for this order...",
+    "minimumQuantity": "Minimum Quantity",
+    "minimumQuantityRequired": "Minimum order quantity: {quantity} {unit}",
+    "minimumQuantityError": "This item has a minimum order quantity of {quantity} {unit}. Please add at least {quantity} {unit} to your cart.",
+    "minimumQuantityNotMet": "Minimum quantity not met",
+    "minimumQuantityWarning": "You are trying to add {attempted} {unit}, but the minimum order quantity is {minimum} {unit}."
   },
   "footer": {
     "copyright": "© {year} TSH. All rights reserved.",

@@ -13,6 +13,14 @@ export interface CartItem {
   available_stock: number;
   unit: string;
   note?: string;
+  minimum_quantity?: number;
+}
+
+export interface MinimumQuantityError {
+  hasError: boolean;
+  message?: string;
+  minimumQuantity?: number;
+  attemptedQuantity?: number;
 }
 
 interface CartContextType {
@@ -21,7 +29,7 @@ interface CartContextType {
   subtotal: number;
   currencyCode: string;
   orderNote: string;
-  addItem: (item: Omit<CartItem, "quantity">, quantity?: number) => void;
+  addItem: (item: Omit<CartItem, "quantity">, quantity?: number) => MinimumQuantityError;
   removeItem: (itemId: string) => void;
   updateQuantity: (itemId: string, quantity: number) => void;
   updateItemNote: (itemId: string, note: string) => void;
@@ -29,6 +37,7 @@ interface CartContextType {
   clearCart: () => void;
   isInCart: (itemId: string) => boolean;
   getItemQuantity: (itemId: string) => number;
+  validateMinimumQuantity: (item: Omit<CartItem, "quantity">, quantity: number) => MinimumQuantityError;
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
@@ -131,7 +140,37 @@ export function CartProvider({ children, currencyCode = "IQD" }: CartProviderPro
     return map;
   }, [items]);
 
-  const addItem = useCallback((item: Omit<CartItem, "quantity">, quantity = 1) => {
+  // Validate minimum quantity for an item
+  const validateMinimumQuantity = useCallback((item: Omit<CartItem, "quantity">, quantity: number): MinimumQuantityError => {
+    // Check if item has minimum quantity requirement
+    if (!item.minimum_quantity || item.minimum_quantity <= 0) {
+      return { hasError: false };
+    }
+
+    // Get current quantity in cart
+    const currentQuantity = itemsMap.get(item.item_id)?.quantity || 0;
+    const totalQuantity = currentQuantity + quantity;
+
+    // Check if total quantity meets minimum
+    if (totalQuantity < item.minimum_quantity) {
+      return {
+        hasError: true,
+        minimumQuantity: item.minimum_quantity,
+        attemptedQuantity: totalQuantity,
+        message: `Minimum order quantity for this item is ${item.minimum_quantity} ${item.unit}`,
+      };
+    }
+
+    return { hasError: false };
+  }, [itemsMap]);
+
+  const addItem = useCallback((item: Omit<CartItem, "quantity">, quantity = 1): MinimumQuantityError => {
+    // Validate minimum quantity first
+    const validation = validateMinimumQuantity(item, quantity);
+    if (validation.hasError) {
+      return validation;
+    }
+
     setItems((prevItems) => {
       const existingIndex = prevItems.findIndex((i) => i.item_id === item.item_id);
 
@@ -147,7 +186,9 @@ export function CartProvider({ children, currencyCode = "IQD" }: CartProviderPro
       // Add new item
       return [...prevItems, { ...item, quantity: Math.min(quantity, item.available_stock) }];
     });
-  }, []);
+
+    return { hasError: false };
+  }, [validateMinimumQuantity]);
 
   const removeItem = useCallback((itemId: string) => {
     setItems((prevItems) => prevItems.filter((item) => item.item_id !== itemId));
@@ -222,8 +263,9 @@ export function CartProvider({ children, currencyCode = "IQD" }: CartProviderPro
       clearCart,
       isInCart,
       getItemQuantity,
+      validateMinimumQuantity,
     }),
-    [items, itemCount, subtotal, currencyCode, orderNote, addItem, removeItem, updateQuantity, updateItemNote, updateOrderNote, clearCart, isInCart, getItemQuantity]
+    [items, itemCount, subtotal, currencyCode, orderNote, addItem, removeItem, updateQuantity, updateItemNote, updateOrderNote, clearCart, isInCart, getItemQuantity, validateMinimumQuantity]
   );
 
   return (

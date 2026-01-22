@@ -68,6 +68,12 @@ interface ZohoBooksItem {
     warehouse_actual_available_stock?: number;
     warehouse_committed_stock?: number;
   }>;
+  // Custom fields
+  custom_fields?: Array<{
+    customfield_id: string;
+    label: string;
+    value: string | number;
+  }>;
 }
 
 interface ZohoBooksItemsResponse {
@@ -103,6 +109,33 @@ interface ZohoBooksCategoriesResponse {
 // ============================================
 // HELPER FUNCTIONS
 // ============================================
+
+/**
+ * Extract minimum quantity from custom fields
+ * Looks for "Minimum Quantity Limitation" custom field
+ */
+function getMinimumQuantityFromItem(item: ZohoBooksItem): number | undefined {
+  if (!item.custom_fields || item.custom_fields.length === 0) {
+    return undefined;
+  }
+
+  // Look for the custom field by label (case-insensitive)
+  const minQtyField = item.custom_fields.find(
+    (field) => field.label?.toLowerCase() === 'minimum quantity limitation'
+  );
+
+  if (!minQtyField) {
+    return undefined;
+  }
+
+  // Parse the value (could be string or number)
+  const value = typeof minQtyField.value === 'number'
+    ? minQtyField.value
+    : parseInt(String(minQtyField.value), 10);
+
+  // Return undefined if invalid or <= 0
+  return !isNaN(value) && value > 0 ? value : undefined;
+}
 
 /**
  * Extract available stock from warehouse array (if present)
@@ -162,6 +195,8 @@ function booksItemToZohoItem(item: ZohoBooksItem): ZohoItem {
     category_id: item.category_id,
     category_name: item.category_name,
     brand: item.brand ?? item.manufacturer,
+    custom_fields: item.custom_fields,
+    minimum_quantity: getMinimumQuantityFromItem(item),
   };
 }
 

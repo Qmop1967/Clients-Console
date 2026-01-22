@@ -21,6 +21,7 @@ interface ProductCardProps {
     image_url: string | null;
     category_name?: string;
     unit?: string;
+    minimum_quantity?: number;
   };
   currencyCode: string;
 }
@@ -28,6 +29,7 @@ interface ProductCardProps {
 // Memoized ProductCard for better performance - prevents unnecessary re-renders
 export const ProductCard = memo(function ProductCard({ product, currencyCode }: ProductCardProps) {
   const t = useTranslations("products");
+  const tCart = useTranslations("cart");
   const tCatalog = useTranslations("catalogMode");
   const [added, setAdded] = useState(false);
   const { addItem } = useCart();
@@ -37,7 +39,7 @@ export const ProductCard = memo(function ProductCard({ product, currencyCode }: 
 
   // Memoized add to cart handler
   const handleAddToCart = useCallback(() => {
-    addItem({
+    const result = addItem({
       item_id: product.item_id,
       name: product.name,
       sku: product.sku,
@@ -45,10 +47,24 @@ export const ProductCard = memo(function ProductCard({ product, currencyCode }: 
       image_url: product.image_url,
       available_stock: product.available_stock,
       unit: product.unit || "unit",
+      minimum_quantity: product.minimum_quantity,
     });
+
+    // Check if validation failed
+    if (result.hasError) {
+      // Show native browser alert with the error message
+      alert(
+        tCart("minimumQuantityError", {
+          quantity: result.minimumQuantity,
+          unit: product.unit || "unit",
+        })
+      );
+      return;
+    }
+
     setAdded(true);
     setTimeout(() => setAdded(false), 1500);
-  }, [addItem, product]);
+  }, [addItem, product, tCart]);
 
   return (
     <Card
