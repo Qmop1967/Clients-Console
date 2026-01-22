@@ -12,6 +12,7 @@ export interface CartItem {
   image_url: string | null;
   available_stock: number;
   unit: string;
+  note?: string;
 }
 
 interface CartContextType {
@@ -19,9 +20,12 @@ interface CartContextType {
   itemCount: number;
   subtotal: number;
   currencyCode: string;
+  orderNote: string;
   addItem: (item: Omit<CartItem, "quantity">, quantity?: number) => void;
   removeItem: (itemId: string) => void;
   updateQuantity: (itemId: string, quantity: number) => void;
+  updateItemNote: (itemId: string, note: string) => void;
+  updateOrderNote: (note: string) => void;
   clearCart: () => void;
   isInCart: (itemId: string) => boolean;
   getItemQuantity: (itemId: string) => number;
@@ -30,6 +34,7 @@ interface CartContextType {
 const CartContext = createContext<CartContextType | undefined>(undefined);
 
 const CART_STORAGE_KEY = "tsh-cart";
+const ORDER_NOTE_STORAGE_KEY = "tsh-cart-order-note";
 const SAVE_DEBOUNCE_MS = 300; // Debounce localStorage writes
 
 interface CartProviderProps {
@@ -39,10 +44,12 @@ interface CartProviderProps {
 
 export function CartProvider({ children, currencyCode = "IQD" }: CartProviderProps) {
   const [items, setItems] = useState<CartItem[]>([]);
+  const [orderNote, setOrderNote] = useState("");
   const [isHydrated, setIsHydrated] = useState(false);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const orderNoteSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Load cart from localStorage on mount
+  // Load cart and order note from localStorage on mount
   useEffect(() => {
     try {
       const stored = localStorage.getItem(CART_STORAGE_KEY);
@@ -51,6 +58,11 @@ export function CartProvider({ children, currencyCode = "IQD" }: CartProviderPro
         if (Array.isArray(parsed)) {
           setItems(parsed);
         }
+      }
+
+      const storedNote = localStorage.getItem(ORDER_NOTE_STORAGE_KEY);
+      if (storedNote) {
+        setOrderNote(storedNote);
       }
     } catch (error) {
       console.error("Error loading cart from localStorage:", error);
@@ -83,6 +95,32 @@ export function CartProvider({ children, currencyCode = "IQD" }: CartProviderPro
       }
     };
   }, [items, isHydrated]);
+
+  // Debounced save order note to localStorage
+  useEffect(() => {
+    if (!isHydrated) return;
+
+    // Clear any pending save
+    if (orderNoteSaveTimeoutRef.current) {
+      clearTimeout(orderNoteSaveTimeoutRef.current);
+    }
+
+    // Schedule new save after debounce period
+    orderNoteSaveTimeoutRef.current = setTimeout(() => {
+      try {
+        localStorage.setItem(ORDER_NOTE_STORAGE_KEY, orderNote);
+      } catch (error) {
+        console.error("Error saving order note to localStorage:", error);
+      }
+    }, SAVE_DEBOUNCE_MS);
+
+    // Cleanup on unmount
+    return () => {
+      if (orderNoteSaveTimeoutRef.current) {
+        clearTimeout(orderNoteSaveTimeoutRef.current);
+      }
+    };
+  }, [orderNote, isHydrated]);
 
   // Create a Map for O(1) lookups instead of O(n) array.find()
   const itemsMap = useMemo(() => {
@@ -130,8 +168,25 @@ export function CartProvider({ children, currencyCode = "IQD" }: CartProviderPro
     );
   }, [removeItem]);
 
+  const updateItemNote = useCallback((itemId: string, note: string) => {
+    setItems((prevItems) =>
+      prevItems.map((item) =>
+        item.item_id === itemId
+          ? { ...item, note }
+          : item
+      )
+    );
+  }, []);
+
+  const updateOrderNote = useCallback((note: string) => {
+    setOrderNote(note);
+  }, []);
+
   const clearCart = useCallback(() => {
     setItems([]);
+    setOrderNote("");
+    // Clear from localStorage immediately
+    localStorage.removeItem(ORDER_NOTE_STORAGE_KEY);
   }, []);
 
   // Use Map for O(1) lookup
@@ -158,14 +213,17 @@ export function CartProvider({ children, currencyCode = "IQD" }: CartProviderPro
       itemCount,
       subtotal,
       currencyCode,
+      orderNote,
       addItem,
       removeItem,
       updateQuantity,
+      updateItemNote,
+      updateOrderNote,
       clearCart,
       isInCart,
       getItemQuantity,
     }),
-    [items, itemCount, subtotal, currencyCode, addItem, removeItem, updateQuantity, clearCart, isInCart, getItemQuantity]
+    [items, itemCount, subtotal, currencyCode, orderNote, addItem, removeItem, updateQuantity, updateItemNote, updateOrderNote, clearCart, isInCart, getItemQuantity]
   );
 
   return (
