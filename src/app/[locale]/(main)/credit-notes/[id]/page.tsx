@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Link } from "@/i18n/navigation";
+import Image from "next/image";
 import {
   ArrowLeft,
   FileCheck,
@@ -14,7 +15,6 @@ import {
   CheckCircle2,
   AlertCircle,
   Clock,
-  FileText,
   Package,
   Box,
 } from "lucide-react";
@@ -190,9 +190,22 @@ export default async function CreditNoteDetailPage({
                     key={item.line_item_id || index}
                     className="flex items-center gap-4 py-4 first:pt-0 last:pb-0"
                   >
-                    {/* Item Icon */}
-                    <div className="w-12 h-12 rounded-lg bg-muted shrink-0 flex items-center justify-center">
-                      <Box className="h-5 w-5 text-muted-foreground" />
+                    {/* Item Image */}
+                    <div className="relative w-16 h-16 rounded-lg bg-muted shrink-0 overflow-hidden">
+                      {item.item_id ? (
+                        <Image
+                          src={`/api/zoho/images/${item.item_id}`}
+                          alt={item.name || item.item_name || "Product"}
+                          fill
+                          className="object-cover"
+                          sizes="64px"
+                          unoptimized
+                        />
+                      ) : (
+                        <div className="flex h-full items-center justify-center">
+                          <Box className="h-5 w-5 text-muted-foreground" />
+                        </div>
+                      )}
                     </div>
 
                     {/* Item Details */}
