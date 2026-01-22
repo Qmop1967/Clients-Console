@@ -53,6 +53,7 @@ type FetchResult = {
     unit: string;
     inPriceList: boolean;
     currencyCode: string;
+    minimum_quantity?: number;
   };
 } | {
   success: false;
@@ -106,6 +107,7 @@ async function fetchProductData(productId: string, priceListId?: string): Promis
         unit: product.unit || "pcs",
         inPriceList: priceInfo.inPriceList,
         currencyCode: priceList?.currency_code || "IQD",
+        minimum_quantity: product.minimum_quantity,
       }
     };
   } catch (error) {
