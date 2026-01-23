@@ -54,7 +54,10 @@ export function ChatWidget() {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
+  const [isVisible, setIsVisible] = useState(true);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
+  const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const lastScrollYRef = useRef(0);
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
@@ -62,6 +65,46 @@ export function ChatWidget() {
       scrollAreaRef.current.scrollTop = scrollAreaRef.current.scrollHeight;
     }
   }, [messages]);
+
+  // Handle scroll to hide/show button
+  useEffect(() => {
+    let ticking = false;
+
+    const handleScroll = () => {
+      if (!ticking) {
+        window.requestAnimationFrame(() => {
+          const currentScrollY = window.scrollY;
+
+          // Hide button when scrolling (in either direction)
+          setIsVisible(false);
+
+          // Clear existing timeout
+          if (scrollTimeoutRef.current) {
+            clearTimeout(scrollTimeoutRef.current);
+          }
+
+          // Show button again after scrolling stops (300ms delay)
+          scrollTimeoutRef.current = setTimeout(() => {
+            setIsVisible(true);
+          }, 300);
+
+          lastScrollYRef.current = currentScrollY;
+          ticking = false;
+        });
+
+        ticking = true;
+      }
+    };
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+      if (scrollTimeoutRef.current) {
+        clearTimeout(scrollTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // Add welcome message when opened
   useEffect(() => {
@@ -220,12 +263,16 @@ export function ChatWidget() {
         <Button
           onClick={() => setIsOpen(true)}
           className={cn(
-            'fixed bottom-6 right-6 z-50',
+            'fixed bottom-24 right-6 z-40',
             'h-14 w-14 rounded-full shadow-lg',
             'bg-gradient-to-br from-gold to-amber-600',
             'hover:scale-110 transition-all duration-300',
             'hover:shadow-xl hover:shadow-gold/50',
-            'group'
+            'group',
+            // Smooth visibility transitions
+            isVisible
+              ? 'translate-y-0 opacity-100'
+              : 'translate-y-20 opacity-0 pointer-events-none'
           )}
           aria-label="Open AI Assistant"
         >
