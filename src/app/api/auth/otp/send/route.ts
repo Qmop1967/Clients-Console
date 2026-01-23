@@ -191,6 +191,12 @@ export async function POST(request: NextRequest) {
     const otpKey = `otp:${email}`;
     await redis.setex(otpKey, 600, otp); // 600 seconds = 10 minutes
 
+    console.log('[OTP Send] Generated and stored OTP:', {
+      email,
+      code: otp,
+      key: otpKey,
+    });
+
     // Send OTP email
     const result = await resend.emails.send({
       from: process.env.EMAIL_FROM || 'TSH <noreply@tsh.sale>',

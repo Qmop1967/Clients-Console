@@ -21,9 +21,19 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Clean and normalize the code (remove spaces, trim)
+    const cleanCode = String(code).trim().replace(/\s/g, '');
+
     // Get OTP from Redis
     const otpKey = `otp:${email}`;
     const storedOTP = await redis.get<string>(otpKey);
+
+    console.log('[OTP Verify] Debug:', {
+      email,
+      receivedCode: cleanCode,
+      storedCode: storedOTP,
+      match: storedOTP === cleanCode,
+    });
 
     if (!storedOTP) {
       return NextResponse.json(
@@ -32,8 +42,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Verify OTP
-    if (storedOTP !== code) {
+    // Verify OTP with cleaned code
+    if (String(storedOTP).trim() !== cleanCode) {
+      console.error('[OTP Verify] Code mismatch:', {
+        stored: String(storedOTP).trim(),
+        received: cleanCode,
+      });
       return NextResponse.json(
         { error: 'Invalid verification code' },
         { status: 400 }
