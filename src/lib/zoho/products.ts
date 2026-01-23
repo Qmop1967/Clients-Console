@@ -334,7 +334,7 @@ export const getProductsInStock = unstable_cache(
   },
   ['products-in-stock-books'],
   {
-    revalidate: 86400, // 24 hours - webhook-triggered revalidation handles updates
+    revalidate: 60, // Temporarily reduced from 86400 for minimum quantity rollout
     tags: [CACHE_TAGS.PRODUCTS],
   }
 );
@@ -367,7 +367,7 @@ export const getProduct = unstable_cache(
   },
   ['product-books'],
   {
-    revalidate: 86400,
+    revalidate: 60, // Temporarily reduced from 86400 for minimum quantity rollout
     tags: [CACHE_TAGS.PRODUCTS],
   }
 );
