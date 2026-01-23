@@ -120,7 +120,9 @@
       "Bash(git restore:*)",
       "Skill(zoho-debug)",
       "Bash(kill:*)",
-      "Bash(jq:*)"
+      "Bash(jq:*)",
+      "Bash(git show:*)",
+      "Bash(chmod:*)"
     ],
     "deny": [],
     "ask": []
