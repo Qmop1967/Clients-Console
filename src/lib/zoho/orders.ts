@@ -555,3 +555,135 @@ export async function getOrderSummaryStats(customerId: string): Promise<OrderSum
 
   return getCachedStats();
 }
+
+// ============================================
+// Receipt Tracking Functions
+// ============================================
+
+export interface ReceiptEvent {
+  timestamp: string;
+  quantity: number;
+  totalReceived: number;
+  receivedBy?: string;
+}
+
+// Update line item receipt status
+export async function updateLineItemReceipt(
+  orderId: string,
+  lineItemId: string,
+  quantityReceived: number,
+  customerId: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    // First get the current order to access line items
+    const order = await getOrder(orderId, customerId);
+    if (!order) {
+      return { success: false, error: 'Order not found' };
+    }
+
+    // Find the line item
+    const lineItem = order.line_items.find(item => item.line_item_id === lineItemId);
+    if (!lineItem) {
+      return { success: false, error: 'Line item not found' };
+    }
+
+    // Calculate new totals
+    const currentReceived = lineItem.cf_quantity_received || 0;
+    const newTotalReceived = currentReceived + quantityReceived;
+    const quantityOrdered = lineItem.quantity;
+
+    // Determine new status
+    let newStatus: 'pending' | 'partial' | 'completed' = 'pending';
+    if (newTotalReceived >= quantityOrdered) {
+      newStatus = 'completed';
+    } else if (newTotalReceived > 0) {
+      newStatus = 'partial';
+    }
+
+    // Get existing timeline or create new
+    let timeline: ReceiptEvent[] = [];
+    if (order.cf_receive_timeline) {
+      try {
+        timeline = JSON.parse(order.cf_receive_timeline);
+      } catch {
+        timeline = [];
+      }
+    }
+
+    // Add new event to timeline
+    const newEvent: ReceiptEvent = {
+      timestamp: new Date().toISOString(),
+      quantity: quantityReceived,
+      totalReceived: newTotalReceived,
+    };
+    timeline.push(newEvent);
+
+    // Update the sales order with new custom field values
+    // Note: Zoho Books API doesn't support updating individual line item custom fields directly
+    // We need to update the entire order with modified line items
+    const updatedLineItems = order.line_items.map(item => {
+      if (item.line_item_id === lineItemId) {
+        return {
+          ...item,
+          cf_quantity_received: newTotalReceived,
+          cf_receive_status: newStatus,
+          cf_last_received_date: new Date().toISOString().split('T')[0],
+        };
+      }
+      return item;
+    });
+
+    // Calculate overall order receive status
+    const allItemsReceived = updatedLineItems.every(
+      item => (item.cf_quantity_received || 0) >= item.quantity
+    );
+    const someItemsReceived = updatedLineItems.some(
+      item => (item.cf_quantity_received || 0) > 0
+    );
+
+    const overallStatus: 'pending' | 'partial' | 'completed' = allItemsReceived
+      ? 'completed'
+      : someItemsReceived
+      ? 'partial'
+      : 'pending';
+
+    // Update the order via Zoho API
+    await rateLimitedFetch(() =>
+      zohoFetch(`/salesorders/${orderId}`, {
+        method: 'PUT',
+        api: 'inventory',
+        body: {
+          line_items: updatedLineItems,
+          cf_overall_receive_status: overallStatus,
+          cf_receive_timeline: JSON.stringify(timeline),
+        },
+      })
+    );
+
+    console.log(`[updateLineItemReceipt] Updated item ${lineItemId} in order ${orderId}: ${newTotalReceived}/${quantityOrdered} (${newStatus})`);
+
+    return { success: true };
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error('[updateLineItemReceipt] Failed:', errorMessage);
+    return { success: false, error: errorMessage };
+  }
+}
+
+// Get receipt timeline for an order
+export async function getReceiptTimeline(
+  orderId: string,
+  customerId: string
+): Promise<ReceiptEvent[]> {
+  try {
+    const order = await getOrder(orderId, customerId);
+    if (!order || !order.cf_receive_timeline) {
+      return [];
+    }
+
+    return JSON.parse(order.cf_receive_timeline);
+  } catch (error) {
+    console.error('[getReceiptTimeline] Failed to parse timeline:', error);
+    return [];
+  }
+}

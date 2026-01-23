@@ -146,6 +146,9 @@ export interface ZohoSalesOrder {
   shipments?: ZohoShipment[];
   created_time: string;
   last_modified_time: string;
+  // Receipt tracking custom fields
+  cf_overall_receive_status?: 'pending' | 'partial' | 'completed';
+  cf_receive_timeline?: string; // JSON array of receipt events
 }
 
 // Zoho Package (Carton)
@@ -217,6 +220,10 @@ export interface ZohoLineItem {
   item_total: number;
   discount?: number;
   discount_type?: string;
+  // Receipt tracking custom fields
+  cf_quantity_received?: number;
+  cf_receive_status?: 'pending' | 'partial' | 'completed';
+  cf_last_received_date?: string;
 }
 
 // Zoho Invoice
