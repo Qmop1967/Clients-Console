@@ -8,13 +8,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Mail, Loader2, CheckCircle, Lock, Shield, ArrowLeft, Sparkles, UserPlus, Link2, Store, ChevronLeft, Hash, Fingerprint } from "lucide-react";
+import { Mail, Loader2, CheckCircle, Lock, Shield, ArrowLeft, Sparkles, UserPlus, Link2, Store, ChevronLeft, Hash } from "lucide-react";
 import Link from "next/link";
 import { useLocale } from "next-intl";
-import { startRegistration, startAuthentication } from "@simplewebauthn/browser";
 import { useRouter } from "next/navigation";
 
-type AuthMethod = "magic-link" | "otp" | "passkey";
+type AuthMethod = "magic-link" | "otp";
 
 export default function LoginPage() {
   const t = useTranslations("auth");
@@ -30,7 +29,6 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [focused, setFocused] = useState(false);
   const [otpSent, setOtpSent] = useState(false);
-  const [passkeySetup, setPasskeySetup] = useState(false);
 
   // Magic Link handler
   const handleMagicLink = async (e: React.FormEvent) => {
@@ -114,120 +112,8 @@ export default function LoginPage() {
     }
   };
 
-  // Passkey Setup handler
-  const handleSetupPasskey = async () => {
-    if (!email) {
-      setError("Please enter your email first");
-      return;
-    }
-
-    setLoading(true);
-    setError("");
-
-    try {
-      // Get registration options
-      const optionsResponse = await fetch("/api/auth/webauthn/register-options", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
-      });
-
-      if (!optionsResponse.ok) {
-        throw new Error("Failed to get registration options");
-      }
-
-      const options = await optionsResponse.json();
-
-      // Start registration
-      const credential = await startRegistration(options);
-
-      // Verify registration
-      const verifyResponse = await fetch("/api/auth/webauthn/register-verify", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, credential }),
-      });
-
-      if (!verifyResponse.ok) {
-        throw new Error("Failed to verify registration");
-      }
-
-      setPasskeySetup(true);
-      setTimeout(() => {
-        setPasskeySetup(false);
-        // Auto-login after setup
-        handlePasskeyLogin();
-      }, 2000);
-    } catch (err: any) {
-      console.error("Passkey setup error:", err);
-      setError(err.message || t("passkeyError"));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Passkey Login handler
-  const handlePasskeyLogin = async () => {
-    if (!email) {
-      setError("Please enter your email first");
-      return;
-    }
-
-    setLoading(true);
-    setError("");
-
-    try {
-      // Get authentication options
-      const optionsResponse = await fetch("/api/auth/webauthn/auth-options", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
-      });
-
-      if (!optionsResponse.ok) {
-        const data = await optionsResponse.json();
-        if (optionsResponse.status === 404) {
-          // No passkey registered, offer to set up
-          setError("No Face ID/Touch ID registered. Please setup first.");
-          return;
-        }
-        throw new Error(data.error || "Failed to get authentication options");
-      }
-
-      const options = await optionsResponse.json();
-
-      // Start authentication
-      const credential = await startAuthentication(options);
-
-      // Verify authentication
-      const verifyResponse = await fetch("/api/auth/webauthn/auth-verify", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, credential }),
-      });
-
-      const data = await verifyResponse.json();
-
-      if (!verifyResponse.ok) {
-        throw new Error(data.error || "Authentication failed");
-      }
-
-      // Set session cookie
-      document.cookie = `next-auth.session-token=${data.sessionToken}; path=/; max-age=${365 * 24 * 60 * 60}; samesite=lax`;
-
-      // Redirect to dashboard
-      router.push(`/${locale}/dashboard`);
-      router.refresh();
-    } catch (err: any) {
-      console.error("Passkey login error:", err);
-      setError(err.message || t("passkeyError"));
-    } finally {
-      setLoading(false);
-    }
-  };
-
   // Success state - Email/Code sent
-  if (sent || passkeySetup) {
+  if (sent) {
     return (
       <div className="relative flex min-h-screen items-center justify-center p-4">
         <Link
@@ -251,35 +137,29 @@ export default function LoginPage() {
                 </div>
               </div>
               <CardTitle className="text-2xl font-bold">
-                {passkeySetup ? t("passkeySetupSuccess") : t("checkEmail")}
+                {t("checkEmail")}
               </CardTitle>
-              {!passkeySetup && (
-                <CardDescription className="text-base mt-2 px-4">
-                  {t("checkEmailDescription", { email })}
-                </CardDescription>
-              )}
+              <CardDescription className="text-base mt-2 px-4">
+                {t("checkEmailDescription", { email })}
+              </CardDescription>
             </CardHeader>
             <CardContent className="text-center pb-8">
-              {!passkeySetup && (
-                <>
-                  <div className="bg-muted/50 rounded-xl p-4 mb-6 mx-4">
-                    <p className="text-sm text-muted-foreground">
-                      {t("checkSpamFolder")}
-                    </p>
-                  </div>
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      setSent(false);
-                      setOtpSent(false);
-                    }}
-                    className="gap-2 rounded-xl h-11 px-6"
-                  >
-                    <ArrowLeft className="h-4 w-4" />
-                    {t("backToLogin")}
-                  </Button>
-                </>
-              )}
+              <div className="bg-muted/50 rounded-xl p-4 mb-6 mx-4">
+                <p className="text-sm text-muted-foreground">
+                  {t("checkSpamFolder")}
+                </p>
+              </div>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setSent(false);
+                  setOtpSent(false);
+                }}
+                className="gap-2 rounded-xl h-11 px-6"
+              >
+                <ArrowLeft className="h-4 w-4" />
+                {t("backToLogin")}
+              </Button>
             </CardContent>
           </Card>
         </div>
@@ -330,7 +210,7 @@ export default function LoginPage() {
           </CardHeader>
           <CardContent className="pb-6">
             <Tabs value={authMethod} onValueChange={(v) => setAuthMethod(v as AuthMethod)} className="w-full">
-              <TabsList className="grid w-full grid-cols-3 mb-6">
+              <TabsList className="grid w-full grid-cols-2 mb-6">
                 <TabsTrigger value="magic-link" className="gap-1.5 text-xs">
                   <Link2 className="h-3.5 w-3.5" />
                   <span className="hidden sm:inline">{t("magicLink")}</span>
@@ -338,10 +218,6 @@ export default function LoginPage() {
                 <TabsTrigger value="otp" className="gap-1.5 text-xs">
                   <Hash className="h-3.5 w-3.5" />
                   <span className="hidden sm:inline">{t("otpCode")}</span>
-                </TabsTrigger>
-                <TabsTrigger value="passkey" className="gap-1.5 text-xs">
-                  <Fingerprint className="h-3.5 w-3.5" />
-                  <span className="hidden sm:inline">Face ID</span>
                 </TabsTrigger>
               </TabsList>
 
@@ -504,69 +380,6 @@ export default function LoginPage() {
                     </Button>
                   </form>
                 )}
-              </TabsContent>
-
-              {/* Passkey Tab */}
-              <TabsContent value="passkey">
-                <div className="space-y-5">
-                  <div className="space-y-2">
-                    <label htmlFor="email-passkey" className="text-sm font-medium flex items-center gap-2">
-                      <Mail className="h-4 w-4 text-muted-foreground" />
-                      {t("email")}
-                    </label>
-                    <Input
-                      id="email-passkey"
-                      type="email"
-                      placeholder={t("emailPlaceholder")}
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      className="h-12 rounded-xl"
-                      required
-                      disabled={loading}
-                    />
-                  </div>
-
-                  <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-4 text-sm text-blue-700 dark:text-blue-300">
-                    <Fingerprint className="h-5 w-5 mb-2" />
-                    {t("passkeyDescription")}
-                  </div>
-
-                  {error && (
-                    <div className="flex items-center gap-2 p-3 bg-destructive/10 border border-destructive/20 rounded-xl text-sm text-destructive animate-fade-in">
-                      <span className="shrink-0">!</span>
-                      {error}
-                    </div>
-                  )}
-
-                  <div className="grid gap-3">
-                    <Button
-                      onClick={handlePasskeyLogin}
-                      className="w-full h-12 rounded-xl text-base font-semibold"
-                      disabled={loading || !email}
-                    >
-                      {loading ? (
-                        <>
-                          <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                          Authenticating...
-                        </>
-                      ) : (
-                        <>
-                          <Fingerprint className="mr-2 h-5 w-5" />
-                          {t("usePasskey")}
-                        </>
-                      )}
-                    </Button>
-
-                    <Button
-                      onClick={handleSetupPasskey}
-                      variant="outline"
-                      className="w-full h-12 rounded-xl text-base"
-                      disabled={loading || !email}
-                    >
-                      {t("setupPasskey")}
-                    </Button>
-                  </div>
-                </div>
               </TabsContent>
             </Tabs>
 
