@@ -122,7 +122,9 @@
       "Bash(kill:*)",
       "Bash(jq:*)",
       "Bash(git show:*)",
-      "Bash(chmod:*)"
+      "Bash(chmod:*)",
+      "Bash(for i in {1..8})",
+      "Bash(npx vercel:*)"
     ],
     "deny": [],
     "ask": []

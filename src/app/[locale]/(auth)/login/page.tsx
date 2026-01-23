@@ -227,7 +227,7 @@ export default function LoginPage() {
   };
 
   // Success state - Email/Code sent
-  if (sent || otpSent || passkeySetup) {
+  if (sent || passkeySetup) {
     return (
       <div className="relative flex min-h-screen items-center justify-center p-4">
         <Link
@@ -251,11 +251,11 @@ export default function LoginPage() {
                 </div>
               </div>
               <CardTitle className="text-2xl font-bold">
-                {passkeySetup ? t("passkeySetupSuccess") : sent ? t("checkEmail") : t("codeDescription", { email })}
+                {passkeySetup ? t("passkeySetupSuccess") : t("checkEmail")}
               </CardTitle>
               {!passkeySetup && (
                 <CardDescription className="text-base mt-2 px-4">
-                  {sent ? t("checkEmailDescription", { email }) : t("checkSpamFolder")}
+                  {t("checkEmailDescription", { email })}
                 </CardDescription>
               )}
             </CardHeader>
