@@ -25,6 +25,7 @@ interface ProductWithPrice {
   category_name?: string;
   unit?: string;
   available_stock?: number;
+  minimum_quantity?: number;
   display_price: number;
   price_currency: string;
   in_price_list: boolean;
@@ -43,6 +44,7 @@ interface MobileProduct {
   stock: number;
   in_stock: boolean;
   price: number | null;
+  minimum_quantity: number | null;
   in_price_list: boolean;
 }
 
@@ -61,6 +63,7 @@ function transformProductForMobile(item: ProductWithPrice, baseUrl: string): Mob
     stock,
     in_stock: stock > 0,
     price: item.display_price ?? null,
+    minimum_quantity: item.minimum_quantity ?? null,
     in_price_list: item.in_price_list,
   };
 }

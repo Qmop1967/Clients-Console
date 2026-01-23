@@ -65,6 +65,7 @@ async function fetchShopData(priceListId?: string) {
       category_name: product.category_name,
       brand: product.brand,
       unit: product.unit,
+      minimum_quantity: product.minimum_quantity,
       inPriceList: product.in_price_list ?? (product.display_price > 0),
     }));
 
