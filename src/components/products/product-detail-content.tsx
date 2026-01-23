@@ -98,7 +98,7 @@ export function ProductDetailContent({ product, locale }: ProductDetailProps) {
     if (result.hasError) {
       setMinimumQtyError(
         tCart("minimumQuantityError", {
-          quantity: result.minimumQuantity,
+          quantity: result.minimumQuantity || 1,
           unit: product.unit,
         })
       );

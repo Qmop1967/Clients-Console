@@ -197,7 +197,6 @@ export function ChatWidget() {
     };
 
     setMessages((prev) => [...prev, userMessage]);
-    const messageText = input;
     setInput('');
     setIsLoading(true);
 

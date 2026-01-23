@@ -55,7 +55,7 @@ export const ProductCard = memo(function ProductCard({ product, currencyCode }: 
       // Show native browser alert with the error message
       alert(
         tCart("minimumQuantityError", {
-          quantity: result.minimumQuantity,
+          quantity: result.minimumQuantity || 1,
           unit: product.unit || "unit",
         })
       );
