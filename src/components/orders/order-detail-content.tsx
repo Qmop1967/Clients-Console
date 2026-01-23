@@ -29,8 +29,17 @@ import {
   FileDown,
   ExternalLink,
   MapPin,
+  Clock,
 } from "lucide-react";
 import type { ZohoSalesOrder, ZohoPackage, ZohoShipment } from "@/types";
+import {
+  ReceiptStatusBadge,
+  ReceiptProgressBar,
+  ReceiptConfirmationModal,
+  ReceiptTimeline,
+  type ReceiptEvent,
+} from "@/components/orders/receipt-tracking";
+import { useToast } from "@/hooks/use-toast";
 
 interface OrderDetailContentProps {
   order: ZohoSalesOrder;
@@ -46,9 +55,16 @@ export function OrderDetailContent({
   currencyCode,
 }: OrderDetailContentProps) {
   const t = useTranslations("orders");
+  const { toast } = useToast();
   const [packagesDialogOpen, setPackagesDialogOpen] = useState(false);
   const [shipmentsDialogOpen, setShipmentsDialogOpen] = useState(false);
   const [imageErrors, setImageErrors] = useState<Record<string, boolean>>({});
+
+  // Receipt tracking state
+  const [receiptModalOpen, setReceiptModalOpen] = useState(false);
+  const [timelineModalOpen, setTimelineModalOpen] = useState(false);
+  const [selectedLineItem, setSelectedLineItem] = useState<typeof order.line_items[0] | null>(null);
+  const [receiptLoading, setReceiptLoading] = useState(false);
 
   const formatCurrency = (amount: number, currency?: string) => {
     const curr = currency || order.currency_code || currencyCode;
@@ -126,8 +142,76 @@ export function OrderDetailContent({
     setImageErrors(prev => ({ ...prev, [itemId]: true }));
   };
 
+  // Check if receipt tracking is enabled for this order
+  const isReceiptTrackingEnabled = () => {
+    const status = order.status?.toLowerCase();
+    return status === 'shipped' || status === 'delivered';
+  };
+
+  // Handle receipt confirmation
+  const handleReceiptConfirm = async (quantity: number) => {
+    if (!selectedLineItem) return;
+
+    setReceiptLoading(true);
+    try {
+      const response = await fetch(`/api/orders/${order.salesorder_id}/receive`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          lineItemId: selectedLineItem.line_item_id,
+          quantityReceived: quantity,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        toast({
+          title: t('receipt.receiptSuccess'),
+          variant: 'default',
+        });
+        // Refresh page to show updated data
+        window.location.reload();
+      } else {
+        throw new Error(data.error || 'Failed to confirm receipt');
+      }
+    } catch (error) {
+      console.error('Receipt confirmation error:', error);
+      toast({
+        title: t('receipt.receiptError'),
+        description: error instanceof Error ? error.message : 'Unknown error',
+        variant: 'destructive',
+      });
+    } finally {
+      setReceiptLoading(false);
+    }
+  };
+
+  // Open receipt modal for a line item
+  const openReceiptModal = (lineItem: typeof order.line_items[0]) => {
+    setSelectedLineItem(lineItem);
+    setReceiptModalOpen(true);
+  };
+
+  // Open timeline modal
+  const openTimelineModal = () => {
+    setTimelineModalOpen(true);
+  };
+
+  // Parse receipt timeline from order
+  const getReceiptTimeline = (): ReceiptEvent[] => {
+    if (!order.cf_receive_timeline) return [];
+    try {
+      return JSON.parse(order.cf_receive_timeline);
+    } catch {
+      return [];
+    }
+  };
+
   const statusInfo = getStatusInfo(order.status);
   const currency = order.currency_code || currencyCode;
+  const receiptTrackingEnabled = isReceiptTrackingEnabled();
+  const receiptTimeline = getReceiptTimeline();
 
   return (
     <div className="container mx-auto px-4 py-6 max-w-4xl">
@@ -307,65 +391,117 @@ export function OrderDetailContent({
         {order.line_items && order.line_items.length > 0 && (
           <Card>
             <CardHeader className="pb-4">
-              <CardTitle className="flex items-center gap-2 text-lg">
-                <Package className="h-5 w-5" />
-                {t("orderDetails")}
-              </CardTitle>
+              <div className="flex items-center justify-between">
+                <CardTitle className="flex items-center gap-2 text-lg">
+                  <Package className="h-5 w-5" />
+                  {t("orderDetails")}
+                </CardTitle>
+                {receiptTrackingEnabled && receiptTimeline.length > 0 && (
+                  <Button variant="outline" size="sm" onClick={openTimelineModal}>
+                    <Clock className="h-4 w-4 ltr:mr-2 rtl:ml-2" />
+                    {t("receipt.viewTimeline")}
+                  </Button>
+                )}
+              </div>
             </CardHeader>
             <CardContent className="pt-0">
+              {receiptTrackingEnabled && (
+                <div className="mb-4 p-3 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200">
+                  <p className="text-sm text-blue-700 dark:text-blue-400 flex items-center gap-2">
+                    <Clock className="h-4 w-4" />
+                    {t("receipt.title")}
+                  </p>
+                </div>
+              )}
               <div className="space-y-0 divide-y">
-                {order.line_items.map((item, index) => (
-                  <div
-                    key={item.line_item_id || index}
-                    className="flex items-center gap-4 py-4 first:pt-0 last:pb-0"
-                  >
-                    {/* Item Image */}
-                    <div className="w-16 h-16 rounded-lg bg-muted shrink-0 overflow-hidden relative">
-                      {!imageErrors[item.item_id] ? (
-                        <Image
-                          src={getItemImageUrl(item.item_id)}
-                          alt={item.item_name || "Product"}
-                          fill
-                          className="object-cover"
-                          onError={() => handleImageError(item.item_id)}
-                          sizes="64px"
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center">
-                          <Box className="h-6 w-6 text-muted-foreground" />
+                {order.line_items.map((item, index) => {
+                  const quantityReceived = item.cf_quantity_received || 0;
+                  const isFullyReceived = quantityReceived >= item.quantity;
+
+                  return (
+                    <div
+                      key={item.line_item_id || index}
+                      className="py-4 first:pt-0 last:pb-0 space-y-3"
+                    >
+                      <div className="flex items-center gap-4">
+                        {/* Item Image */}
+                        <div className="w-16 h-16 rounded-lg bg-muted shrink-0 overflow-hidden relative">
+                          {!imageErrors[item.item_id] ? (
+                            <Image
+                              src={getItemImageUrl(item.item_id)}
+                              alt={item.item_name || "Product"}
+                              fill
+                              className="object-cover"
+                              onError={() => handleImageError(item.item_id)}
+                              sizes="64px"
+                            />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center">
+                              <Box className="h-6 w-6 text-muted-foreground" />
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Item Details */}
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-sm sm:text-base">
+                            {item.name || item.item_name || item.description || `Item #${index + 1}`}
+                          </p>
+                          {item.sku && (
+                            <p className="text-xs text-muted-foreground">SKU: {item.sku}</p>
+                          )}
+                          {item.description && (item.name || item.item_name) && (
+                            <p className="text-sm text-muted-foreground line-clamp-1">{item.description}</p>
+                          )}
+                          <div className="flex items-center gap-2 mt-1">
+                            <Badge variant="secondary" className="text-xs font-normal">
+                              {item.quantity} × {formatCurrency(item.rate, currency)}
+                            </Badge>
+                            {item.discount && item.discount > 0 && (
+                              <Badge variant="outline" className="text-xs text-green-600 border-green-200 bg-green-50">
+                                -{item.discount}% {t("discount")}
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Item Total */}
+                        <div className="text-right shrink-0">
+                          <p className="font-bold">{formatCurrency(item.item_total, currency)}</p>
+                        </div>
+                      </div>
+
+                      {/* Receipt Tracking Section */}
+                      {receiptTrackingEnabled && (
+                        <div className="pl-20 space-y-2">
+                          <div className="flex items-center justify-between gap-2">
+                            <ReceiptStatusBadge
+                              quantityOrdered={item.quantity}
+                              quantityReceived={quantityReceived}
+                              size="sm"
+                            />
+                            {!isFullyReceived && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => openReceiptModal(item)}
+                                className="text-xs"
+                              >
+                                <CheckCircle2 className="h-3 w-3 ltr:mr-1 rtl:ml-1" />
+                                {t("receipt.markAsReceived")}
+                              </Button>
+                            )}
+                          </div>
+                          <ReceiptProgressBar
+                            quantityOrdered={item.quantity}
+                            quantityReceived={quantityReceived}
+                            showLabel={true}
+                          />
                         </div>
                       )}
                     </div>
-
-                    {/* Item Details */}
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-sm sm:text-base">
-                        {item.name || item.item_name || item.description || `Item #${index + 1}`}
-                      </p>
-                      {item.sku && (
-                        <p className="text-xs text-muted-foreground">SKU: {item.sku}</p>
-                      )}
-                      {item.description && (item.name || item.item_name) && (
-                        <p className="text-sm text-muted-foreground line-clamp-1">{item.description}</p>
-                      )}
-                      <div className="flex items-center gap-2 mt-1">
-                        <Badge variant="secondary" className="text-xs font-normal">
-                          {item.quantity} × {formatCurrency(item.rate, currency)}
-                        </Badge>
-                        {item.discount && item.discount > 0 && (
-                          <Badge variant="outline" className="text-xs text-green-600 border-green-200 bg-green-50">
-                            -{item.discount}% {t("discount")}
-                          </Badge>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Item Total */}
-                    <div className="text-right shrink-0">
-                      <p className="font-bold">{formatCurrency(item.item_total, currency)}</p>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
 
               {/* Totals */}
@@ -644,6 +780,35 @@ export function OrderDetailContent({
               <p className="text-center text-muted-foreground py-4">{t("noShipments")}</p>
             )}
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Receipt Confirmation Modal */}
+      {selectedLineItem && (
+        <ReceiptConfirmationModal
+          open={receiptModalOpen}
+          onOpenChange={setReceiptModalOpen}
+          itemName={selectedLineItem.name || selectedLineItem.item_name || 'Item'}
+          quantityOrdered={selectedLineItem.quantity}
+          quantityReceived={selectedLineItem.cf_quantity_received || 0}
+          onConfirm={handleReceiptConfirm}
+          loading={receiptLoading}
+        />
+      )}
+
+      {/* Receipt Timeline Modal */}
+      <Dialog open={timelineModalOpen} onOpenChange={setTimelineModalOpen}>
+        <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Clock className="h-5 w-5 text-blue-600" />
+              {t("receipt.receiptTimeline")}
+            </DialogTitle>
+          </DialogHeader>
+          <ReceiptTimeline
+            events={receiptTimeline}
+            quantityOrdered={order.line_items.reduce((sum, item) => sum + item.quantity, 0)}
+          />
         </DialogContent>
       </Dialog>
     </div>

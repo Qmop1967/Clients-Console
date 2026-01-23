@@ -73,8 +73,12 @@ interface ZohoBooksItem {
   // Custom fields
   custom_fields?: Array<{
     customfield_id: string;
+    field_id?: string;
     label: string;
+    api_name?: string;
     value: string | number;
+    data_type?: string;
+    value_formatted?: string;
   }>;
 }
 
@@ -114,21 +118,41 @@ interface ZohoBooksCategoriesResponse {
 
 /**
  * Extract minimum quantity from Zoho Books item
- * Uses the built-in minimum_order_quantity field from Zoho Books API
- * This is a standard field in Zoho Books, not a custom field
+ * Priority order:
+ * 1. Custom field: cf_minimum_quantity_limitation
+ * 2. Built-in field: minimum_order_quantity (fallback)
  */
 function getMinimumQuantityFromItem(item: ZohoBooksItem): number | undefined {
-  // Zoho Books has a built-in minimum_order_quantity field
-  if (!item.minimum_order_quantity) {
-    return undefined;
+  // First, check custom field: cf_minimum_quantity_limitation
+  if (item.custom_fields && item.custom_fields.length > 0) {
+    const customField = item.custom_fields.find(
+      (field) =>
+        field.api_name === 'cf_minimum_quantity_limitation' ||
+        field.label?.toLowerCase() === 'minimum quantity limitation'
+    );
+
+    if (customField && customField.value) {
+      const value = typeof customField.value === 'number'
+        ? customField.value
+        : parseInt(String(customField.value), 10);
+
+      if (!isNaN(value) && value > 0) {
+        return value;
+      }
+    }
   }
 
-  const value = typeof item.minimum_order_quantity === 'number'
-    ? item.minimum_order_quantity
-    : parseInt(String(item.minimum_order_quantity), 10);
+  // Fallback to built-in minimum_order_quantity field
+  if (item.minimum_order_quantity) {
+    const value = typeof item.minimum_order_quantity === 'number'
+      ? item.minimum_order_quantity
+      : parseInt(String(item.minimum_order_quantity), 10);
 
-  // Return undefined if invalid or <= 0
-  return !isNaN(value) && value > 0 ? value : undefined;
+    // Return undefined if invalid or <= 0
+    return !isNaN(value) && value > 0 ? value : undefined;
+  }
+
+  return undefined;
 }
 
 /**
@@ -310,7 +334,7 @@ export const getProductsInStock = unstable_cache(
   },
   ['products-in-stock-books'],
   {
-    revalidate: 86400, // 24 hours - webhook-triggered revalidation handles updates
+    revalidate: 60, // Temporarily reduced from 86400 for minimum quantity rollout
     tags: [CACHE_TAGS.PRODUCTS],
   }
 );
@@ -343,7 +367,7 @@ export const getProduct = unstable_cache(
   },
   ['product-books'],
   {
-    revalidate: 86400,
+    revalidate: 60, // Temporarily reduced from 86400 for minimum quantity rollout
     tags: [CACHE_TAGS.PRODUCTS],
   }
 );
