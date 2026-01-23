@@ -79,7 +79,7 @@ export async function getCustomerOrders(
 }
 
 // Get single order by ID
-// Uses Zoho Inventory API to get order details with packages/shipments included
+// Uses Zoho Books API for better performance and higher rate limits
 export async function getOrder(
   orderId: string,
   customerId: string
@@ -87,21 +87,41 @@ export async function getOrder(
   const getCachedOrder = unstable_cache(
     async () => {
       try {
-        // Use Inventory API to get order with packages/shipments included
+        console.log(`[getOrder] Fetching order ${orderId} for customer ${customerId}`);
+        // Use Books API (default) for better performance and rate limits
         const data = await rateLimitedFetch(() =>
-          zohoFetch<ZohoOrderResponse>(`/salesorders/${orderId}`, {
-            api: 'inventory',
-          })
+          zohoFetch<ZohoOrderResponse>(`/salesorders/${orderId}`)
         );
 
-        console.log(`[getOrder] Order ${orderId}: packages=${data.salesorder?.packages?.length || 0}, shipments=${data.salesorder?.shipments?.length || 0}`);
-        return data.salesorder || null;
+        if (!data.salesorder) {
+          console.warn(`[getOrder] Order ${orderId} not found in Zoho response`);
+          return null;
+        }
+
+        // Verify the order belongs to the customer for security
+        if (data.salesorder.customer_id !== customerId) {
+          console.warn(`[getOrder] Order ${orderId} does not belong to customer ${customerId}`);
+          return null;
+        }
+
+        console.log(`[getOrder] Order ${orderId}: status=${data.salesorder.status}, total=${data.salesorder.total}`);
+        return data.salesorder;
       } catch (error) {
-        console.error('Error fetching order:', error);
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error(`[getOrder] Error fetching order ${orderId}:`, errorMessage);
+
+        // Check if it's a 404 (order not found) vs timeout/other error
+        if (errorMessage.includes('404')) {
+          console.warn(`[getOrder] Order ${orderId} not found (404)`);
+          return null;
+        }
+
+        // For timeouts or other errors, also return null but log as error
+        console.error(`[getOrder] Failed to fetch order ${orderId} due to: ${errorMessage}`);
         return null;
       }
     },
-    [`order-${orderId}-v2`], // Changed cache key to invalidate old cached data
+    [`order-${orderId}-v3`], // Changed cache key to invalidate old cached data
     {
       revalidate: 120,
       tags: [CACHE_TAGS.ORDERS(customerId)],
@@ -182,8 +202,7 @@ export async function getOrderShipments(
 }
 
 // Get full order details with packages and shipments
-// Note: We get packages from the Inventory API order response
-// Shipments are derived from packages (each package with carrier = shipment)
+// Note: We fetch order from Books API, then get packages/shipments from Inventory API
 export async function getOrderWithDetails(
   orderId: string,
   customerId: string
@@ -192,27 +211,28 @@ export async function getOrderWithDetails(
   packages: ZohoPackage[];
   shipments: ZohoShipment[];
 }> {
-  // First get the order details from Inventory API
-  const order = await getOrder(orderId, customerId);
+  // Fetch order, packages, and shipments in parallel for better performance
+  const [order, packages, shipments] = await Promise.all([
+    getOrder(orderId, customerId),
+    getOrderPackages(orderId, customerId),
+    getOrderShipments(orderId, customerId),
+  ]);
 
   if (!order) {
     return { order: null, packages: [], shipments: [] };
   }
 
-  // Get packages from the order response
-  const packages = order.packages || [];
-
-  // Get shipments from the order response, or derive from packages
-  let shipments = order.shipments || [];
+  // If no explicit shipments but packages have carrier info, derive shipments from packages
+  let finalShipments = shipments;
 
   // If no shipments in response but packages have carrier info, create shipment entries from packages
-  if (shipments.length === 0 && packages.length > 0) {
+  if (finalShipments.length === 0 && packages.length > 0) {
     // Check if any package has been shipped (has carrier info)
     const shippedPackages = packages.filter(pkg => pkg.carrier || pkg.tracking_number || pkg.status?.toLowerCase() === 'delivered');
 
     if (shippedPackages.length > 0) {
       // Create shipment entries from shipped packages
-      shipments = shippedPackages.map((pkg) => ({
+      finalShipments = shippedPackages.map((pkg) => ({
         shipment_id: `ship-${pkg.package_id}`,
         shipment_number: `SHP-${pkg.package_number}`,
         salesorder_id: orderId,
@@ -227,9 +247,9 @@ export async function getOrderWithDetails(
     }
   }
 
-  console.log(`[getOrderWithDetails] Order ${orderId}: ${packages.length} packages, ${shipments.length} shipments`);
+  console.log(`[getOrderWithDetails] Order ${orderId}: ${packages.length} packages, ${finalShipments.length} shipments`);
 
-  return { order, packages, shipments };
+  return { order, packages, shipments: finalShipments };
 }
 
 // Get recent orders for dashboard

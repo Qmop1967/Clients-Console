@@ -334,21 +334,39 @@ export async function zohoFetch<T>(
     'Content-Type': 'application/json',
   };
 
-  const response = await fetch(url.toString(), {
-    method,
-    headers,
-    body: body ? JSON.stringify(body) : undefined,
-  });
+  // Add timeout to prevent indefinite hanging
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 25000); // 25 second timeout
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error(`[Zoho API Error] Endpoint: ${endpoint}, Status: ${response.status}, Response: ${errorText}`);
-    // Include the actual error message in the thrown error
-    throw new Error(`Zoho API error (${response.status}): ${errorText}`);
+  try {
+    const response = await fetch(url.toString(), {
+      method,
+      headers,
+      body: body ? JSON.stringify(body) : undefined,
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`[Zoho API Error] Endpoint: ${endpoint}, Status: ${response.status}, Response: ${errorText}`);
+      // Include the actual error message in the thrown error
+      throw new Error(`Zoho API error (${response.status}): ${errorText}`);
+    }
+
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    clearTimeout(timeoutId);
+
+    if (error instanceof Error && error.name === 'AbortError') {
+      console.error(`[Zoho API Timeout] Endpoint: ${endpoint} exceeded 25s timeout`);
+      throw new Error(`Zoho API timeout: ${endpoint}`);
+    }
+
+    throw error;
   }
-
-  const data = await response.json();
-  return data;
 }
 
 // Rate limiting helper with retry logic
