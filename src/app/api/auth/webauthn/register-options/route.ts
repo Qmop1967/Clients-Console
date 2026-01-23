@@ -34,8 +34,7 @@ export async function POST(request: NextRequest) {
       userDisplayName: email.split('@')[0],
       attestationType: 'none',
       excludeCredentials: existingAuthenticators.map((auth: any) => ({
-        id: auth.credentialID,
-        type: 'public-key',
+        id: auth.credentialID, // Already base64 encoded string
         transports: auth.transports,
       })),
       authenticatorSelection: {
