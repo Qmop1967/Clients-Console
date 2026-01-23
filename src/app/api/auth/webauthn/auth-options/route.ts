@@ -36,8 +36,7 @@ export async function POST(request: NextRequest) {
     const options: GenerateAuthenticationOptionsOpts = {
       rpID,
       allowCredentials: authenticators.map((auth: any) => ({
-        id: Buffer.from(auth.credentialID, 'base64'),
-        type: 'public-key',
+        id: auth.credentialID, // Already base64 encoded string
         transports: auth.transports,
       })),
       userVerification: 'preferred',

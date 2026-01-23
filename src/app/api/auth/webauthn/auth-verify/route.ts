@@ -2,11 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import {
   verifyAuthenticationResponse,
   type VerifyAuthenticationResponseOpts,
+  type AuthenticationResponseJSON,
 } from '@simplewebauthn/server';
 import { Redis } from '@upstash/redis';
 import { UpstashRedisAdapter } from '@auth/upstash-redis-adapter';
 import { getZohoCustomerByEmail, getZohoCustomerFresh } from '@/lib/zoho/customers';
-import type { AuthenticationResponseJSON } from '@simplewebauthn/types';
 
 const redis = new Redis({
   url: process.env.UPSTASH_REDIS_REST_URL!,
@@ -66,8 +66,8 @@ export async function POST(request: NextRequest) {
       expectedOrigin: origin,
       expectedRPID: rpID,
       credential: {
-        id: Buffer.from(authenticator.credentialID, 'base64'),
-        publicKey: Buffer.from(authenticator.credentialPublicKey, 'base64'),
+        id: authenticator.credentialID, // Base64 encoded string
+        publicKey: Uint8Array.from(Buffer.from(authenticator.credentialPublicKey, 'base64')),
         counter: authenticator.counter,
       },
     };
