@@ -119,7 +119,8 @@
       "Bash(npm run lint:*)",
       "Bash(git restore:*)",
       "Skill(zoho-debug)",
-      "Bash(kill:*)"
+      "Bash(kill:*)",
+      "Bash(jq:*)"
     ],
     "deny": [],
     "ask": []
