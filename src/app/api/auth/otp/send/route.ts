@@ -1,26 +1,27 @@
-import NextAuth from 'next-auth';
-import { authConfig } from './auth.config';
-import Resend from 'next-auth/providers/resend';
-import { UpstashRedisAdapter } from '@auth/upstash-redis-adapter';
+import { NextRequest, NextResponse } from 'next/server';
+import { Resend } from 'resend';
 import { Redis } from '@upstash/redis';
-import { getZohoCustomerByEmail, getZohoCustomerFresh } from '@/lib/zoho/customers';
-import { Resend as ResendClient } from 'resend';
 
-// Initialize Upstash Redis client for NextAuth adapter
+const resend = new Resend(process.env.RESEND_API_KEY);
 const redis = new Redis({
   url: process.env.UPSTASH_REDIS_REST_URL!,
   token: process.env.UPSTASH_REDIS_REST_TOKEN!,
 });
 
-// Professional Arabic Email Template
-function generateMagicLinkEmail(url: string): string {
+// Generate 6-digit OTP
+function generateOTP(): string {
+  return Math.floor(100000 + Math.random() * 900000).toString();
+}
+
+// Professional Arabic OTP Email Template
+function generateOTPEmail(code: string): string {
   return `
 <!DOCTYPE html>
 <html dir="rtl" lang="ar">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>تسجيل الدخول - TSH</title>
+  <title>رمز التحقق - TSH</title>
 </head>
 <body style="margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Arial, sans-serif; background-color: #f8fafc; direction: rtl;">
   <table role="presentation" style="width: 100%; border-collapse: collapse;">
@@ -57,20 +58,22 @@ function generateMagicLinkEmail(url: string): string {
                       </table>
                     </div>
                     <h1 style="margin: 0 0 8px; font-size: 24px; font-weight: 700; color: #1e293b;">
-                      مرحباً بك في TSH
+                      رمز التحقق الخاص بك
                     </h1>
                     <p style="margin: 0; font-size: 16px; color: #64748b; line-height: 1.6;">
-                      اضغط على الزر أدناه لتسجيل الدخول إلى حسابك
+                      استخدم الرمز التالي لتسجيل الدخول
                     </p>
                   </td>
                 </tr>
 
-                <!-- Button -->
+                <!-- OTP Code -->
                 <tr>
                   <td style="padding: 8px 32px 32px; text-align: center;">
-                    <a href="${url}" style="display: inline-block; background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); color: white; text-decoration: none; font-size: 16px; font-weight: 600; padding: 16px 48px; border-radius: 12px; box-shadow: 0 4px 14px rgba(59, 130, 246, 0.4);">
-                      تسجيل الدخول
-                    </a>
+                    <div style="display: inline-block; background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%); padding: 24px 48px; border-radius: 16px; border: 2px solid #3b82f6; box-shadow: 0 4px 14px rgba(59, 130, 246, 0.15);">
+                      <div style="font-size: 42px; font-weight: 800; color: #1e293b; letter-spacing: 8px; font-family: 'Courier New', monospace;">
+                        ${code}
+                      </div>
+                    </div>
                   </td>
                 </tr>
 
@@ -96,7 +99,7 @@ function generateMagicLinkEmail(url: string): string {
                               </td>
                               <td style="vertical-align: middle; padding-right: 12px;">
                                 <p style="margin: 0; font-size: 14px; color: #64748b; line-height: 1.5;">
-                                  هذا الرابط صالح لمدة <strong style="color: #1e293b;">24 ساعة</strong> فقط
+                                  هذا الرمز صالح لمدة <strong style="color: #1e293b;">10 دقائق</strong> فقط
                                 </p>
                               </td>
                             </tr>
@@ -122,7 +125,7 @@ function generateMagicLinkEmail(url: string): string {
                               </td>
                               <td style="vertical-align: middle; padding-right: 12px;">
                                 <p style="margin: 0; font-size: 14px; color: #92400e; line-height: 1.5;">
-                                  إذا لم تطلب هذا البريد، يمكنك تجاهله بأمان
+                                  لا تشارك هذا الرمز مع أي شخص. إذا لم تطلب هذا، يمكنك تجاهل هذا البريد بأمان
                                 </p>
                               </td>
                             </tr>
@@ -161,128 +164,60 @@ function generateMagicLinkEmail(url: string): string {
 `;
 }
 
-// Build providers array
-const providers = [];
+export async function POST(request: NextRequest) {
+  try {
+    const { email } = await request.json();
 
-// Add Resend provider for magic link emails with custom Arabic template
-if (process.env.RESEND_API_KEY) {
-  const resendClient = new ResendClient(process.env.RESEND_API_KEY);
+    if (!email || typeof email !== 'string') {
+      return NextResponse.json(
+        { error: 'Email is required' },
+        { status: 400 }
+      );
+    }
 
-  providers.push(
-    Resend({
-      apiKey: process.env.RESEND_API_KEY,
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return NextResponse.json(
+        { error: 'Invalid email format' },
+        { status: 400 }
+      );
+    }
+
+    // Generate OTP
+    const otp = generateOTP();
+
+    // Store OTP in Redis with 10 minute expiration
+    const otpKey = `otp:${email}`;
+    await redis.setex(otpKey, 600, otp); // 600 seconds = 10 minutes
+
+    // Send OTP email
+    const result = await resend.emails.send({
       from: process.env.EMAIL_FROM || 'TSH <noreply@tsh.sale>',
-      async sendVerificationRequest({ identifier: email, url, provider }) {
-        try {
-          const fromEmail = provider.from || 'TSH <noreply@tsh.sale>';
-          const result = await resendClient.emails.send({
-            from: fromEmail,
-            to: email,
-            subject: 'تسجيل الدخول إلى TSH | Sign in to TSH',
-            html: generateMagicLinkEmail(url),
-          });
+      to: email,
+      subject: 'رمز التحقق - TSH | Your verification code - TSH',
+      html: generateOTPEmail(otp),
+    });
 
-          if (result.error) {
-            throw new Error(result.error.message);
-          }
+    if (result.error) {
+      console.error('[OTP Send] Failed to send email:', result.error);
+      return NextResponse.json(
+        { error: 'Failed to send verification code' },
+        { status: 500 }
+      );
+    }
 
-          console.log('[Auth] Magic link email sent to:', email);
-        } catch (error) {
-          console.error('[Auth] Failed to send magic link email:', error);
-          throw new Error('Failed to send verification email');
-        }
-      },
-    })
-  );
-}
+    console.log('[OTP Send] Verification code sent to:', email);
 
-export const {
-  handlers: { GET, POST },
-  auth,
-  signIn,
-  signOut,
-} = NextAuth({
-  ...authConfig,
-  adapter: UpstashRedisAdapter(redis),
-  providers,
-  callbacks: {
-    ...authConfig.callbacks,
-    async signIn({ user }) {
-      if (!user.email) return false;
-
-      try {
-        // First, find customer by email (list endpoint - returns basic data)
-        const customerBasic = await getZohoCustomerByEmail(user.email);
-
-        if (customerBasic) {
-          // Fetch full customer details by ID (single endpoint - returns all fields)
-          // CRITICAL: Use uncached fetch to get fresh price list and currency data
-          const customerFull = await getZohoCustomerFresh(customerBasic.contact_id);
-          const customer = customerFull || customerBasic;
-
-          // Existing customer - attach Zoho data
-          // Note: Zoho Books uses pricebook_id, not price_list_id
-          user.zohoContactId = customer.contact_id;
-          user.priceListId = customer.pricebook_id || customer.price_list_id || '';
-          user.currencyCode = customer.currency_code;
-          user.name = customer.contact_name;
-
-          console.log('[Auth] Customer data fetched:', {
-            contactId: customer.contact_id,
-            priceListId: customer.pricebook_id || customer.price_list_id,
-            pricebookName: customer.pricebook_name,
-            currencyCode: customer.currency_code,
-          });
-        } else {
-          // New customer - will be created on first order
-          // For now, just allow login with default settings
-          user.zohoContactId = '';
-          user.priceListId = '';
-          user.currencyCode = 'IQD';
-          console.log('[Auth] New customer - no Zoho contact found for:', user.email);
-        }
-
-        return true;
-      } catch (error) {
-        console.error('Error during sign in:', error);
-        // Allow sign in even if Zoho check fails
-        return true;
-      }
-    },
-  },
-  session: {
-    strategy: 'database',
-    maxAge: 365 * 24 * 60 * 60, // 365 days - persistent login
-    updateAge: 24 * 60 * 60, // Update session every 24 hours to keep it fresh
-  },
-  debug: process.env.NODE_ENV === 'development', // Only enable debug in development
-});
-
-// Type augmentation for NextAuth
-declare module 'next-auth' {
-  interface User {
-    zohoContactId?: string;
-    priceListId?: string;
-    currencyCode?: string;
-  }
-
-  interface Session {
-    user: {
-      id: string;
-      email: string;
-      name?: string;
-      zohoContactId?: string;
-      priceListId?: string;
-      currencyCode?: string;
-    };
-  }
-}
-
-declare module '@auth/core/jwt' {
-  interface JWT {
-    id?: string;
-    zohoContactId?: string;
-    priceListId?: string;
-    currencyCode?: string;
+    return NextResponse.json({
+      success: true,
+      message: 'Verification code sent successfully',
+    });
+  } catch (error) {
+    console.error('[OTP Send] Error:', error);
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    );
   }
 }

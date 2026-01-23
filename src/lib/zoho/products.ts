@@ -9,7 +9,7 @@
 
 import { unstable_cache } from 'next/cache';
 import { zohoFetch, CACHE_TAGS, rateLimitedFetch } from './client';
-import { getUnifiedStockBulk, getStockCacheStatus } from './stock-cache';
+import { getUnifiedStockBulk, getStockCacheStatus, getMinimumQuantitiesBulk } from './stock-cache';
 import { getCachedImageUrls } from '@/lib/blob/image-cache';
 import type { ZohoItem, ZohoCategory, PaginatedResponse } from '@/types';
 
@@ -627,28 +627,7 @@ async function fetchAllProductsFromBooks(): Promise<ZohoItem[]> {
       );
 
       if (data.items && data.items.length > 0) {
-        // DEBUG: Log first item to see what fields are returned
-        if (currentPage === 1 && data.items[0]) {
-          console.log('[DEBUG] First item from LIST API:', {
-            item_id: data.items[0].item_id,
-            name: data.items[0].name,
-            hasCustomFields: !!data.items[0].custom_fields,
-            customFieldsCount: data.items[0].custom_fields?.length || 0,
-            minimum_order_quantity: data.items[0].minimum_order_quantity,
-          });
-        }
-
         const items = data.items.map(booksItemToZohoItem);
-
-        // DEBUG: Log mapped item to see if minimum_quantity is populated
-        if (currentPage === 1 && items[0]) {
-          console.log('[DEBUG] First mapped item:', {
-            item_id: items[0].item_id,
-            name: items[0].name,
-            minimum_quantity: items[0].minimum_quantity,
-          });
-        }
-
         allProducts.push(...items);
         if (process.env.NODE_ENV === 'development') console.log(`[Products] Page ${currentPage}: ${data.items.length} items (total: ${allProducts.length})`);
       }
@@ -756,17 +735,18 @@ export async function getAllProductsComplete(): Promise<ZohoItem[]> {
       return productsWithZeroStock;
     }
 
-    // Step 3: Get stock from Redis cache (warehouse-specific)
+    // Step 3: Get stock and minimum quantities from Redis cache (warehouse-specific)
     const itemIds = products.map(item => item.item_id);
-    const stockMap = await getUnifiedStockBulk(itemIds, {
-      context: 'shop-list',
-    });
+    const [stockMap, minimumQuantitiesMap] = await Promise.all([
+      getUnifiedStockBulk(itemIds, { context: 'shop-list' }),
+      getMinimumQuantitiesBulk(itemIds),
+    ]);
 
     // Calculate statistics for monitoring
     let redisHits = 0;
     let booksHits = 0;
 
-    // Step 4: Merge stock with products
+    // Step 4: Merge stock and minimum quantities with products
     // Priority: Redis cache ONLY (no Books fallback to avoid warehouse discrepancy)
     const productsWithStock = products.map((item) => {
       const redisStock = stockMap.get(item.item_id);
@@ -784,9 +764,17 @@ export async function getAllProductsComplete(): Promise<ZohoItem[]> {
         booksHits++; // Track as "miss" for monitoring
       }
 
+      // Merge minimum quantity from cache (if available)
+      // If not in cache, keep the value from Books API (undefined if not set)
+      const cachedMinimumQuantity = minimumQuantitiesMap.get(item.item_id);
+      const finalMinimumQuantity = cachedMinimumQuantity !== undefined
+        ? cachedMinimumQuantity
+        : item.minimum_quantity;
+
       return {
         ...item,
         available_stock: finalStock,
+        minimum_quantity: finalMinimumQuantity,
       };
     });
 

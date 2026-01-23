@@ -32,6 +32,13 @@ interface ZohoItemWithLocations {
   name: string;
   available_stock?: number;
   locations?: ZohoItemLocationStock[];
+  minimum_order_quantity?: number; // Built-in Zoho Books field
+  custom_fields?: Array<{
+    customfield_id: string;
+    label: string;
+    api_name?: string;
+    value: string | number;
+  }>;
 }
 
 interface ZohoSingleItemResponse {
@@ -53,10 +60,58 @@ interface StockMap {
   [itemId: string]: number;
 }
 
+interface MinimumQuantityMap {
+  [itemId: string]: number | undefined;
+}
+
 interface StockCacheData {
   stock: StockMap;
+  minimumQuantities?: MinimumQuantityMap; // Added: cache minimum quantities alongside stock
   updatedAt: number;
   itemCount: number;
+}
+
+// ============================================
+// Helper Functions
+// ============================================
+
+/**
+ * Extract minimum quantity from Zoho Books item
+ * Priority order:
+ * 1. Custom field: cf_minimum_quantity_limitation
+ * 2. Built-in field: minimum_order_quantity (fallback)
+ */
+function getMinimumQuantityFromItem(item: ZohoItemWithLocations): number | undefined {
+  // First, check custom field: cf_minimum_quantity_limitation
+  if (item.custom_fields && item.custom_fields.length > 0) {
+    const customField = item.custom_fields.find(
+      (field) =>
+        field.api_name === 'cf_minimum_quantity_limitation' ||
+        field.label?.toLowerCase() === 'minimum quantity limitation'
+    );
+
+    if (customField && customField.value) {
+      const value = typeof customField.value === 'number'
+        ? customField.value
+        : parseInt(String(customField.value), 10);
+
+      if (!isNaN(value) && value > 0) {
+        return value;
+      }
+    }
+  }
+
+  // Fallback to built-in minimum_order_quantity field
+  if (item.minimum_order_quantity) {
+    const value = typeof item.minimum_order_quantity === 'number'
+      ? item.minimum_order_quantity
+      : parseInt(String(item.minimum_order_quantity), 10);
+
+    // Return undefined if invalid or <= 0
+    return !isNaN(value) && value > 0 ? value : undefined;
+  }
+
+  return undefined;
 }
 
 // ============================================
@@ -704,6 +759,34 @@ async function cacheStockOnDemand(itemId: string, stock: number): Promise<void> 
  * @param itemIds - Array of item IDs to get stock for
  * @param options.context - Context for logging
  */
+/**
+ * Get minimum quantities for multiple items from Redis cache
+ * Returns a map of itemId -> minimumQuantity
+ * For items not in cache or with no minimum quantity, returns undefined
+ */
+export async function getMinimumQuantitiesBulk(
+  itemIds: string[]
+): Promise<Map<string, number | undefined>> {
+  const minimumQuantityMap = new Map<string, number | undefined>();
+
+  const cached = await getStockCache();
+
+  if (!cached || !cached.minimumQuantities) {
+    // No minimum quantities in cache - return empty map
+    // Caller can fall back to getMinimumQuantityFromItem if needed
+    return minimumQuantityMap;
+  }
+
+  for (const itemId of itemIds) {
+    const minimumQuantity = cached.minimumQuantities[itemId];
+    if (minimumQuantity !== undefined) {
+      minimumQuantityMap.set(itemId, minimumQuantity);
+    }
+  }
+
+  return minimumQuantityMap;
+}
+
 export async function getUnifiedStockBulk(
   itemIds: string[],
   options: {
@@ -875,6 +958,7 @@ export async function syncStockFromBooks(options: {
     // Get existing cache to merge
     const existingCache = await getStockCache();
     const stockMap: StockMap = existingCache?.stock || {};
+    const minimumQuantitiesMap: MinimumQuantityMap = existingCache?.minimumQuantities || {};
     let processedCount = 0;
     let errorCount = 0;
     let itemsWithStock = 0;
@@ -891,9 +975,12 @@ export async function syncStockFromBooks(options: {
 
           // Extract warehouse-specific stock from locations array
           const stock = getWholesaleAvailableStock(data.item as ZohoItemWithLocations);
+          // Extract minimum quantity from the same API response (no extra API call)
+          const minimumQuantity = getMinimumQuantityFromItem(data.item as ZohoItemWithLocations);
           return {
             itemId: item.item_id,
             stock,
+            minimumQuantity,
             error: false,
           };
         } catch (error) {
@@ -906,12 +993,13 @@ export async function syncStockFromBooks(options: {
                 api: 'books',
               });
               const stock = getWholesaleAvailableStock(retryData.item as ZohoItemWithLocations);
-              return { itemId: item.item_id, stock, error: false };
+              const minimumQuantity = getMinimumQuantityFromItem(retryData.item as ZohoItemWithLocations);
+              return { itemId: item.item_id, stock, minimumQuantity, error: false };
             } catch {
-              return { itemId: item.item_id, stock: 0, error: true };
+              return { itemId: item.item_id, stock: 0, minimumQuantity: undefined, error: true };
             }
           }
-          return { itemId: item.item_id, stock: 0, error: true };
+          return { itemId: item.item_id, stock: 0, minimumQuantity: undefined, error: true };
         }
       });
 
@@ -919,6 +1007,9 @@ export async function syncStockFromBooks(options: {
 
       for (const result of results) {
         stockMap[result.itemId] = result.stock;
+        if (result.minimumQuantity !== undefined) {
+          minimumQuantitiesMap[result.itemId] = result.minimumQuantity;
+        }
         if (result.error) errorCount++;
         if (result.stock > 0) itemsWithStock++;
       }
@@ -940,6 +1031,7 @@ export async function syncStockFromBooks(options: {
     // Step 3: Save to Redis
     const cacheData: StockCacheData = {
       stock: stockMap,
+      minimumQuantities: minimumQuantitiesMap, // Include minimum quantities in cache
       updatedAt: Date.now(),
       itemCount: Object.keys(stockMap).length,
     };
