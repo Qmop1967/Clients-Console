@@ -627,7 +627,28 @@ async function fetchAllProductsFromBooks(): Promise<ZohoItem[]> {
       );
 
       if (data.items && data.items.length > 0) {
+        // DEBUG: Log first item to see what fields are returned
+        if (currentPage === 1 && data.items[0]) {
+          console.log('[DEBUG] First item from LIST API:', {
+            item_id: data.items[0].item_id,
+            name: data.items[0].name,
+            hasCustomFields: !!data.items[0].custom_fields,
+            customFieldsCount: data.items[0].custom_fields?.length || 0,
+            minimum_order_quantity: data.items[0].minimum_order_quantity,
+          });
+        }
+
         const items = data.items.map(booksItemToZohoItem);
+
+        // DEBUG: Log mapped item to see if minimum_quantity is populated
+        if (currentPage === 1 && items[0]) {
+          console.log('[DEBUG] First mapped item:', {
+            item_id: items[0].item_id,
+            name: items[0].name,
+            minimum_quantity: items[0].minimum_quantity,
+          });
+        }
+
         allProducts.push(...items);
         if (process.env.NODE_ENV === 'development') console.log(`[Products] Page ${currentPage}: ${data.items.length} items (total: ${allProducts.length})`);
       }
