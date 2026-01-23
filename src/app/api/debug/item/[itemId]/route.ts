@@ -20,7 +20,7 @@ export async function GET(
     // Extract minimum quantity field
     const minimumQuantityField = item?.custom_fields?.find(
       (field: any) =>
-        field.customfield_id === 'cf_minimum_quantity_limitation' ||
+        field.api_name === 'cf_minimum_quantity_limitation' ||
         field.label?.toLowerCase() === 'minimum quantity limitation'
     );
 

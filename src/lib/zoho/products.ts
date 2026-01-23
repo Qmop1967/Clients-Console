@@ -73,8 +73,12 @@ interface ZohoBooksItem {
   // Custom fields
   custom_fields?: Array<{
     customfield_id: string;
+    field_id?: string;
     label: string;
+    api_name?: string;
     value: string | number;
+    data_type?: string;
+    value_formatted?: string;
   }>;
 }
 
@@ -123,8 +127,8 @@ function getMinimumQuantityFromItem(item: ZohoBooksItem): number | undefined {
   if (item.custom_fields && item.custom_fields.length > 0) {
     const customField = item.custom_fields.find(
       (field) =>
-        field.customfield_id === 'cf_minimum_quantity_limitation' ||
-        field.label.toLowerCase() === 'minimum quantity limitation'
+        field.api_name === 'cf_minimum_quantity_limitation' ||
+        field.label?.toLowerCase() === 'minimum quantity limitation'
     );
 
     if (customField && customField.value) {
