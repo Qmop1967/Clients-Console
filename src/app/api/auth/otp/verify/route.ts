@@ -133,15 +133,28 @@ export async function POST(request: NextRequest) {
 
     console.log('[OTP Verify] Session created for:', normalizedEmail);
 
-    return NextResponse.json({
+    // Create response with session cookie set server-side (Safari compatible)
+    const response = NextResponse.json({
       success: true,
-      sessionToken: session.sessionToken,
       user: {
         id: user.id,
         email: user.email,
         name: user.name,
       },
     });
+
+    // Set session cookie in HTTP response header (works in Safari)
+    // Secure flag required for HTTPS, SameSite=Lax for cross-site requests
+    const isProduction = process.env.NODE_ENV === 'production';
+    response.cookies.set('next-auth.session-token', session.sessionToken, {
+      path: '/',
+      maxAge: 365 * 24 * 60 * 60, // 365 days
+      httpOnly: false, // NextAuth needs client access
+      secure: isProduction, // Secure in production (HTTPS)
+      sameSite: 'lax',
+    });
+
+    return response;
   } catch (error) {
     console.error('[OTP Verify] Error:', error);
     return NextResponse.json(

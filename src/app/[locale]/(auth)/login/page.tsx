@@ -99,8 +99,8 @@ export default function LoginPage() {
         throw new Error(data.error || "Verification failed");
       }
 
-      // Set session cookie
-      document.cookie = `next-auth.session-token=${data.sessionToken}; path=/; max-age=${365 * 24 * 60 * 60}; samesite=lax`;
+      // Session cookie is now set server-side in the API response (Safari compatible)
+      // No need to set it client-side with document.cookie
 
       // Redirect to dashboard
       router.push(`/${locale}/dashboard`);
