@@ -487,7 +487,14 @@ export async function POST(request: NextRequest) {
       case "expense":
         // These don't affect product stock, just log
         console.log(`[Webhook] Vendor/expense event: ${eventType} - no action needed`);
-        break;
+        return NextResponse.json({
+          success: true,
+          event: eventType,
+          entity: entityType,
+          handled: true,
+          message: 'Vendor/expense event does not affect product data',
+        });
+
 
       // ============================================
       // ITEM/PRODUCT EVENTS
@@ -693,14 +700,26 @@ export async function POST(request: NextRequest) {
       // ============================================
       case "category":
         await safeRevalidate(CACHE_TAGS.CATEGORIES, eventType);
-        break;
+        return NextResponse.json({
+          success: true,
+          event: eventType,
+          entity: entityType,
+          handled: true,
+          message: 'Category cache revalidated',
+        });
 
       // ============================================
       // PRICE LIST EVENTS
       // ============================================
       case "pricebook":
         await safeRevalidate(CACHE_TAGS.PRICE_LISTS, eventType);
-        break;
+        return NextResponse.json({
+          success: true,
+          event: eventType,
+          entity: entityType,
+          handled: true,
+          message: 'Price list cache revalidated',
+        });
 
       // ============================================
       // SALES ORDER EVENTS
@@ -812,13 +831,21 @@ export async function POST(request: NextRequest) {
       // ============================================
       // PAYMENT EVENTS
       // ============================================
-      case "payment":
+      case "payment": {
         const payCustomerId = (data.customer_id as string) || (data.contact_id as string);
         if (payCustomerId) {
           await safeRevalidate(CACHE_TAGS.PAYMENTS(payCustomerId), eventType);
           await safeRevalidate(CACHE_TAGS.INVOICES(payCustomerId), eventType);
         }
-        break;
+        return NextResponse.json({
+          success: true,
+          event: eventType,
+          entity: entityType,
+          handled: true,
+          customerId: payCustomerId,
+          message: payCustomerId ? 'Payment and invoice caches revalidated' : 'Payment event processed',
+        });
+      }
 
       // ============================================
       // CREDIT NOTE EVENTS
@@ -855,12 +882,20 @@ export async function POST(request: NextRequest) {
       // ============================================
       // CONTACT/CUSTOMER EVENTS
       // ============================================
-      case "contact":
+      case "contact": {
         const contactId = (data.contact_id as string) || (data.id as string);
         if (contactId) {
           await safeRevalidate(CACHE_TAGS.CUSTOMER(contactId), eventType);
         }
-        break;
+        return NextResponse.json({
+          success: true,
+          event: eventType,
+          entity: entityType,
+          handled: true,
+          contactId,
+          message: contactId ? 'Contact cache revalidated' : 'Contact event processed',
+        });
+      }
 
       // ============================================
       // UNKNOWN EVENTS
