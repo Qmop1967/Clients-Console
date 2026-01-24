@@ -356,7 +356,7 @@ export async function createSalesOrder(data: {
     const response = await rateLimitedFetch(() =>
       zohoFetch<ZohoOrderResponse>('/salesorders', {
         method: 'POST',
-        api: 'inventory',
+        api: 'books', // Use Books API for higher rate limits and lower cost
         body: orderBody,
       })
     );
@@ -387,13 +387,13 @@ export async function createSalesOrder(data: {
   }
 }
 
-// Confirm a sales order (uses Inventory API to match order creation)
+// Confirm a sales order (uses Books API to match order creation)
 export async function confirmSalesOrder(salesorderId: string): Promise<boolean> {
   try {
     await rateLimitedFetch(() =>
       zohoFetch<{ message: string }>(`/salesorders/${salesorderId}/status/confirmed`, {
         method: 'POST',
-        api: 'inventory', // Match the API used for order creation
+        api: 'books', // Use Books API for higher rate limits and lower cost
       })
     );
     console.log(`[confirmSalesOrder] Order ${salesorderId} confirmed successfully`);
@@ -671,7 +671,7 @@ export async function updateLineItemReceipt(
     await rateLimitedFetch(() =>
       zohoFetch(`/salesorders/${orderId}`, {
         method: 'PUT',
-        api: 'inventory',
+        api: 'books', // Use Books API for higher rate limits and lower cost
         body: {
           line_items: updatedLineItems,
           cf_overall_receive_status: overallStatus,
