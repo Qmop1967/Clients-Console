@@ -125,15 +125,23 @@ export async function POST(request: NextRequest) {
     }
 
     // Create session
+    const sessionToken = crypto.randomUUID();
+    const sessionExpires = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000); // 365 days
+
     const session = await adapter.createSession!({
       userId: user.id,
-      sessionToken: crypto.randomUUID(),
-      expires: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000), // 365 days
+      sessionToken,
+      expires: sessionExpires,
     });
 
-    console.log('[OTP Verify] Session created for:', normalizedEmail);
+    console.log('[OTP Verify] ✅ Session created:', {
+      email: normalizedEmail,
+      userId: user.id,
+      sessionToken,
+      expires: sessionExpires.toISOString(),
+    });
 
-    // Create response with session cookie set server-side (Safari compatible)
+    // Create response
     const response = NextResponse.json({
       success: true,
       user: {
@@ -143,15 +151,26 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Set session cookie in HTTP response header (works in Safari)
-    // Secure flag required for HTTPS, SameSite=Lax for cross-site requests
+    // Set session cookie - CRITICAL: Must match NextAuth's cookie configuration
+    // NextAuth uses __Secure- prefix in production (HTTPS)
     const isProduction = process.env.NODE_ENV === 'production';
-    response.cookies.set('next-auth.session-token', session.sessionToken, {
+    const useSecureCookies = isProduction;
+    const cookiePrefix = useSecureCookies ? '__Secure-' : '';
+    const cookieName = `${cookiePrefix}next-auth.session-token`;
+
+    response.cookies.set(cookieName, session.sessionToken, {
       path: '/',
       maxAge: 365 * 24 * 60 * 60, // 365 days
-      httpOnly: false, // NextAuth needs client access
-      secure: isProduction, // Secure in production (HTTPS)
+      httpOnly: false, // NextAuth needs client access for getSession()
+      secure: useSecureCookies, // Must be true in production for __Secure- prefix
       sameSite: 'lax',
+    });
+
+    console.log('[OTP Verify] 🍪 Cookie set:', {
+      name: cookieName,
+      value: `${session.sessionToken.substring(0, 8)}...`,
+      secure: useSecureCookies,
+      NODE_ENV: process.env.NODE_ENV,
     });
 
     return response;
