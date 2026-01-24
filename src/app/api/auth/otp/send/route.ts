@@ -175,9 +175,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Normalize email (lowercase and trim)
+    const normalizedEmail = email.toLowerCase().trim();
+
     // Validate email format
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
+    if (!emailRegex.test(normalizedEmail)) {
       return NextResponse.json(
         { error: 'Invalid email format' },
         { status: 400 }
@@ -188,11 +191,11 @@ export async function POST(request: NextRequest) {
     const otp = generateOTP();
 
     // Store OTP in Redis with 10 minute expiration
-    const otpKey = `otp:${email}`;
+    const otpKey = `otp:${normalizedEmail}`;
     await redis.setex(otpKey, 600, otp); // 600 seconds = 10 minutes
 
     console.log('[OTP Send] Generated and stored OTP:', {
-      email,
+      email: normalizedEmail,
       code: otp,
       key: otpKey,
     });
@@ -200,7 +203,7 @@ export async function POST(request: NextRequest) {
     // Send OTP email
     const result = await resend.emails.send({
       from: process.env.EMAIL_FROM || 'TSH <noreply@tsh.sale>',
-      to: email,
+      to: normalizedEmail,
       subject: 'رمز التحقق - TSH | Your verification code - TSH',
       html: generateOTPEmail(otp),
     });
@@ -213,7 +216,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log('[OTP Send] Verification code sent to:', email);
+    console.log('[OTP Send] Verification code sent to:', normalizedEmail);
 
     return NextResponse.json({
       success: true,

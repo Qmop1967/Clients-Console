@@ -21,18 +21,21 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Normalize email (lowercase and trim) - MUST match send route
+    const normalizedEmail = email.toLowerCase().trim();
+
     // Clean and normalize the code (remove spaces, trim)
     const cleanCode = String(code).trim().replace(/\s/g, '');
 
-    // Get OTP from Redis
-    const otpKey = `otp:${email}`;
+    // Get OTP from Redis using normalized email
+    const otpKey = `otp:${normalizedEmail}`;
     const storedOTP = await redis.get<string>(otpKey);
 
     // Normalize stored OTP the same way as received code
     const cleanStoredOTP = storedOTP ? String(storedOTP).trim().replace(/\s/g, '') : null;
 
     console.log('[OTP Verify] Debug:', {
-      email,
+      email: normalizedEmail,
       receivedCode: cleanCode,
       receivedCodeLength: cleanCode.length,
       storedCode: storedOTP,
@@ -41,6 +44,7 @@ export async function POST(request: NextRequest) {
       match: cleanStoredOTP === cleanCode,
       typeofReceived: typeof code,
       typeofStored: typeof storedOTP,
+      redisKey: otpKey,
     });
 
     if (!cleanStoredOTP) {
@@ -70,21 +74,21 @@ export async function POST(request: NextRequest) {
     await redis.del(otpKey);
 
     // Find or create user
-    let user = await adapter.getUserByEmail!(email);
+    let user = await adapter.getUserByEmail!(normalizedEmail);
 
     if (!user) {
       // Create new user
       user = await adapter.createUser!({
         id: crypto.randomUUID(),
-        email,
+        email: normalizedEmail,
         emailVerified: new Date(),
-        name: email.split('@')[0],
+        name: normalizedEmail.split('@')[0],
       });
     }
 
     // Fetch Zoho customer data
     try {
-      const customerBasic = await getZohoCustomerByEmail(email);
+      const customerBasic = await getZohoCustomerByEmail(normalizedEmail);
 
       if (customerBasic) {
         const customerFull = await getZohoCustomerFresh(customerBasic.contact_id);
@@ -104,7 +108,7 @@ export async function POST(request: NextRequest) {
           // Update in database via Redis (manual update since adapter doesn't have updateUser)
           const userKey = `user:${user.id}`;
           await redis.set(userKey, updatedUser);
-          const emailKey = `user:email:${email}`;
+          const emailKey = `user:email:${normalizedEmail}`;
           await redis.set(emailKey, user.id);
 
           user = updatedUser as typeof user;
@@ -127,7 +131,7 @@ export async function POST(request: NextRequest) {
       expires: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000), // 365 days
     });
 
-    console.log('[OTP Verify] Session created for:', email);
+    console.log('[OTP Verify] Session created for:', normalizedEmail);
 
     return NextResponse.json({
       success: true,
