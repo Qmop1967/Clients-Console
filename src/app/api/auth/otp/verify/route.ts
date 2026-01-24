@@ -28,25 +28,37 @@ export async function POST(request: NextRequest) {
     const otpKey = `otp:${email}`;
     const storedOTP = await redis.get<string>(otpKey);
 
+    // Normalize stored OTP the same way as received code
+    const cleanStoredOTP = storedOTP ? String(storedOTP).trim().replace(/\s/g, '') : null;
+
     console.log('[OTP Verify] Debug:', {
       email,
       receivedCode: cleanCode,
+      receivedCodeLength: cleanCode.length,
       storedCode: storedOTP,
-      match: storedOTP === cleanCode,
+      cleanStoredOTP,
+      cleanStoredOTPLength: cleanStoredOTP?.length,
+      match: cleanStoredOTP === cleanCode,
+      typeofReceived: typeof code,
+      typeofStored: typeof storedOTP,
     });
 
-    if (!storedOTP) {
+    if (!cleanStoredOTP) {
       return NextResponse.json(
         { error: 'Verification code expired or not found' },
         { status: 400 }
       );
     }
 
-    // Verify OTP with cleaned code
-    if (String(storedOTP).trim() !== cleanCode) {
+    // Verify OTP with cleaned code (both normalized the same way)
+    if (cleanStoredOTP !== cleanCode) {
       console.error('[OTP Verify] Code mismatch:', {
-        stored: String(storedOTP).trim(),
+        stored: cleanStoredOTP,
+        storedLength: cleanStoredOTP.length,
         received: cleanCode,
+        receivedLength: cleanCode.length,
+        charsStored: cleanStoredOTP.split('').map((c, i) => `[${i}]='${c}' (${c.charCodeAt(0)})`),
+        charsReceived: cleanCode.split('').map((c, i) => `[${i}]='${c}' (${c.charCodeAt(0)})`),
       });
       return NextResponse.json(
         { error: 'Invalid verification code' },
