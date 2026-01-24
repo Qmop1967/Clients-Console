@@ -349,8 +349,11 @@ Component Variants:
 
 | File | Purpose |
 |------|---------|
+| `KNOWLEDGE.md` | **Complete knowledge base** - Business context, architecture, features, troubleshooting |
+| `CLAUDE.md` | **Developer guide** - Quick reference for Claude Code |
 | `.claude/CHANGELOG.md` | Version history |
 | `.claude/PROJECT_MEMORY.md` | Critical IDs, golden rules |
+| `.claude/TSH_ARCHITECTURE.md` | Detailed system architecture |
 | `.claude/ZOHO_INTEGRATION.md` | Zoho API reference |
 | `.claude/PRICING_RULES.md` | Price list logic |
 | `.claude/STOCK_RULES.md` | Stock calculation |
@@ -453,13 +456,20 @@ grep -r "console.error" src/ | grep -v "node_modules"
 
 ---
 
-**Version:** 2.3.0 | **Last Updated:** 2026-01-24
+**Version:** 2.4.0 | **Last Updated:** 2026-01-24
 
 TSH = Tech Spider Hand
 
 ---
 
 ## Changelog
+
+### 2.4.0 (2026-01-24)
+- **Webhook Enhancement:** Standardized response format for all webhook event handlers
+- Added explicit return statements for non-stock events (payment, category, contact, expense, pricebook)
+- All webhook handlers now return consistent JSON with success status, event details, and descriptive messages
+- Improved debugging and monitoring capabilities for webhook operations
+- Files changed: `src/app/api/webhooks/zoho/route.ts`
 
 ### 2.3.0 (2026-01-24)
 - **CRITICAL:** Added API Selection rule - ALWAYS use Zoho Books API for all operations except stock
