@@ -53,6 +53,26 @@ FORBIDDEN:
 - ALWAYS use server-side API routes for Zoho calls
 - ALWAYS include Arabic translations for new text
 
+### API Selection (CRITICAL)
+```yaml
+Default: ALWAYS use Zoho Books API (NOT Inventory API)
+Reason: Books API has higher rate limits, lower cost, better availability
+
+Books API for:
+  - Order submission (Sales Orders)
+  - Product/Item listing and details
+  - Customer data
+  - Invoices, Payments, Credit Notes
+  - All transactional operations
+
+EXCEPTION - Inventory API ONLY for:
+  - Stock levels (warehouse-specific data)
+  - Stock sync operations
+  - Inventory adjustments
+
+Rule: If data exists in both APIs, prefer Zoho Books API
+```
+
 ### Stock (CRITICAL)
 ```yaml
 Source: Zoho Inventory API (NOT Books)
@@ -69,11 +89,17 @@ NEVER use: item.available_stock from Books API (total across ALL warehouses)
 
 ### Orders (CRITICAL)
 ```yaml
+API: ALWAYS use Zoho Books API (NOT Inventory API)
+Endpoint: POST https://www.zohoapis.com/books/v3/salesorders
+Reason: Higher rate limits, lower cost than Inventory API
+
 Order Creation - Warehouse Fulfillment:
   - Set location_id at ORDER level → Main TSH Business (tax/reporting)
   - Set location_id on EACH LINE ITEM → Main WareHouse (stock fulfillment)
 
-NEVER use warehouse_id at order level (invalid parameter)
+NEVER use:
+  - Zoho Inventory API for order operations (use Books API)
+  - warehouse_id at order level (invalid parameter)
 ```
 
 ### Pricing (CRITICAL)
@@ -124,8 +150,8 @@ src/
 | next-intl | i18n (AR/EN with RTL) |
 | NextAuth.js v5 | Magic Link authentication |
 | Upstash Redis | OAuth token + stock caching |
-| Zoho Books | Orders, Invoices, Products (higher rate limits) |
-| Zoho Inventory | Stock levels (warehouse-specific) |
+| Zoho Books | **PRIMARY API** - Orders, Invoices, Products, Customers (higher rate limits, lower cost) |
+| Zoho Inventory | **STOCK ONLY** - Warehouse-specific stock levels |
 
 ---
 
@@ -159,6 +185,8 @@ Fix: Verify UPSTASH_REDIS_REST_* env vars in Vercel
 
 | Mistake | Fix |
 |---------|-----|
+| Using Inventory API for orders/products | Use Zoho Books API (higher limits, lower cost) |
+| Using Inventory API for non-stock operations | Use Zoho Books API - Inventory is ONLY for stock data |
 | Consumer prices for logged-in customers | Use `auth()` + `session.user.priceListId` |
 | ISR on price pages | Use `force-dynamic` |
 | Using `item.available_stock` from Books | Use `getUnifiedStock()` from Inventory |
@@ -425,6 +453,17 @@ grep -r "console.error" src/ | grep -v "node_modules"
 
 ---
 
-**Version:** 2.2.0 | **Last Updated:** 2026-01-01
+**Version:** 2.3.0 | **Last Updated:** 2026-01-24
 
 TSH = Tech Spider Hand
+
+---
+
+## Changelog
+
+### 2.3.0 (2026-01-24)
+- **CRITICAL:** Added API Selection rule - ALWAYS use Zoho Books API for all operations except stock
+- Zoho Books API is now the primary API (higher rate limits, lower cost, better availability)
+- Zoho Inventory API usage restricted to stock-only operations (warehouse-specific data)
+- Updated Orders section to explicitly require Books API for order submission
+- Added Common Mistakes entries for wrong API usage
