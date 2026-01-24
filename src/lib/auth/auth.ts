@@ -1,6 +1,7 @@
 import NextAuth from 'next-auth';
 import { authConfig } from './auth.config';
 import Resend from 'next-auth/providers/resend';
+import Credentials from 'next-auth/providers/credentials';
 import { UpstashRedisAdapter } from '@auth/upstash-redis-adapter';
 import { Redis } from '@upstash/redis';
 import { getZohoCustomerByEmail, getZohoCustomerFresh } from '@/lib/zoho/customers';
@@ -163,6 +164,53 @@ function generateMagicLinkEmail(url: string): string {
 
 // Build providers array
 const providers = [];
+
+// Add OTP Credentials Provider (uses NextAuth's built-in session management)
+providers.push(
+  Credentials({
+    id: 'otp',
+    name: 'OTP',
+    credentials: {
+      email: { label: 'Email', type: 'email' },
+      code: { label: 'Code', type: 'text' },
+    },
+    async authorize(credentials) {
+      if (!credentials?.email || !credentials?.code) {
+        return null;
+      }
+
+      // Normalize email
+      const normalizedEmail = credentials.email.toLowerCase().trim();
+      const cleanCode = String(credentials.code).trim().replace(/\s/g, '');
+
+      // Get OTP from Redis
+      const otpKey = `otp:${normalizedEmail}`;
+      const storedOTP = await redis.get<string>(otpKey);
+      const cleanStoredOTP = storedOTP ? String(storedOTP).trim().replace(/\s/g, '') : null;
+
+      console.log('[OTP Auth] Verifying:', {
+        email: normalizedEmail,
+        codeMatch: cleanStoredOTP === cleanCode,
+      });
+
+      // Verify OTP
+      if (!cleanStoredOTP || cleanStoredOTP !== cleanCode) {
+        console.error('[OTP Auth] Invalid code');
+        return null;
+      }
+
+      // Delete OTP after successful verification
+      await redis.del(otpKey);
+
+      // Return user object - NextAuth will create session automatically
+      return {
+        id: crypto.randomUUID(),
+        email: normalizedEmail,
+        name: normalizedEmail.split('@')[0],
+      };
+    },
+  })
+);
 
 // Add Resend provider for magic link emails with custom Arabic template
 if (process.env.RESEND_API_KEY) {
