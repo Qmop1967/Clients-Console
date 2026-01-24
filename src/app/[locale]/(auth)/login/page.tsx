@@ -80,32 +80,37 @@ export default function LoginPage() {
     }
   };
 
-  // OTP Verify handler
+  // OTP Verify handler - Use NextAuth signIn (PROPER ROOT SOLUTION)
   const handleVerifyOTP = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError("");
 
     try {
-      const response = await fetch("/api/auth/otp/verify", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, code: otpCode }),
+      // Use NextAuth's signIn function - this is the CORRECT way
+      // NextAuth will create the session with proper cookies automatically
+      const result = await signIn("otp", {
+        email,
+        code: otpCode,
+        redirect: false,
       });
 
-      const data = await response.json();
+      console.log('[OTP Client] SignIn result:', result);
 
-      if (!response.ok) {
-        throw new Error(data.error || "Verification failed");
+      if (result?.error) {
+        console.error('[OTP Client] SignIn error:', result.error);
+        setError(t("otpError"));
+        return;
       }
 
-      // Session cookie is now set server-side in the API response (Safari compatible)
-      // No need to set it client-side with document.cookie
-
-      // Redirect to dashboard
-      router.push(`/${locale}/dashboard`);
-      router.refresh();
+      if (result?.ok) {
+        // NextAuth has successfully created the session
+        console.log('[OTP Client] SignIn successful, redirecting to dashboard');
+        router.push(`/${locale}/dashboard`);
+        router.refresh();
+      }
     } catch (err: any) {
+      console.error('[OTP Client] Exception:', err);
       setError(err.message || t("otpError"));
     } finally {
       setLoading(false);
