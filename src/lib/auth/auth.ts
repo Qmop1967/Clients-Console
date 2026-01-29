@@ -180,7 +180,7 @@ providers.push(
       }
 
       // Normalize email
-      const normalizedEmail = credentials.email.toLowerCase().trim();
+      const normalizedEmail = String(credentials.email).toLowerCase().trim();
       const cleanCode = String(credentials.code).trim().replace(/\s/g, '');
 
       // Get OTP from Redis
