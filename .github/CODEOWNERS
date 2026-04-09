@@ -1,0 +1,10 @@
+# Default owners for everything
+* @Qmop1967
+
+# Gateway / API routes
+/src/routes/ @Qmop1967
+/src/config/ @Qmop1967
+
+# Security-sensitive files
+.env.example @Qmop1967
+.github/ @Qmop1967

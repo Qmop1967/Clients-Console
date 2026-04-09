@@ -1,0 +1,27 @@
+/**
+ * UI Components barrel file
+ * Re-exports all shadcn/ui components for clean imports
+ *
+ * Usage:
+ *   import { Button, Card, Badge } from '@/components/ui';
+ */
+
+export * from './animated-logo';
+export * from './avatar';
+export * from './badge';
+export * from './button';
+export * from './card';
+export * from './dialog';
+export * from './empty-state';
+export * from './input';
+export * from './label';
+export * from './pagination';
+export * from './scroll-area';
+export * from './select';
+export * from './separator';
+export * from './sheet';
+export * from './skeleton';
+export * from './switch';
+export * from './tabs';
+export * from './toast';
+export * from './toaster';

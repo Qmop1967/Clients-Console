@@ -1,0 +1,1 @@
+self.__REACT_LOADABLE_MANIFEST='{"components/products/public-products-content.tsx -> @/components/ui/wholesale-quantity-input":{"id":69563,"files":["static/chunks/9563.45ba60ac2a80fb78.js"]}}';

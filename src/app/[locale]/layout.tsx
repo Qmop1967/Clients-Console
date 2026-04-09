@@ -1,0 +1,147 @@
+import type { Metadata, Viewport } from "next";
+import { notFound } from "next/navigation";
+import { NextIntlClientProvider } from "next-intl";
+import { getMessages } from "next-intl/server";
+import { ThemeProvider } from "@/components/providers/theme-provider";
+import { SessionProvider } from "@/components/providers/session-provider";
+import { CartSessionProvider } from "@/components/providers/cart-session-provider";
+import { CatalogModeProvider } from "@/components/providers/catalog-mode-provider";
+import { Toaster } from "@/components/ui/toaster";
+import { locales, localeDirection, type Locale } from "@/i18n/config";
+import "../globals.css";
+
+// Performance-optimized fonts using next/font/google
+// This prevents render-blocking and enables automatic font subsetting
+import { Plus_Jakarta_Sans, Cormorant_Garamond, Cairo, IBM_Plex_Sans_Arabic } from "next/font/google";
+
+// Body font - Latin (used for most UI text)
+// PERF: Minimal weights - 400 for body, 600 for emphasis (use CSS font-weight for 500)
+const plusJakartaSans = Plus_Jakarta_Sans({
+  subsets: ["latin"],
+  weight: ["400", "600"],
+  variable: "--font-jakarta",
+  display: "swap",
+  preload: true,
+});
+
+// Display font - Latin (used for headings, prices)
+// PERF: Single weight - CSS can fake lighter/heavier with font-synthesis
+const cormorantGaramond = Cormorant_Garamond({
+  subsets: ["latin"],
+  weight: ["600"],
+  style: ["normal"],
+  variable: "--font-cormorant",
+  display: "swap",
+  preload: true,
+});
+
+// Arabic display font - headings only
+// PERF: 600 for regular headings, 700 for emphasis - skip 400
+const cairo = Cairo({
+  subsets: ["arabic", "latin"],
+  weight: ["600", "700"],
+  variable: "--font-cairo",
+  display: "swap",
+  preload: true,
+});
+
+// Arabic body font
+// PERF: 400 for body, 600 for emphasis - skip 500 (use 600 instead)
+const ibmPlexSansArabic = IBM_Plex_Sans_Arabic({
+  subsets: ["arabic", "latin"],
+  weight: ["400", "600"],
+  variable: "--font-ibm-arabic",
+  display: "swap",
+  preload: true,
+});
+
+export const metadata: Metadata = {
+  title: {
+    default: "TSH Clients",
+    template: "%s | TSH",
+  },
+  description: "TSH Wholesale & Retail Clients Portal - Order Management, Invoices, and Account Services",
+  keywords: ["TSH", "wholesale", "retail", "orders", "invoices", "Iraq", "IQD"],
+  authors: [{ name: "TSH" }],
+  creator: "TSH",
+  manifest: "/manifest.json",
+  icons: {
+    icon: "/favicon.ico",
+    apple: "/apple-touch-icon.png",
+  },
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "TSH Clients",
+  },
+  formatDetection: {
+    telephone: false,
+  },
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#1C1930" },
+    { media: "(prefers-color-scheme: dark)", color: "#1C1930" },
+  ],
+};
+
+export function generateStaticParams() {
+  return locales.map((locale) => ({ locale }));
+}
+
+interface RootLayoutProps {
+  children: React.ReactNode;
+  params: Promise<{ locale: string }>;
+}
+
+export default async function RootLayout({
+  children,
+  params,
+}: RootLayoutProps) {
+  const { locale } = await params;
+
+  // Validate locale
+  if (!locales.includes(locale as Locale)) {
+    notFound();
+  }
+
+  const messages = await getMessages();
+  const dir = localeDirection[locale as Locale];
+
+  // Combine all font CSS variables
+  const fontVariables = `${plusJakartaSans.variable} ${cormorantGaramond.variable} ${cairo.variable} ${ibmPlexSansArabic.variable}`;
+
+  return (
+    <html lang={locale} dir={dir} suppressHydrationWarning className={fontVariables}>
+      <head>
+        {/* Preconnect to Vercel Blob storage for faster image loading (LCP optimization) */}
+        {/* Preconnect to the system domains for faster API loading */}
+        {/* Note: Font preconnects handled automatically by next/font */}
+      </head>
+      <body className="font-body antialiased">
+        <SessionProvider>
+          <ThemeProvider
+            attribute="class"
+            defaultTheme="system"
+            enableSystem
+            disableTransitionOnChange
+          >
+            <NextIntlClientProvider messages={messages}>
+              <CatalogModeProvider>
+                <CartSessionProvider>
+                  {children}
+                  
+                  <Toaster />
+                </CartSessionProvider>
+              </CatalogModeProvider>
+            </NextIntlClientProvider>
+          </ThemeProvider>
+        </SessionProvider>
+      </body>
+    </html>
+  );
+}

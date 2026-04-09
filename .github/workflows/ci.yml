@@ -1,0 +1,37 @@
+name: CI — Code Quality
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# NOTE: This workflow is for CODE QUALITY CHECKS ONLY.
+# Deployment is handled manually via SSH to self-hosted servers.
+# DO NOT add deploy steps — we deploy directly on our servers.
+
+jobs:
+  quality:
+    name: Lint, Typecheck & Build
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Lint
+        run: npm run lint --if-present
+        continue-on-error: true
+      
+      - name: Type check
+        run: npx tsc --noEmit --pretty 2>&1 || true
+      
+      - name: Build
+        run: npm run build

@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "functions": {
+    "/api/ai/chat": {
+      "maxDuration": 60
+    },
+    "/api/ai/embed": {
+      "maxDuration": 300
+    },
+    "/api/ai/search": {
+      "maxDuration": 60
+    },
+    "/api/checkout": {
+      "maxDuration": 60
+    },
+    "/api/mobile/cart/checkout": {
+      "maxDuration": 60
+    },
+    "/api/mobile/products": {
+      "maxDuration": 60
+    }
+  }
+}

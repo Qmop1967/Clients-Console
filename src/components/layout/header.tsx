@@ -1,0 +1,61 @@
+"use client";
+
+import { ShoppingCart } from "lucide-react";
+import { NotificationDropdown } from "./notification-dropdown";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { AnimatedLogo } from "@/components/ui/animated-logo";
+import { useCatalogMode } from "@/components/providers/catalog-mode-provider";
+
+interface HeaderProps {
+  title?: string;
+  cartCount?: number;
+  onCartClick?: () => void;
+}
+
+export function Header({ title, cartCount = 0, onCartClick }: HeaderProps) {
+  const { isCatalogMode, showCatalogModal } = useCatalogMode();
+  return (
+    <header className="sticky top-0 z-40 border-b border-border/40 bg-background/80 backdrop-blur-lg supports-[backdrop-filter]:bg-background/60" style={{ paddingTop: "env(safe-area-inset-top)" }}>
+      <div className="flex h-14 items-center justify-between px-4">
+        {/* Logo / Title */}
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2.5">
+            <AnimatedLogo />
+            <div className="flex flex-col">
+              <h1 className="font-display text-lg font-semibold tracking-tight">
+                {title || "TSH"}
+              </h1>
+            </div>
+          </div>
+        </div>
+
+        {/* Actions */}
+        <div className="flex items-center gap-1">
+          {/* Notifications */}
+          <NotificationDropdown />
+
+          {/* Cart - shows modal in catalog mode, otherwise navigates to cart */}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="relative h-10 w-10 rounded-full transition-all hover:bg-secondary"
+            onClick={isCatalogMode ? showCatalogModal : onCartClick}
+            aria-label="Shopping cart"
+          >
+            <ShoppingCart className="h-5 w-5 text-foreground/70" strokeWidth={1.5} />
+            {/* Hide cart count badge in catalog mode */}
+            {!isCatalogMode && cartCount > 0 && (
+              <Badge
+                variant="gold"
+                className="absolute -end-0.5 -top-0.5 h-5 min-w-5 rounded-full p-0 text-[10px] flex items-center justify-center border-2 border-background animate-scale-in"
+              >
+                {cartCount > 99 ? "99+" : cartCount}
+              </Badge>
+            )}
+          </Button>
+        </div>
+      </div>
+    </header>
+  );
+}
