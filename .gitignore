@@ -78,3 +78,5 @@ tsconfig.tsbuildinfo
 *.pack
 .env
 .env.local
+*.bak*
+.env.bak*
