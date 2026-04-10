@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
         order_id: order_id || undefined,
         products: products || [],
         description,
-        source: "client",
+        source: "customer",
       }),
     });
     const ticketData = await ticketRes.json();
