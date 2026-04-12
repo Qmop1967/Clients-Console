@@ -347,7 +347,14 @@
     "noFilterResultsDescription": "حاول تعديل معايير البحث أو الفلترة.",
     "showing": "عرض {from}-{to} من {total}",
     "firstPage": "الصفحة الأولى",
-    "lastPage": "الصفحة الأخيرة"
+    "lastPage": "الصفحة الأخيرة",
+    "printInvoice": "طباعة / مشاركة",
+    "items": "المنتجات",
+    "subtotal": "المجموع الفرعي",
+    "tax": "الضريبة",
+    "discount": "الخصم",
+    "notes": "ملاحظات",
+    "continueShopping": "متابعة التسوق"
   },
   "payments": {
     "title": "المدفوعات",

@@ -347,7 +347,14 @@
     "noFilterResultsDescription": "Try adjusting your search or filter criteria.",
     "showing": "Showing {from}-{to} of {total}",
     "firstPage": "First page",
-    "lastPage": "Last page"
+    "lastPage": "Last page",
+    "printInvoice": "Print / Share",
+    "items": "Items",
+    "subtotal": "Subtotal",
+    "tax": "Tax",
+    "discount": "Discount",
+    "notes": "Notes",
+    "continueShopping": "Continue Shopping"
   },
   "payments": {
     "title": "Payments",

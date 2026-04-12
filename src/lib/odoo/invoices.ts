@@ -128,6 +128,7 @@ export async function getCustomerInvoices(
     const domain = [
       ['partner_id', '=', partnerId],
       ['move_type', '=', 'out_invoice'],
+      ['state', '=', 'posted'],
     ];
     const offset = (page - 1) * perPage;
 

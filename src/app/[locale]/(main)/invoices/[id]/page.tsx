@@ -12,7 +12,6 @@ import {
   FileText,
   Calendar,
   DollarSign,
-  Download,
   Clock,
   CheckCircle2,
   AlertCircle,
@@ -20,6 +19,8 @@ import {
   Package,
   Box,
   ShoppingBag,
+  Printer,
+  Share2,
 } from "lucide-react";
 import { getInvoice } from "@/lib/odoo/invoices";
 
@@ -123,7 +124,6 @@ export default async function InvoiceDetailPage({
   const currency = invoice.currency_code || "IQD";
   const statusInfo = getStatusInfo(invoice.status);
 
-  // Calculate payment progress
   const paymentProgress = invoice.total > 0
     ? Math.round(((invoice.total - invoice.balance) / invoice.total) * 100)
     : 0;
@@ -196,7 +196,7 @@ export default async function InvoiceDetailPage({
           </Card>
         </div>
 
-        {/* Payment Progress (if partially paid) */}
+        {/* Payment Progress */}
         {invoice.balance > 0 && invoice.balance < invoice.total && (
           <Card>
             <CardContent className="p-4">
@@ -211,7 +211,7 @@ export default async function InvoiceDetailPage({
                 />
               </div>
               <p className="text-xs text-muted-foreground mt-2">
-                {formatCurrency(invoice.total - invoice.balance, currency)} paid of {formatCurrency(invoice.total, currency)}
+                {formatCurrency(invoice.total - invoice.balance, currency)} {t("invoiceStatus.paid")} / {formatCurrency(invoice.total, currency)}
               </p>
             </CardContent>
           </Card>
@@ -223,7 +223,7 @@ export default async function InvoiceDetailPage({
             <CardHeader className="pb-4">
               <CardTitle className="flex items-center gap-2 text-lg">
                 <Package className="h-5 w-5" />
-                Items ({invoice.line_items.length})
+                {t("items") || "Items"} ({invoice.line_items.length})
               </CardTitle>
             </CardHeader>
             <CardContent className="pt-0">
@@ -233,7 +233,6 @@ export default async function InvoiceDetailPage({
                     key={item.line_item_id || index}
                     className="flex items-center gap-4 py-4 first:pt-0 last:pb-0"
                   >
-                    {/* Item Image */}
                     <div className="w-16 h-16 rounded-lg bg-muted shrink-0 overflow-hidden relative">
                       {item.item_id ? (
                         <Image
@@ -250,8 +249,6 @@ export default async function InvoiceDetailPage({
                         </div>
                       )}
                     </div>
-
-                    {/* Item Details */}
                     <div className="flex-1 min-w-0">
                       <p className="font-medium text-sm sm:text-base">
                         {item.name || item.item_name || item.description || `Item #${index + 1}`}
@@ -259,17 +256,12 @@ export default async function InvoiceDetailPage({
                       {item.sku && (
                         <p className="text-xs text-muted-foreground">SKU: {item.sku}</p>
                       )}
-                      {item.description && (item.name || item.item_name) && (
-                        <p className="text-sm text-muted-foreground line-clamp-1">{item.description}</p>
-                      )}
                       <div className="flex items-center gap-2 mt-1">
                         <Badge variant="secondary" className="text-xs font-normal">
-                          {item.quantity} × {formatCurrency(item.rate, currency)}
+                          {item.quantity} x {formatCurrency(item.rate, currency)}
                         </Badge>
                       </div>
                     </div>
-
-                    {/* Item Total */}
                     <div className="text-right shrink-0">
                       <p className="font-bold">{formatCurrency(item.item_total, currency)}</p>
                     </div>
@@ -280,18 +272,18 @@ export default async function InvoiceDetailPage({
               {/* Totals */}
               <div className="mt-6 pt-4 border-t space-y-3">
                 <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Subtotal</span>
+                  <span className="text-muted-foreground">{t("subtotal") || "Subtotal"}</span>
                   <span>{formatCurrency(invoice.sub_total || invoice.total, currency)}</span>
                 </div>
                 {invoice.tax_total > 0 && (
                   <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Tax</span>
+                    <span className="text-muted-foreground">{t("tax") || "Tax"}</span>
                     <span>{formatCurrency(invoice.tax_total, currency)}</span>
                   </div>
                 )}
                 {invoice.discount > 0 && (
                   <div className="flex justify-between text-sm text-green-600">
-                    <span>Discount</span>
+                    <span>{t("discount") || "Discount"}</span>
                     <span>-{formatCurrency(invoice.discount, currency)}</span>
                   </div>
                 )}
@@ -315,7 +307,7 @@ export default async function InvoiceDetailPage({
         {invoice.notes && (
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-base">Notes</CardTitle>
+              <CardTitle className="text-base">{t("notes") || "Notes"}</CardTitle>
             </CardHeader>
             <CardContent className="pt-0">
               <p className="text-muted-foreground whitespace-pre-wrap text-sm">{invoice.notes}</p>
@@ -323,7 +315,7 @@ export default async function InvoiceDetailPage({
           </Card>
         )}
 
-        {/* Actions */}
+        {/* Actions - Updated with Print/Share */}
         <div className="flex flex-wrap gap-3 pt-2">
           <Link href="/invoices">
             <Button variant="outline" className="gap-2">
@@ -331,18 +323,16 @@ export default async function InvoiceDetailPage({
               {t("title")}
             </Button>
           </Link>
-          {invoice.invoice_url && (
-            <a href={invoice.invoice_url} target="_blank" rel="noopener noreferrer">
-              <Button className="gap-2">
-                <Download className="h-4 w-4" />
-                {t("downloadPdf")}
-              </Button>
-            </a>
-          )}
+          <Link href={`/invoices/${invoice.invoice_id}/print`}>
+            <Button className="gap-2 bg-blue-600 hover:bg-blue-700">
+              <Printer className="h-4 w-4" />
+              {t("printInvoice") || "طباعة / مشاركة"}
+            </Button>
+          </Link>
           <Link href="/products">
             <Button variant="secondary" className="gap-2">
               <ShoppingBag className="h-4 w-4" />
-              Continue Shopping
+              {t("continueShopping") || "Continue Shopping"}
             </Button>
           </Link>
         </div>
