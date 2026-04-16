@@ -791,5 +791,18 @@
     "yesterday": "أمس",
     "older": "أقدم",
     "clearAll": "مسح الكل"
+  },
+  "cartMerge": {
+    "title": "عندك طلبية مفتوحة",
+    "description": "عندك {count} طلبية مسودة. تقدر تضيف المواد الجديدة عليها بدل ما تنشئ طلبية ثانية.",
+    "statusDraft": "مسودة",
+    "statusSent": "مرسل",
+    "itemsSummary": "{count} مادة",
+    "mergeButton": "أضف عليها",
+    "newOrderButton": "أنشئ طلبية جديدة",
+    "mergeSuccess": "تم دمج المواد بنجاح!",
+    "mergeSuccessDetail": "تمت إضافة {added} مادة جديدة وتحديث {updated} مادة موجودة في طلبية {order}.",
+    "mergeError": "فشل دمج المواد",
+    "loadingDrafts": "جاري التحقق من طلبياتك المفتوحة..."
   }
 }

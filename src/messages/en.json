@@ -791,5 +791,18 @@
     "yesterday": "Yesterday",
     "older": "Older",
     "clearAll": "Clear all"
+  },
+  "cartMerge": {
+    "title": "You have an open order",
+    "description": "You have {count} draft order(s). You can add items to an existing order instead of creating a new one.",
+    "statusDraft": "Draft",
+    "statusSent": "Sent",
+    "itemsSummary": "{count} items",
+    "mergeButton": "Add to this",
+    "newOrderButton": "Create new order",
+    "mergeSuccess": "Items merged successfully!",
+    "mergeSuccessDetail": "Added {added} new item(s) and updated {updated} existing item(s) in order {order}.",
+    "mergeError": "Failed to merge items",
+    "loadingDrafts": "Checking your open orders..."
   }
 }

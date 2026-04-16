@@ -514,3 +514,207 @@ export async function approveQuotation(orderId: number, partnerId: number): Prom
     };
   }
 }
+
+// ============================================
+// Draft Order Merge — Smart Cart Integration
+// ============================================
+
+export interface DraftOrderSummary {
+  id: number;
+  name: string;
+  date: string;
+  state: string;
+  itemCount: number;
+  total: number;
+  currencyCode: string;
+  lines: Array<{
+    lineId: number;
+    productId: number;
+    productName: string;
+    quantity: number;
+    priceUnit: number;
+    subtotal: number;
+  }>;
+}
+
+/**
+ * Get draft/sent orders for a customer (for merge detection)
+ * Only returns orders created within last 7 days to keep it relevant
+ */
+export async function getDraftOrdersForMerge(customerId: string): Promise<DraftOrderSummary[]> {
+  try {
+    const partnerId = parseInt(customerId, 10);
+    if (isNaN(partnerId)) return [];
+
+    // Only draft orders from last 7 days
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    const dateStr = sevenDaysAgo.toISOString().replace('T', ' ').slice(0, 19);
+
+    const domain = [
+      ['partner_id', '=', partnerId],
+      ['state', 'in', ['draft', 'sent']],
+      ['create_date', '>=', dateStr],
+    ];
+
+    const orders = await odooSearchRead<OdooSaleOrder>(
+      'sale.order', domain,
+      ['id', 'name', 'date_order', 'state', 'amount_total', 'currency_id', 'order_line', 'create_date'],
+      { order: 'create_date desc', limit: 5 }
+    );
+
+    if (!orders.length) return [];
+
+    // Fetch all lines
+    const allLineIds = orders.flatMap(o => o.order_line || []);
+    let allLines: OdooSaleOrderLine[] = [];
+    if (allLineIds.length) {
+      allLines = await odooSearchRead<OdooSaleOrderLine>(
+        'sale.order.line',
+        [['id', 'in', allLineIds]],
+        ['id', 'order_id', 'product_id', 'name', 'product_uom_qty', 'price_unit', 'price_subtotal']
+      );
+    }
+
+    return orders.map(o => {
+      const orderLines = allLines.filter(l => {
+        const oid = Array.isArray(l.order_id) ? l.order_id[0] : l.order_id;
+        return oid === o.id;
+      });
+
+      return {
+        id: o.id,
+        name: o.name,
+        date: o.date_order ? o.date_order.split(' ')[0] : '',
+        state: o.state,
+        itemCount: orderLines.length,
+        total: o.amount_total,
+        currencyCode: Array.isArray(o.currency_id) ? o.currency_id[1] : 'IQD',
+        lines: orderLines.map(l => ({
+          lineId: l.id,
+          productId: Array.isArray(l.product_id) ? l.product_id[0] : 0,
+          productName: Array.isArray(l.product_id) ? l.product_id[1] : '',
+          quantity: l.product_uom_qty,
+          priceUnit: l.price_unit,
+          subtotal: l.price_subtotal,
+        })),
+      };
+    });
+  } catch (error) {
+    console.error('[Odoo Orders] getDraftOrdersForMerge error:', error);
+    return [];
+  }
+}
+
+export interface MergeResult {
+  success: boolean;
+  order?: SalesOrder;
+  addedCount?: number;
+  updatedCount?: number;
+  error?: string;
+}
+
+/**
+ * Merge cart items into an existing draft order.
+ * - If product already exists in order: increment quantity
+ * - If product is new: add new line
+ * - Appends merge note to order
+ */
+export async function mergeToDraftOrder(data: {
+  orderId: number;
+  customerId: string;
+  items: Array<{ item_id: string; quantity: number; rate: number; name: string }>;
+  notes?: string;
+}): Promise<MergeResult> {
+  try {
+    const partnerId = parseInt(data.customerId, 10);
+
+    // 1. Verify order exists, belongs to customer, and is draft
+    const orders = await odooRead<OdooSaleOrder>('sale.order', [data.orderId], [
+      'id', 'name', 'state', 'partner_id', 'order_line', 'note',
+    ]);
+
+    if (!orders.length) {
+      return { success: false, error: 'Order not found' };
+    }
+
+    const order = orders[0];
+    const orderPartnerId = Array.isArray(order.partner_id) ? order.partner_id[0] : order.partner_id;
+
+    if (orderPartnerId !== partnerId) {
+      return { success: false, error: 'Order does not belong to this customer' };
+    }
+
+    if (order.state !== 'draft' && order.state !== 'sent') {
+      return { success: false, error: 'Only draft orders can be modified' };
+    }
+
+    // 2. Get existing lines to detect duplicates
+    const existingLines = order.order_line?.length
+      ? await odooSearchRead<OdooSaleOrderLine>(
+          'sale.order.line',
+          [['id', 'in', order.order_line]],
+          ['id', 'product_id', 'product_uom_qty', 'price_unit']
+        )
+      : [];
+
+    // Map: productId → existing line
+    const existingByProduct = new Map<number, OdooSaleOrderLine>();
+    for (const line of existingLines) {
+      const pid = Array.isArray(line.product_id) ? line.product_id[0] : 0;
+      if (pid) existingByProduct.set(pid, line);
+    }
+
+    let addedCount = 0;
+    let updatedCount = 0;
+
+    // 3. Process each cart item
+    for (const item of data.items) {
+      const productId = parseInt(item.item_id, 10);
+      const existing = existingByProduct.get(productId);
+
+      if (existing) {
+        // Product exists — increment quantity
+        const newQty = existing.product_uom_qty + item.quantity;
+        await odooWrite('sale.order.line', [existing.id], {
+          product_uom_qty: newQty,
+        });
+        updatedCount++;
+      } else {
+        // New product — add line
+        await odooCreate('sale.order.line', {
+          order_id: data.orderId,
+          product_id: productId,
+          product_uom_qty: item.quantity,
+          price_unit: item.rate,
+        });
+        addedCount++;
+      }
+    }
+
+    // 4. Append merge note
+    const now = new Date().toLocaleString('en-US', { timeZone: 'Asia/Baghdad' });
+    const mergeNote = `[${now}] Client merged ${data.items.length} item(s) from cart`;
+    const existingNote = order.note || '';
+    const separator = existingNote ? '\n' : '';
+    const fullNote = data.notes
+      ? `${existingNote}${separator}${mergeNote}\n${data.notes}`
+      : `${existingNote}${separator}${mergeNote}`;
+
+    await odooWrite('sale.order', [data.orderId], { note: fullNote });
+
+    // 5. Read back updated order
+    const updatedOrder = await getOrder(String(data.orderId), data.customerId);
+
+    return {
+      success: true,
+      order: updatedOrder || undefined,
+      addedCount,
+      updatedCount,
+    };
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    console.error('[Odoo Orders] mergeToDraftOrder error:', msg);
+    return { success: false, error: msg };
+  }
+}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useSession } from "next-auth/react";
 import { useCart } from "@/components/providers/cart-provider";
@@ -23,6 +23,7 @@ import {
   MessageCircle,
 } from "lucide-react";
 import { WholesaleQuantityInput } from "@/components/ui/wholesale-quantity-input";
+import { DraftOrderMerge } from "@/components/cart/draft-order-merge";
 import Image from "next/image";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
@@ -44,6 +45,19 @@ export default function CartPage() {
     orderNumber: string;
     orderId: string;
   } | null>(null);
+
+  // Draft order merge state
+  const [draftOrders, setDraftOrders] = useState<any[]>([]);
+  const [isLoadingDrafts, setIsLoadingDrafts] = useState(false);
+  const [isMerging, setIsMerging] = useState(false);
+  const [mergeResult, setMergeResult] = useState<{
+    success: boolean;
+    addedCount?: number;
+    updatedCount?: number;
+    orderName?: string;
+    orderId?: string;
+  } | null>(null);
+  const [skipMergeCheck, setSkipMergeCheck] = useState(false);
 
   const isAuthenticated = status === "authenticated" && !!session?.user?.odooPartnerId;
 
@@ -85,6 +99,90 @@ export default function CartPage() {
       maximumFractionDigits: decimals,
     }).format(rate);
   };
+
+  // Fetch draft orders for merge detection
+  useEffect(() => {
+    if (!isAuthenticated || items.length === 0) return;
+
+    let cancelled = false;
+    const fetchDrafts = async () => {
+      setIsLoadingDrafts(true);
+      try {
+        const res = await fetch('/api/draft-orders');
+        if (res.ok) {
+          const data = await res.json();
+          if (!cancelled && data.drafts?.length) {
+            setDraftOrders(data.drafts);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to fetch draft orders:', err);
+      } finally {
+        if (!cancelled) setIsLoadingDrafts(false);
+      }
+    };
+
+    fetchDrafts();
+    return () => { cancelled = true; };
+  }, [isAuthenticated, items.length]);
+
+  // Handle merge into existing draft order
+  const handleMerge = useCallback(async (orderId: number) => {
+    if (isMerging || validItems.length === 0) return;
+
+    setIsMerging(true);
+    setCheckoutError(null);
+
+    try {
+      const itemNotesText = validItems
+        .filter(item => item.note && item.note.trim())
+        .map(item => `${item.name} (${item.sku}): ${item.note}`)
+        .join('\n');
+      const combinedNotes = [orderNote, itemNotesText].filter(Boolean).join('\n\n');
+
+      const res = await fetch(`/api/orders/${orderId}/merge`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          items: validItems.map(item => ({
+            item_id: item.item_id,
+            quantity: item.quantity,
+            rate: item.rate,
+            name: item.name,
+          })),
+          notes: combinedNotes || undefined,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Merge failed');
+      }
+
+      const targetDraft = draftOrders.find(d => d.id === orderId);
+      setMergeResult({
+        success: true,
+        addedCount: data.addedCount,
+        updatedCount: data.updatedCount,
+        orderName: targetDraft?.name || data.order?.salesorder_number || '',
+        orderId: String(orderId),
+      });
+
+      // Clear the cart after successful merge
+      clearCart();
+    } catch (error) {
+      console.error('Merge error:', error);
+      setCheckoutError(error instanceof Error ? error.message : 'Merge failed');
+    } finally {
+      setIsMerging(false);
+    }
+  }, [isMerging, validItems, orderNote, draftOrders, clearCart]);
+
+  // Handle "create new order" — skip merge check
+  const handleSkipMerge = useCallback(() => {
+    setSkipMergeCheck(true);
+  }, []);
 
   // Handle checkout
   const handleCheckout = async () => {
@@ -177,6 +275,36 @@ export default function CartPage() {
   }
 
   // Catalog Mode view - orders temporarily disabled
+  // Merge success view
+  if (mergeResult?.success) {
+    return (
+      <div className="flex min-h-[60vh] flex-col items-center justify-center space-y-6 px-4">
+        <div className="rounded-full bg-green-100 dark:bg-green-900/30 p-6">
+          <CheckCircle className="h-16 w-16 text-green-600 dark:text-green-400" />
+        </div>
+        <div className="text-center space-y-2">
+          <h2 className="text-2xl font-bold text-green-600 dark:text-green-400">
+            تم دمج المواد بنجاح!
+          </h2>
+          <p className="text-muted-foreground max-w-sm">
+            تمت إضافة {mergeResult.addedCount || 0} مادة جديدة وتحديث {mergeResult.updatedCount || 0} مادة موجودة في طلبية {mergeResult.orderName}.
+          </p>
+        </div>
+        <div className="flex gap-3 mt-4">
+          <Link href={`/${locale}/quotations`}>
+            <Button>{t("viewAllOrders")}</Button>
+          </Link>
+          <Button variant="outline" onClick={() => {
+            router.push(`/${locale}/shop`);
+          }}>
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            {t("continueShopping")}
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   if (isCatalogMode) {
     return (
       <div className="flex min-h-[60vh] flex-col items-center justify-center space-y-6 px-4">
@@ -481,7 +609,19 @@ export default function CartPage() {
         </div>
 
         {/* Order Summary */}
-        <div className="lg:col-span-1">
+        <div className="lg:col-span-1 space-y-4">
+          {/* Draft Order Merge Card */}
+          {isAuthenticated && !skipMergeCheck && draftOrders.length > 0 && !isLoadingDrafts && (
+            <DraftOrderMerge
+              drafts={draftOrders}
+              currencyCode={currencyCode}
+              onMerge={handleMerge}
+              onNewOrder={handleSkipMerge}
+              isMerging={isMerging}
+              mergeResult={null}
+            />
+          )}
+
           <Card className="sticky top-20">
             <CardHeader className="pb-4">
               <CardTitle className="flex items-center gap-2">
