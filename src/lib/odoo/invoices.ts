@@ -66,7 +66,7 @@ function formatInvoice(inv: OdooInvoice, lines: OdooInvoiceLine[] = []): Invoice
   const paid = inv.amount_total - inv.amount_residual;
 
   // Filter out section/note lines, keep only product lines
-  const productLines = lines.filter(l => !l.display_type);
+  const productLines = lines.filter(l => !l.display_type || l.display_type === 'product');
 
   return {
     invoice_id: String(inv.id),
