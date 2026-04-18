@@ -90,9 +90,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Generate and store OTP — key on partnerId when possible (most stable anchor)
+    // Generate and store OTP.
+    // IMPORTANT: the key MUST match what /api/auth/otp/verify receives as its
+    // "phone" field (which is either the phone number or the email address).
+    // otp-store.ts normalizePhone() treats emails as-is but mangles anything
+    // else (e.g. "partner:3866" would become "+partner:3866" and never match).
     const otp = generateOTP();
-    const otpKey = partnerId ? `partner:${partnerId}` : (phone || cleaned);
+    const otpKey = phone || cleaned;
     storeOTP(otpKey, otp);
 
     // Send via Email
