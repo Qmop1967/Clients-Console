@@ -3,7 +3,7 @@ import { generateOTP, isRateLimited, storeOTP } from "@/lib/otp-store";
 import { sendEmailOTP } from "@/lib/email-otp";
 
 // Search customer in Odoo by email via Gateway
-async function findCustomerByEmail(email: string): Promise<{ found: boolean; phone?: string }> {
+async function findCustomerByEmail(email: string): Promise<{ found: boolean; ambiguous?: boolean; partnerId?: number; phone?: string; matchedIds?: number[] }> {
   const gatewayUrl = process.env.API_GATEWAY_URL || "http://127.0.0.1:3010";
   const apiKey = process.env.API_KEY || "";
 
@@ -17,23 +17,28 @@ async function findCustomerByEmail(email: string): Promise<{ found: boolean; pho
       body: JSON.stringify({
         model: "res.partner",
         domain: [
-          "&",
+          "&", "&",
           ["customer_rank", ">", 0],
-          "|",
-          ["email", "=ilike", email],
+          ["active", "=", true],
           ["email", "=ilike", email.toLowerCase()],
         ],
         fields: ["id", "name", "email", "phone", "mobile"],
-        limit: 1,
+        limit: 2,
+        order: "id ASC",
       }),
     });
 
     const data = await res.json();
     const records = data?.data || data?.result || data || [];
-    if (Array.isArray(records) && records.length > 0) {
+    if (Array.isArray(records) && records.length > 1) {
+      const matchedIds = records.map((r: any) => r.id);
+      console.error("[Email OTP] AMBIGUOUS_EMAIL", email, matchedIds);
+      return { found: false, ambiguous: true, matchedIds };
+    }
+    if (Array.isArray(records) && records.length === 1) {
       const customer = records[0];
       const phone = customer.mobile || customer.phone || "";
-      return { found: true, phone };
+      return { found: true, partnerId: customer.id, phone };
     }
     return { found: false };
   } catch (err) {
@@ -64,7 +69,17 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if customer exists in Odoo
-    const { found, phone } = await findCustomerByEmail(cleaned);
+    const { found, phone, partnerId, ambiguous, matchedIds } = await findCustomerByEmail(cleaned);
+    if (ambiguous) {
+      return NextResponse.json(
+        {
+          error: "يوجد أكثر من حساب بهذا البريد. تواصل مع الدعم لحل الازدواج",
+          errorCode: "ambiguous_email",
+          matchedIds,
+        },
+        { status: 409 }
+      );
+    }
     if (!found) {
       return NextResponse.json(
         {
@@ -75,9 +90,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Generate and store OTP (key = phone if available, else email)
+    // Generate and store OTP — key on partnerId when possible (most stable anchor)
     const otp = generateOTP();
-    const otpKey = phone || cleaned;
+    const otpKey = partnerId ? `partner:${partnerId}` : (phone || cleaned);
     storeOTP(otpKey, otp);
 
     // Send via Email
@@ -96,7 +111,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       message: "تم إرسال رمز التحقق على البريد الإلكتروني",
-      phone: phone || undefined, // needed for verify step
+      phone: phone || undefined, // still returned for backward compatibility (ignored by new code)
+      partnerId, // canonical anchor for the verify step
     });
   } catch (error) {
     console.error("[Email OTP] Error:", error);

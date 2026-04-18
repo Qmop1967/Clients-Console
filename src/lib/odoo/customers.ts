@@ -81,18 +81,30 @@ function odooPartnerToCustomer(p: OdooPartner): Customer {
  */
 export async function getCustomerByEmail(email: string): Promise<Customer | null> {
   try {
+    // Guard: reject obviously-invalid input
+    const cleaned = (email || '').trim().toLowerCase();
+    if (!cleaned || !cleaned.includes('@')) return null;
+
     const partners = await odooSearchRead<OdooPartner>(
       'res.partner',
       [
-        ['email', '=', email],
+        '&', '&',
         ['customer_rank', '>', 0],
+        ['active', '=', true],
+        ['email', '=ilike', cleaned],
       ],
       PARTNER_FIELDS,
-      { limit: 1 }
+      { limit: 2, order: 'id ASC' }
     );
 
-    return partners.length > 0 ? odooPartnerToCustomer(partners[0]) : null;
+    if (partners.length > 1) {
+      const ids = partners.map(p => p.id).join(',');
+      console.error(`[Odoo Customers] AMBIGUOUS_EMAIL ${cleaned} matched partners ${ids}`);
+      throw new Error(`AMBIGUOUS_EMAIL:${ids}`);
+    }
+    return partners.length === 1 ? odooPartnerToCustomer(partners[0]) : null;
   } catch (error) {
+    if (error instanceof Error && error.message.startsWith('AMBIGUOUS_EMAIL')) throw error;
     console.error(`[Odoo Customers] Error fetching customer by email ${email}:`, error);
     return null;
   }
@@ -216,8 +228,16 @@ export async function searchCustomers(
  */
 export async function getCustomerByPhone(phone: string): Promise<Customer | null> {
   try {
+    // Guard A: reject email-shaped input (must use getCustomerByEmail instead)
+    if (!phone || phone.includes('@')) return null;
+
     // Normalize phone: strip spaces, dashes, and leading +964/00964
     const cleaned = phone.replace(/[\s\-()]/g, '');
+
+    // Guard B: Iraq local numbers are 10-11 digits; short inputs would over-match via ilike
+    const digits = cleaned.replace(/[^0-9]/g, '');
+    if (digits.length < 9) return null;
+
     const variants = [cleaned];
     // Add variants without country code
     if (cleaned.startsWith('+964')) variants.push('0' + cleaned.slice(4));
@@ -232,13 +252,12 @@ export async function getCustomerByPhone(phone: string): Promise<Customer | null
     // Also add variants with leading single-quote (Odoo stores some as '"+964...")
     const withQuote = variants.map(v => "'" + v);
     const allVariants = [...variants, ...withQuote];
-    
+
     // Use last 10 digits for fuzzy ilike match as fallback
-    const digits = cleaned.replace(/[^0-9]/g, '');
     const last10 = digits.slice(-10);
 
     const domain: unknown[] = [
-      '&', ['customer_rank', '>', 0],
+      '&', '&', ['customer_rank', '>', 0], ['active', '=', true],
       '|', '|', '|',
       ['phone', 'in', allVariants],
       ['mobile', 'in', allVariants],
@@ -250,11 +269,17 @@ export async function getCustomerByPhone(phone: string): Promise<Customer | null
       'res.partner',
       domain,
       PARTNER_FIELDS,
-      { limit: 1 }
+      { limit: 2, order: 'id ASC' }
     );
 
-    return partners.length > 0 ? odooPartnerToCustomer(partners[0]) : null;
+    if (partners.length > 1) {
+      const ids = partners.map(p => p.id).join(',');
+      console.error(`[Odoo Customers] AMBIGUOUS_PHONE ${phone} matched partners ${ids}`);
+      throw new Error(`AMBIGUOUS_PHONE:${ids}`);
+    }
+    return partners.length === 1 ? odooPartnerToCustomer(partners[0]) : null;
   } catch (error) {
+    if (error instanceof Error && error.message.startsWith('AMBIGUOUS_PHONE')) throw error;
     console.error(`[Odoo Customers] Error fetching customer by phone ${phone}:`, error);
     return null;
   }

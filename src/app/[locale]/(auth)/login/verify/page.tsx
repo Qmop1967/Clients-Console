@@ -159,10 +159,21 @@ export default function VerifyOTPPage() {
 
       setVerified(true);
 
-      const signInResult = await signIn("phone", {
-        phone,
-        redirect: false,
-      });
+      // Branch on the OTP method so email logins hit the email Credentials
+      // provider (which resolves the partner via partnerId) instead of being
+      // squeezed through the phone lookup.
+      const storedEmail = sessionStorage.getItem("otp_email") || "";
+      const storedPartnerId = sessionStorage.getItem("otp_partner_id") || "";
+      const signInResult = otpMethod === "email"
+        ? await signIn("email", {
+            email: storedEmail,
+            partnerId: storedPartnerId,
+            redirect: false,
+          })
+        : await signIn("phone", {
+            phone,
+            redirect: false,
+          });
 
       if (signInResult?.error) {
         setError(isAr ? "خطأ بتسجيل الدخول. حاول مرة أخرى" : "Login error. Please try again");
@@ -173,6 +184,7 @@ export default function VerifyOTPPage() {
 
       sessionStorage.removeItem("otp_phone");
       sessionStorage.removeItem("otp_email");
+      sessionStorage.removeItem("otp_partner_id");
       sessionStorage.removeItem("otp_method");
       sessionStorage.removeItem("dev_otp");
 

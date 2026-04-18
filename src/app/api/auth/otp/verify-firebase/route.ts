@@ -2,12 +2,18 @@ import { NextRequest, NextResponse } from 'next/server';
 import { storeOTP } from '@/lib/otp-store';
 
 // Search customer in Odoo by phone via Gateway
-async function findCustomerByPhone(phone: string): Promise<{ found: boolean; partnerId?: number; name?: string }> {
+async function findCustomerByPhone(phone: string): Promise<{ found: boolean; ambiguous?: boolean; partnerId?: number; name?: string; matchedIds?: number[] }> {
   const gatewayUrl = process.env.API_GATEWAY_URL || 'http://127.0.0.1:3010';
   const apiKey = process.env.API_KEY || '';
 
+  // Guard: reject email-shaped input
+  if (!phone || phone.includes('@')) return { found: false };
+
   // Normalize: phone comes as +9647xxxxxxxxx
   const digits = phone.replace(/\D/g, '');
+  // Guard: Iraq local phones are 10-11 digits; shorter inputs over-match via ilike
+  if (digits.length < 9) return { found: false };
+
   const local = '0' + digits.replace(/^964/, ''); // 07xxxxxxxxx
   const bare = digits; // 9647xxxxxxxxx
   const short = digits.replace(/^964/, ''); // 7xxxxxxxxx
@@ -23,7 +29,7 @@ async function findCustomerByPhone(phone: string): Promise<{ found: boolean; par
       body: JSON.stringify({
         model: 'res.partner',
         domain: [
-          '&', ['customer_rank', '>', 0],
+          '&', '&', ['customer_rank', '>', 0], ['active', '=', true],
           '|', '|', '|', '|', '|',
           ['phone', 'in', [local, `+${bare}`, bare, short, `+${local}`, phone]],
           ['mobile', 'in', [local, `+${bare}`, bare, short, `+${local}`, phone]],
@@ -33,13 +39,19 @@ async function findCustomerByPhone(phone: string): Promise<{ found: boolean; par
           ['mobile', 'ilike', local],
         ],
         fields: ['id', 'name', 'phone', 'mobile'],
-        limit: 1,
+        limit: 2,
+        order: 'id ASC',
       }),
     });
 
     const data = await res.json();
     const records = data?.data || data?.result || data || [];
-    if (Array.isArray(records) && records.length > 0) {
+    if (Array.isArray(records) && records.length > 1) {
+      const matchedIds = records.map((r: any) => r.id);
+      console.error('[Firebase Verify] AMBIGUOUS_PHONE', phone, matchedIds);
+      return { found: false, ambiguous: true, matchedIds };
+    }
+    if (Array.isArray(records) && records.length === 1) {
       return { found: true, partnerId: records[0].id, name: records[0].name };
     }
     return { found: false };

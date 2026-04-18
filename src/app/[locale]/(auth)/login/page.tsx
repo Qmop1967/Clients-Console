@@ -216,15 +216,17 @@ export default function LoginPage() {
       }
 
       // Normal flow — navigate to verify page
+      // IMPORTANT: never store email as otp_phone — the phone Credentials provider
+      // would treat it as a phone number and cross-match an unrelated partner.
+      sessionStorage.removeItem("otp_phone");
+      sessionStorage.removeItem("otp_email");
+      sessionStorage.removeItem("otp_partner_id");
       if (method === "phone") {
         sessionStorage.setItem("otp_phone", phone.trim());
       } else {
         sessionStorage.setItem("otp_email", email.trim());
-        if (data.phone) {
-          sessionStorage.setItem("otp_phone", data.phone);
-        } else {
-          sessionStorage.setItem("otp_phone", email.trim());
-        }
+        if (data.phone) sessionStorage.setItem("otp_phone", data.phone);
+        if (data.partnerId) sessionStorage.setItem("otp_partner_id", String(data.partnerId));
       }
       sessionStorage.setItem("otp_method", method);
       if (data.devOtp) sessionStorage.setItem("dev_otp", data.devOtp);

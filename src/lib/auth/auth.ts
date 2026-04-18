@@ -1,7 +1,7 @@
 import NextAuth from 'next-auth';
 import { authConfig } from './auth.config';
 import Credentials from 'next-auth/providers/credentials';
-import { getCustomerByPhone } from '@/lib/odoo/customers';
+import { getCustomerByPhone, getCustomerById } from '@/lib/odoo/customers';
 
 export const {
   handlers: { GET, POST },
@@ -49,6 +49,57 @@ export const {
           };
         } catch (error) {
           console.error('[Auth] Error during phone login:', error);
+          return null;
+        }
+      },
+    }),
+    // Email-based login: OTP sent to email, signIn carries the partnerId
+    // that was resolved server-side (in /api/auth/otp/send-email) to avoid
+    // any lookup ambiguity at this stage.
+    Credentials({
+      id: 'email',
+      name: 'Email',
+      credentials: {
+        email: { label: 'Email', type: 'email' },
+        partnerId: { label: 'PartnerId', type: 'text' },
+      },
+      async authorize(credentials) {
+        try {
+          const emailRaw = String(credentials?.email || '').trim().toLowerCase();
+          const partnerIdStr = String(credentials?.partnerId || '').trim();
+          const partnerId = Number(partnerIdStr);
+          if (!emailRaw || !emailRaw.includes('@')) return null;
+          if (!Number.isInteger(partnerId) || partnerId <= 0) return null;
+
+          const customer = await getCustomerById(partnerId);
+          if (!customer) {
+            console.log('[Auth] No customer for partnerId:', partnerId);
+            return null;
+          }
+          // Safety: the partner must actually own this email.
+          const ownEmail = String(customer.email || '').trim().toLowerCase();
+          if (ownEmail !== emailRaw) {
+            console.warn('[Auth] Email/partner mismatch — refusing', { partnerId, emailRaw });
+            return null;
+          }
+
+          console.log('[Auth] Customer found (email):', {
+            contactId: customer.contact_id,
+            name: customer.contact_name,
+            priceListId: customer.pricebook_id || customer.price_list_id,
+            currency: customer.currency_code,
+          });
+
+          return {
+            id: customer.contact_id,
+            name: customer.contact_name,
+            email: customer.email || `${customer.contact_id}@tsh.local`,
+            odooContactId: customer.contact_id,
+            priceListId: customer.pricebook_id || customer.price_list_id || '',
+            currencyCode: customer.currency_code || 'IQD',
+          };
+        } catch (error) {
+          console.error('[Auth] Error during email login:', error);
           return null;
         }
       },
