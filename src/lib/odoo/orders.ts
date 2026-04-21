@@ -63,7 +63,7 @@ function formatOrder(o: OdooSaleOrder, lines: OdooSaleOrderLine[] = []): SalesOr
     currency_symbol: currencyCode === 'USD' ? '$' : 'IQD',
     exchange_rate: 1,
     notes: (o.note || undefined) as string | undefined,
-    line_items: lines.map(formatLineItem),
+    line_items: lines.filter(l => l.product_uom_qty > 0).map(formatLineItem),
     created_time: o.create_date,
     last_modified_time: o.write_date,
   };
