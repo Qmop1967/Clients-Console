@@ -129,6 +129,16 @@ export const {
   session: {
     strategy: 'jwt',
     maxAge: 365 * 24 * 60 * 60, // 365 days
+    // updateAge: re-issue JWT (and rewrite cookie WITH maxAge) at most once per 24h
+    // of activity. This is the key fix that keeps customers signed in across days —
+    // without it, NextAuth v5 rewrites the cookie on every request without Max-Age,
+    // which turns it into a session cookie that dies when the browser/PWA closes.
+    updateAge: 24 * 60 * 60, // 24 hours
+  },
+  // Explicit JWT lifetime — NextAuth v5 beta does not always inherit session.maxAge
+  // onto the JWT `exp` claim. Setting this explicitly guarantees 365-day tokens.
+  jwt: {
+    maxAge: 365 * 24 * 60 * 60, // 365 days
   },
   // Use non-prefixed cookie names so they work consistently across all browsers
   // __Secure- prefix causes issues on some mobile browsers when app is closed
