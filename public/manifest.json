@@ -57,8 +57,13 @@
       "purpose": "maskable"
     }
   ],
-  "categories": ["business", "shopping"],
-  "lang": "en",
-  "dir": "auto",
-  "prefer_related_applications": false
+  "categories": [
+    "business",
+    "shopping"
+  ],
+  "lang": "ar",
+  "dir": "rtl",
+  "prefer_related_applications": false,
+  "scope": "/",
+  "id": "/"
 }

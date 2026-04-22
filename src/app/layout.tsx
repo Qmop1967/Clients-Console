@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { ErrorReporter } from "@/components/error-reporter";
+import { ServiceWorkerRegister } from "@/components/service-worker-register";
 
 // PERFORMANCE: Removed unused Geist fonts (~100KB savings)
 // Actual fonts are loaded in [locale]/layout.tsx
@@ -19,6 +20,7 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body className="antialiased">
         <ErrorReporter />
+        <ServiceWorkerRegister />
         {children}
       </body>
     </html>

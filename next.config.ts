@@ -136,6 +136,16 @@ const nextConfig: NextConfig = {
           },
         ],
       },
+      // Service worker must never be cached — it controls its own updates.
+      // Must be served from root scope (Service-Worker-Allowed: /) for iOS PWA.
+      {
+        source: "/sw.js",
+        headers: [
+          { key: "Content-Type", value: "application/javascript; charset=utf-8" },
+          { key: "Cache-Control", value: "no-store, no-cache, must-revalidate, proxy-revalidate" },
+          { key: "Service-Worker-Allowed", value: "/" },
+        ],
+      },
       // Cache static assets aggressively
       {
         source: "/:path*.(ico|jpg|jpeg|png|gif|webp|svg|avif)",
