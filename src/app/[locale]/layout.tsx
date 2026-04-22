@@ -4,6 +4,7 @@ import { NextIntlClientProvider } from "next-intl";
 import { getMessages } from "next-intl/server";
 import { ThemeProvider } from "@/components/providers/theme-provider";
 import { SessionProvider } from "@/components/providers/session-provider";
+import { PushPermission } from "@/components/pwa/push-permission";
 import { CartSessionProvider } from "@/components/providers/cart-session-provider";
 import { CatalogModeProvider } from "@/components/providers/catalog-mode-provider";
 import { Toaster } from "@/components/ui/toaster";
@@ -136,6 +137,7 @@ export default async function RootLayout({
                   {children}
                   
                   <Toaster />
+                  <PushPermission />
                 </CartSessionProvider>
               </CatalogModeProvider>
             </NextIntlClientProvider>

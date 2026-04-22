@@ -27,6 +27,7 @@ import { DraftOrderMerge } from "@/components/cart/draft-order-merge";
 import Image from "next/image";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
+import { useOnlineStatus } from "@/lib/use-online-status";
 
 export default function CartPage() {
   const t = useTranslations("cart");
@@ -41,6 +42,7 @@ export default function CartPage() {
 
   const [isCheckingOut, setIsCheckingOut] = useState(false);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
+  const online = useOnlineStatus();
   const [orderSuccess, setOrderSuccess] = useState<{
     orderNumber: string;
     orderId: string;
@@ -686,7 +688,7 @@ export default function CartPage() {
                 <Button
                   className="w-full"
                   size="lg"
-                  disabled={!canCheckout || isCheckingOut}
+                  disabled={!canCheckout || isCheckingOut || !online}
                   onClick={handleCheckout}
                 >
                   {isCheckingOut ? (
@@ -694,6 +696,8 @@ export default function CartPage() {
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                       {t("processing")}
                     </>
+                  ) : !online ? (
+                    "لا يوجد اتصال — يرجى المحاولة بعد الاتصال"
                   ) : invalidItems.length > 0 ? (
                     t("removeInvalidFirst")
                   ) : (
