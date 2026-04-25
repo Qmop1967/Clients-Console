@@ -16,7 +16,7 @@ interface IdempotencyEntry {
 }
 
 const idempotencyStore = new Map<string, IdempotencyEntry>();
-const IDEMPOTENCY_TTL = 60_000; // 60 seconds
+const IDEMPOTENCY_TTL = 120_000; // 120 seconds — sliding window
 
 // Cleanup expired entries every 5 minutes
 setInterval(() => {
@@ -29,13 +29,13 @@ setInterval(() => {
 }, 5 * 60 * 1000).unref?.();
 
 function generateIdempotencyKey(partnerId: string | number, items: any[]): string {
-  const timeWindow = Math.floor(Date.now() / 60_000); // 60s window
+  // No time window in key — TTL-based sliding window prevents boundary-crossing duplicates
   const itemsHash = crypto
     .createHash('sha256')
     .update(JSON.stringify(items.map(i => ({ id: i.item_id, qty: i.quantity, rate: i.rate })).sort((a, b) => a.id.localeCompare(b.id))))
     .digest('hex')
     .slice(0, 16);
-  return `checkout:${partnerId}:${itemsHash}:${timeWindow}`;
+  return `checkout:${partnerId}:${itemsHash}`;
 }
 
 const checkoutSchema = z.object({
