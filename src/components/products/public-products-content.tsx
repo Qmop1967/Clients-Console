@@ -171,24 +171,24 @@ const ProductCardWithCart = memo(function ProductCardWithCart({
 
         {/* Category Tag */}
         {product.category_name && (
-          <div className="absolute bottom-3 left-3 rtl:left-auto rtl:right-3 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-            <span className="px-2 py-1 text-xs font-medium bg-black/70 text-white rounded-md backdrop-blur-sm">
+          <div className="absolute top-2.5 left-2.5 rtl:left-auto rtl:right-2.5 z-10">
+            <span className="px-2 py-0.5 text-[10px] font-medium bg-black/60 text-white/90 rounded-full backdrop-blur-sm">
               {product.category_name}
             </span>
           </div>
         )}
       </div>
 
-      <div className="p-3 sm:p-4">
+      <div className="px-3 py-3.5 sm:p-4">
         {/* Product Info */}
         <div className="space-y-1.5 sm:space-y-2">
           {/* Product Name */}
-          <h2 className="font-semibold text-xs sm:text-sm line-clamp-2 min-h-[2rem] sm:min-h-[2.5rem] group-hover:text-primary transition-colors duration-200">
+          <h2 className="font-semibold text-xs sm:text-sm line-clamp-3 min-h-[2.75rem] sm:min-h-[3.75rem] group-hover:text-primary transition-colors duration-200">
             {product.name}
           </h2>
 
           {/* SKU & Brand */}
-          <div className="flex items-center justify-between text-[10px] sm:text-xs text-muted-foreground">
+          <div className="flex items-center justify-between text-[11px] sm:text-xs text-muted-foreground">
             <span className="font-mono truncate max-w-[60%]">{product.sku}</span>
             {product.brand && (
               <span className="text-primary font-medium truncate">{product.brand}</span>
@@ -208,7 +208,8 @@ const ProductCardWithCart = memo(function ProductCardWithCart({
                       </span>
                     </>
                   ) : (
-                    <span className="text-xs sm:text-sm text-muted-foreground italic">
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 text-[10px] sm:text-xs font-medium">
+                      <MessageCircle className="h-3 w-3" />
                       {t("contactForPrice")}
                     </span>
                   )}
@@ -217,14 +218,20 @@ const ProductCardWithCart = memo(function ProductCardWithCart({
                 {/* Stock Count */}
                 <div
                   className={cn(
-                    "stock-indicator text-[10px] sm:text-xs font-medium",
+                    "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-medium",
                     isInStock
                       ? isLowStock
-                        ? "stock-low text-amber-700 dark:text-amber-400"
-                        : "stock-in text-emerald-700 dark:text-emerald-400"
-                      : "stock-out text-red-600"
+                        ? "bg-amber-500/10 text-amber-600 dark:text-amber-400"
+                        : "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                      : "bg-red-500/10 text-red-600 dark:text-red-400"
                   )}
                 >
+                  <span className={cn(
+                    "w-1.5 h-1.5 rounded-full shrink-0",
+                    isInStock
+                      ? isLowStock ? "bg-amber-500" : "bg-emerald-500"
+                      : "bg-red-500"
+                  )} />
                   {isInStock
                     ? t("stockCount", { count: product.available_stock })
                     : t("outOfStock")}
@@ -301,10 +308,10 @@ const ProductCardWithCart = memo(function ProductCardWithCart({
           <div className="mt-3 sm:mt-4 pt-2 sm:pt-3 border-t border-border/50">
             <Button
               variant="outline"
-              className="w-full btn-press group/btn"
+              className="w-full btn-press group/btn border-primary/30 hover:bg-primary/5"
               size="sm"
             >
-              <Eye className="h-4 w-4 me-2 group-hover/btn:scale-110 transition-transform" />
+              <Eye className="h-3.5 w-3.5 me-1.5 group-hover/btn:scale-110 transition-transform" />
               {t("viewDetails")}
             </Button>
           </div>
