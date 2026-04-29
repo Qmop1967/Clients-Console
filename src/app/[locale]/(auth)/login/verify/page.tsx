@@ -182,6 +182,18 @@ export default function VerifyOTPPage() {
         return;
       }
 
+      // Store recovery data in localStorage so the session can be
+      // silently restored if iOS clears the session cookie on PWA close.
+      try {
+        localStorage.setItem("tsh_session_recovery", JSON.stringify({
+          method: otpMethod,
+          ...(phone && { phone }),
+          ...(storedEmail && { email: storedEmail }),
+          ...(storedPartnerId && { partnerId: storedPartnerId }),
+          ts: Date.now(),
+        }));
+      } catch { /* localStorage full — non-critical */ }
+
       sessionStorage.removeItem("otp_phone");
       sessionStorage.removeItem("otp_email");
       sessionStorage.removeItem("otp_partner_id");

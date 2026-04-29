@@ -97,6 +97,8 @@ export function MenuDrawer({
 
   const handleLogout = async () => {
     onOpenChange(false);
+    // Clear session recovery data so auto-login doesn't fire after explicit logout
+    try { localStorage.removeItem("tsh_session_recovery"); } catch {}
     await signOut({ redirect: false });
     window.location.href = "/" + locale + "/login";
   };
