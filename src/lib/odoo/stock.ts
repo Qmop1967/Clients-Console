@@ -11,7 +11,10 @@ import type { OdooStockQuant } from './types';
 // Main warehouse location ID in Odoo
 // This should be configured per environment
 // Default: WH/Stock (internal location of main warehouse)
-const MAIN_WAREHOUSE_LOCATION_NAME = 'WH/Stock';
+// WH=1 (TSH main warehouse) lot_stock_id = 8
+// Khaleel rule: "تطبيق العملاء مرتبط بـ WH=1 فقط"
+// child_of matches this ID + all sub-locations (Stock, Input, QC, Output, Packing)
+const MAIN_WH_LOT_STOCK_ID = 8;
 
 // ============================================
 // Stock API
@@ -33,7 +36,8 @@ export async function getProductStock(productId: number | string): Promise<{
       'stock.quant',
       [
         ['product_id', '=', numId],
-        ['location_id.usage', '=', 'internal'], // only internal locations (warehouses)
+        ['location_id', 'child_of', MAIN_WH_LOT_STOCK_ID],
+        ['location_id.usage', '=', 'internal'],
       ],
       ['product_id', 'location_id', 'quantity', 'reserved_quantity'],
     );
@@ -70,6 +74,7 @@ export async function getAllStock(): Promise<Map<number, number>> {
     const quants = await odooSearchRead<OdooStockQuant>(
       'stock.quant',
       [
+        ['location_id', 'child_of', MAIN_WH_LOT_STOCK_ID],
         ['location_id.usage', '=', 'internal'],
         ['quantity', '!=', 0],
       ],
@@ -107,6 +112,7 @@ export async function getStockBulk(productIds: number[]): Promise<Map<number, nu
       'stock.quant',
       [
         ['product_id', 'in', productIds],
+        ['location_id', 'child_of', MAIN_WH_LOT_STOCK_ID],
         ['location_id.usage', '=', 'internal'],
       ],
       ['product_id', 'quantity', 'reserved_quantity'],
