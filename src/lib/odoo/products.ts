@@ -10,6 +10,53 @@ import type { OdooProduct, OdooCategory as OdooCategoryType } from './types';
 import type { Product, Category, PaginatedResponse } from '@/types';
 
 // ============================================
+// Warehouse Product Isolation (Phase C — 2026-04-30)
+// ============================================
+// tsh-clients is tied to WH=1 only (Khaleel rule).
+// Only show products that physically exist in WH=1's stock locations.
+// Uses stock.quant child_of lot_stock_id=8 (same logic as gateway).
+// ============================================
+
+const WH1_LOT_STOCK_ID = 8; // TSH main warehouse lot_stock_id
+
+let _warehouseProductIdsCache: number[] | null = null;
+let _warehouseProductIdsCacheTime = 0;
+const WH_CACHE_TTL_MS = 60_000; // 60s — matches gateway cache
+
+async function getWarehouseProductIds(): Promise<number[]> {
+  const now = Date.now();
+  if (_warehouseProductIdsCache && now - _warehouseProductIdsCacheTime < WH_CACHE_TTL_MS) {
+    return _warehouseProductIdsCache;
+  }
+
+  try {
+    const quants = await odooSearchRead<{ product_id: [number, string] | number }>(
+      'stock.quant',
+      [
+        ['location_id', 'child_of', WH1_LOT_STOCK_ID],
+        ['location_id.usage', '=', 'internal'],
+        ['quantity', '>', 0],
+      ],
+      ['product_id'],
+      { limit: 50000 }
+    );
+
+    const ids = [...new Set(
+      quants.map(q => Array.isArray(q.product_id) ? q.product_id[0] : q.product_id)
+    )];
+
+    _warehouseProductIdsCache = ids;
+    _warehouseProductIdsCacheTime = now;
+    console.log('[Products] WH=1 warehouse product IDs cached:', ids.length, 'products');
+    return ids;
+  } catch (error) {
+    console.error('[Products] Failed to fetch warehouse product IDs:', error);
+    // Fail-closed: return cached if available, empty array otherwise
+    return _warehouseProductIdsCache || [];
+  }
+}
+
+// ============================================
 // Fields to fetch (avoid fetching image_1920 in lists)
 // ============================================
 
@@ -82,14 +129,20 @@ export async function getProducts(options: {
   const { page = 1, perPage = 50, categoryId, sortBy = 'name', sortOrder = 'asc' } = options;
 
   try {
+    const warehouseProductIds = await getWarehouseProductIds();
     const domain: unknown[] = [
       ['sale_ok', '=', true],
       ['active', '=', true],
       ['type', '!=', 'service'],
     ];
+    if (warehouseProductIds.length > 0) {
+      domain.push(['id', 'in', warehouseProductIds]);
+    } else {
+      domain.push(['id', '=', -1]); // No products in WH=1 → empty result
+    }
 
     if (categoryId) {
-      domain.push(['categ_id', '=', categoryId]);
+      domain.push(['categ_id', 'child_of', categoryId]); // child_of for hierarchy
     }
 
     const offset = (page - 1) * perPage;
@@ -128,11 +181,17 @@ export async function getProducts(options: {
  */
 export async function getAllProducts(): Promise<Product[]> {
   try {
-    const domain = [
+    const warehouseProductIds = await getWarehouseProductIds();
+    const domain: unknown[] = [
       ['sale_ok', '=', true],
       ['active', '=', true],
       ['type', '!=', 'service'],
     ];
+    if (warehouseProductIds.length > 0) {
+      domain.push(['id', 'in', warehouseProductIds]);
+    } else {
+      domain.push(['id', '=', -1]);
+    }
 
     const products = await odooSearchRead<OdooProduct>(
       'product.product', domain, PRODUCT_LIST_FIELDS,
@@ -173,14 +232,18 @@ export async function searchProducts(
   perPage = 50
 ): Promise<PaginatedResponse<Product>> {
   try {
-    const domain = [
+    const warehouseProductIds = await getWarehouseProductIds();
+    const domain: unknown[] = [
       ['sale_ok', '=', true],
       ['active', '=', true],
       ['type', '!=', 'service'],
-      '|',
-      ['name', 'ilike', query],
-      ['default_code', 'ilike', query],
     ];
+    if (warehouseProductIds.length > 0) {
+      domain.push(['id', 'in', warehouseProductIds]);
+    } else {
+      domain.push(['id', '=', -1]);
+    }
+    domain.push('|', ['name', 'ilike', query], ['default_code', 'ilike', query]);
 
     const offset = (page - 1) * perPage;
 
@@ -260,11 +323,18 @@ export function getProductImageUrl(item: Product): string | null {
  */
 export async function getProductCount(): Promise<number> {
   try {
-    return await odooCount('product.product', [
+    const warehouseProductIds = await getWarehouseProductIds();
+    const domain: unknown[] = [
       ['sale_ok', '=', true],
       ['active', '=', true],
       ['type', '!=', 'service'],
-    ]);
+    ];
+    if (warehouseProductIds.length > 0) {
+      domain.push(['id', 'in', warehouseProductIds]);
+    } else {
+      domain.push(['id', '=', -1]);
+    }
+    return await odooCount('product.product', domain);
   } catch (error) {
     console.error('[Odoo Products] Error counting products:', error);
     return 0;
