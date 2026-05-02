@@ -98,6 +98,122 @@ function recordFailure(provider: string, errorMessage: string): void {
 }
 
 /**
+ * PHASE_G_ACTIVE_PROBE_2026_05_02
+ * Active WASender session probe — runs every 60s in server runtime.
+ * Detects disconnect proactively (within 60s) instead of waiting for client failure.
+ *
+ * Behavior:
+ *   - status='connected' -> recordSuccess (auto-recovery)
+ *   - status='logged_out'|'qr_required'|'expired'|... -> recordFailure (opens circuit)
+ *   - HTTP/network errors -> log but DON'T penalize (transient noise)
+ *
+ * Auto-recovery: when session reconnects upstream, next probe will close the circuit.
+ */
+let probeIntervalHandle: ReturnType<typeof setInterval> | null = null;
+let probeInFlight = false;
+let lastProbeAt = 0;
+let lastProbeStatus: string | null = null;
+
+async function probeWasenderSession(): Promise<void> {
+  if (probeInFlight) return; // Avoid overlap
+  const apiKey = process.env.WASENDER_API_KEY;
+  if (!apiKey) return;
+
+  probeInFlight = true;
+  lastProbeAt = Date.now();
+
+  try {
+    const ctrl = new AbortController();
+    const timeoutId = setTimeout(() => ctrl.abort(), 5000);
+
+    const res = await fetch('https://www.wasenderapi.com/api/status', {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Accept': 'application/json',
+      },
+      signal: ctrl.signal,
+    });
+    clearTimeout(timeoutId);
+
+    if (!res.ok) {
+      // 4xx/5xx is a real provider problem — count it
+      const errMsg = `probe HTTP ${res.status}`;
+      lastProbeStatus = errMsg;
+      console.warn(`[Probe] wasender status check failed: ${errMsg}`);
+      recordFailure('wasender', errMsg);
+      return;
+    }
+
+    const data = await res.json().catch(() => ({}));
+    const status = String(data?.status || 'unknown').toLowerCase();
+    lastProbeStatus = status;
+
+    if (status === 'connected') {
+      // Healthy — reset circuit if it was open
+      const cb = breakers['wasender'];
+      if (cb && cb.state !== 'CLOSED') {
+        console.log(`[Probe] wasender recovered (status=connected)`);
+      }
+      recordSuccess('wasender');
+    } else {
+      // logged_out, qr_required, expired, disconnected, etc.
+      const reason = `probe status: ${status}`;
+      console.warn(`[Probe] wasender unhealthy: ${reason}`);
+      recordFailure('wasender', reason);
+    }
+  } catch (err) {
+    // Network/timeout — DON'T count (transient noise shouldn't trip the circuit)
+    const errMsg = err instanceof Error ? err.message : String(err);
+    console.warn(`[Probe] wasender unreachable (transient, not penalized): ${errMsg}`);
+  } finally {
+    probeInFlight = false;
+  }
+}
+
+/**
+ * Start the background probe loop.
+ * Idempotent — safe to call multiple times.
+ * Skipped during Next.js build phase (no probes during compilation).
+ */
+function startWasenderProbe(): void {
+  if (probeIntervalHandle) return;
+  if (!process.env.WASENDER_API_KEY) return;
+  // Skip during Next.js build phase
+  if (process.env.NEXT_PHASE === 'phase-production-build') return;
+
+  console.log('[Probe] starting wasender active session probe (60s interval)');
+  // Initial probe after 5s (let server stabilize)
+  setTimeout(() => probeWasenderSession().catch(() => {}), 5000);
+  // Then every 60s
+  probeIntervalHandle = setInterval(
+    () => probeWasenderSession().catch(() => {}),
+    60_000
+  );
+  // Allow process to exit cleanly even with timer pending
+  if (probeIntervalHandle && typeof probeIntervalHandle.unref === 'function') {
+    probeIntervalHandle.unref();
+  }
+}
+
+// Auto-start on module load (server-side only)
+if (typeof process !== 'undefined') {
+  startWasenderProbe();
+}
+
+/**
+ * Probe metadata for /api/whatsapp/health response.
+ */
+export function getProbeStatus() {
+  return {
+    enabled: probeIntervalHandle !== null,
+    lastProbeAt: lastProbeAt > 0 ? new Date(lastProbeAt).toISOString() : null,
+    secondsSinceLastProbe: lastProbeAt > 0 ? Math.round((Date.now() - lastProbeAt) / 1000) : null,
+    lastProbeStatus,
+  };
+}
+
+/**
  * Read-only snapshot of all provider circuit states.
  * Exposed via /api/whatsapp/health for monitoring.
  */
