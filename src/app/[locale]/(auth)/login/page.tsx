@@ -258,14 +258,14 @@ export default function LoginPage() {
 
       const data = await res.json();
 
-      // Check for SMS fallback signal
-      if (method === "phone" && data.fallback === "sms") {
-        // WhatsApp is down — automatically switch to Firebase SMS
-        setSmsFallback(true);
-        setSmsStep("sending");
-        setError("");
-        // Trigger Firebase SMS with the same phone number
-        await sendFirebaseSMS(phone.trim());
+      // WhatsApp down — redirect to email login (Firebase SMS disabled: billing-not-enabled)
+      if (method === "phone" && (data.fallback === "email" || data.fallback === "sms")) {
+        setMethod("email");
+        setError(isAr
+          ? "خدمة الواتساب غير متاحة حالياً. يرجى تسجيل الدخول عبر البريد الإلكتروني، أو التواصل معنا على الرقم +964 771 388 4329"
+          : "WhatsApp is currently unavailable. Please login via email, or contact us at +964 771 388 4329"
+        );
+        setLoading(false);
         return;
       }
 

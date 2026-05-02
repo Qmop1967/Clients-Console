@@ -93,13 +93,13 @@ export async function POST(request: NextRequest) {
     const result = await sendWhatsAppOTP(waNumber, otp);
 
     if (!result.success) {
-      console.error('[OTP Send] WhatsApp failed, falling back to SMS:', result.error);
-      // Return fallback signal — client will switch to Firebase SMS automatically
+      console.error('[OTP Send] WhatsApp failed:', result.error);
+      // WhatsApp down — redirect to email login (Firebase SMS disabled: billing-not-enabled)
       return NextResponse.json({
         success: false,
-        fallback: 'sms',
+        fallback: 'email',
         phone: cleaned,
-        message: 'سيتم إرسال رمز التحقق برسالة SMS بدلاً من الواتساب',
+        message: 'خدمة الواتساب غير متاحة حالياً، يرجى تسجيل الدخول عبر البريد الإلكتروني',
         errorCode: 'whatsapp_down',
       }, { status: 200 });
     }
