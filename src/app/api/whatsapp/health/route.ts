@@ -17,12 +17,26 @@ export async function GET() {
 
     const status = allOpen ? 'CRITICAL' : anyHealthy ? 'OK' : 'DEGRADED';
 
-    // For UI: simple boolean flags
+    // For UI: determine whatsapp availability based on probe + circuit state
+    // Probe is authoritative source — it actively checks WASender every 60s.
+    // If probe says NOT connected, WhatsApp is unavailable regardless of circuit state
+    // (circuit may not have opened yet because failures haven't reached threshold).
+    const wasenderProvider = providers.find((p) => p.provider === 'wasender');
+    const probeKnowsWasenderConnected =
+      probe.lastProbeStatus === 'connected' && probe.lastProbeAt !== null;
+
+    // WhatsApp available if EITHER:
+    //   1. Probe confirmed wasender is connected recently, OR
+    //   2. Wasender circuit is CLOSED with a recent success (used recently and worked)
+    const whatsapp_available =
+      probeKnowsWasenderConnected ||
+      (wasenderProvider?.state === 'CLOSED' && !!wasenderProvider?.lastSuccessAt);
+
     const ui = {
-      whatsapp_available: providers.find((p) => p.provider === 'wasender')?.state === 'CLOSED'
-        || providers.find((p) => p.provider === 'openclaw')?.state === 'CLOSED',
-      whatsapp_provider_state: providers.find((p) => p.provider === 'wasender')?.state || 'UNKNOWN',
-      reason: providers.find((p) => p.provider === 'wasender')?.lastError || null,
+      whatsapp_available,
+      whatsapp_provider_state: wasenderProvider?.state || 'UNKNOWN',
+      probe_status: probe.lastProbeStatus,
+      reason: wasenderProvider?.lastError || null,
     };
 
     return NextResponse.json({

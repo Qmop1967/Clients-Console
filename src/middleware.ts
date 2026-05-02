@@ -10,7 +10,7 @@ const intlMiddleware = createIntlMiddleware({
 
 // Public paths that don't require authentication
 // Note: /products redirects to /shop, so it must be public too
-const publicPaths = ['/login', '/api'];
+const publicPaths = ['/login', '/api', '/admin'];
 
 function isPublicPath(pathname: string): boolean {
   // Check if the path includes any public path segment
@@ -21,8 +21,10 @@ export default function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
 
   // Skip middleware for API routes and static files
+  // ADMIN_SKIP_INTL_2026_05_02: also skip /admin/* — locale-agnostic admin pages
   if (
     pathname.startsWith('/api') ||
+    pathname.startsWith('/admin') ||
     pathname.startsWith('/_next') ||
     pathname.startsWith('/favicon') ||
     pathname.includes('.')

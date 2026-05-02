@@ -27,6 +27,39 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [notRegistered, setNotRegistered] = useState(false);
 
+  // PHASE_H_UI_ADAPT_2026_05_02
+  // WhatsApp service availability (auto-detected from /api/whatsapp/health)
+  const [whatsappAvailable, setWhatsappAvailable] = useState<boolean | null>(null);
+  const [whatsappReason, setWhatsappReason] = useState<string | null>(null);
+  const autoSwitchedRef = useRef(false);
+
+  // Poll WhatsApp health every 30s, auto-switch to email if degraded
+  useEffect(() => {
+    let cancelled = false;
+    const fetchHealth = async () => {
+      try {
+        const res = await fetch("/api/whatsapp/health", { cache: "no-store" });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (cancelled) return;
+        const available = !!data?.ui?.whatsapp_available;
+        setWhatsappAvailable(available);
+        setWhatsappReason(data?.ui?.reason || null);
+        // Auto-switch to email ONCE when first detected as down (don't fight user)
+        if (!available && !autoSwitchedRef.current && method === "phone" && !smsFallback) {
+          autoSwitchedRef.current = true;
+          setMethod("email");
+        }
+      } catch {
+        // Silent fail — health endpoint not critical
+      }
+    };
+    fetchHealth();
+    const id = setInterval(fetchHealth, 30_000);
+    return () => { cancelled = true; clearInterval(id); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // SMS fallback states
   const [smsFallback, setSmsFallback] = useState(false);
   const [smsStep, setSmsStep] = useState<"sending" | "code">("sending");
@@ -295,6 +328,35 @@ export default function LoginPage() {
 
 
       <div className="w-full max-w-md">
+        {/* PHASE_H_UI_ADAPT_2026_05_02 — Service degradation banner */}
+        {whatsappAvailable === false && !smsFallback && (
+          <div className="mb-4 rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-200">
+            <div className="flex items-start gap-2">
+              <span className="text-base">⚠️</span>
+              <div className="flex-1">
+                <p className="font-medium">
+                  {isAr
+                    ? "خدمة الواتساب موقوفة مؤقتاً"
+                    : "WhatsApp service temporarily unavailable"}
+                </p>
+                <p className="mt-1 text-xs text-amber-300/80">
+                  {isAr
+                    ? "يرجى تسجيل الدخول عبر البريد الإلكتروني، أو التواصل معنا على الواتساب: "
+                    : "Please use email login, or contact us on WhatsApp: "}
+                  <a
+                    href="https://wa.me/9647713884329"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-mono underline hover:text-amber-100"
+                  >
+                    +964 771 388 4329
+                  </a>
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Company Header */}
         <div className="text-center mb-6 animate-fade-in-up">
           <div className="relative inline-block mb-3">
