@@ -35,19 +35,47 @@ export default function LoginPage() {
   const recaptchaRef = useRef<HTMLDivElement>(null);
   const recaptchaVerifierRef = useRef<RecaptchaVerifier | null>(null);
 
-  // Initialize invisible reCAPTCHA
+  // PHASE_B_RECAPTCHA_LIFECYCLE_2026_05_02
+  // Initialize invisible reCAPTCHA — safely clears any stale widget first
   const initRecaptcha = useCallback(() => {
-    if (recaptchaVerifierRef.current) return;
     if (!recaptchaRef.current) return;
+
+    // Clear stale verifier (Firebase) before creating a new one
+    if (recaptchaVerifierRef.current) {
+      try { recaptchaVerifierRef.current.clear(); } catch {}
+      recaptchaVerifierRef.current = null;
+    }
+
+    // Clear stale DOM widget (Google reCAPTCHA renders into innerHTML)
+    // This prevents "reCAPTCHA has already been rendered in this element"
+    try { recaptchaRef.current.innerHTML = ""; } catch {}
+
     try {
       recaptchaVerifierRef.current = new RecaptchaVerifier(auth, recaptchaRef.current, {
         size: "invisible",
         callback: () => {},
-        "expired-callback": () => { recaptchaVerifierRef.current = null; },
+        "expired-callback": () => {
+          // Re-init on expiry happens lazily via initRecaptcha next call
+          if (recaptchaVerifierRef.current) {
+            try { recaptchaVerifierRef.current.clear(); } catch {}
+          }
+          recaptchaVerifierRef.current = null;
+        },
       });
     } catch (err) {
       console.error("reCAPTCHA init error:", err);
+      recaptchaVerifierRef.current = null;
     }
+  }, []);
+
+  // Cleanup verifier on unmount to prevent leaks across route changes
+  useEffect(() => {
+    return () => {
+      if (recaptchaVerifierRef.current) {
+        try { recaptchaVerifierRef.current.clear(); } catch {}
+        recaptchaVerifierRef.current = null;
+      }
+    };
   }, []);
 
   // Pre-init recaptcha when page loads (needed for fallback)
@@ -99,7 +127,11 @@ export default function LoginPage() {
         setError((isAr ? "فشل إرسال الرمز: " : "Failed: ") + ((err as Error)?.message || fbErr.code || "unknown"));
       }
       setSmsFallback(false);
-      recaptchaVerifierRef.current = null;
+      // Clean up verifier safely before nulling
+      if (recaptchaVerifierRef.current) {
+        try { recaptchaVerifierRef.current.clear(); } catch {}
+        recaptchaVerifierRef.current = null;
+      }
       setLoading(false);
     }
   }, [initRecaptcha, isAr]);
@@ -239,14 +271,20 @@ export default function LoginPage() {
     }
   };
 
-  // Reset fallback
+  // Reset fallback — safely clear verifier before nulling
   const resetFallback = () => {
     setSmsFallback(false);
     setSmsStep("sending");
     setSmsCode("");
     setConfirmationResult(null);
     setError("");
-    recaptchaVerifierRef.current = null;
+    if (recaptchaVerifierRef.current) {
+      try { recaptchaVerifierRef.current.clear(); } catch {}
+      recaptchaVerifierRef.current = null;
+    }
+    if (recaptchaRef.current) {
+      try { recaptchaRef.current.innerHTML = ""; } catch {}
+    }
   };
 
   return (

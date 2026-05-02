@@ -13,6 +13,109 @@ interface SendResult {
   provider?: string;
 }
 
+// ============================================
+// PHASE_A_CIRCUIT_BREAKER_2026_05_02
+// Per-provider circuit breaker (in-memory, per-instance)
+// States:
+//   CLOSED     — normal operation
+//   OPEN       — provider failing, skip for OPEN_DURATION_MS
+//   HALF_OPEN  — TTL passed, allow ONE probe attempt
+// ============================================
+type CircuitState = 'CLOSED' | 'OPEN' | 'HALF_OPEN';
+
+interface CircuitBreaker {
+  state: CircuitState;
+  consecutiveFailures: number;
+  lastFailureAt: number;
+  lastSuccessAt: number;
+  openedAt: number;
+  lastError: string;
+}
+
+const FAILURE_THRESHOLD = 2;
+const OPEN_DURATION_MS = 5 * 60 * 1000;
+
+const breakers: Record<string, CircuitBreaker> = {
+  wasender: { state: 'CLOSED', consecutiveFailures: 0, lastFailureAt: 0, lastSuccessAt: 0, openedAt: 0, lastError: '' },
+  openclaw: { state: 'CLOSED', consecutiveFailures: 0, lastFailureAt: 0, lastSuccessAt: 0, openedAt: 0, lastError: '' },
+  ultramsg: { state: 'CLOSED', consecutiveFailures: 0, lastFailureAt: 0, lastSuccessAt: 0, openedAt: 0, lastError: '' },
+  meta:     { state: 'CLOSED', consecutiveFailures: 0, lastFailureAt: 0, lastSuccessAt: 0, openedAt: 0, lastError: '' },
+  twilio:   { state: 'CLOSED', consecutiveFailures: 0, lastFailureAt: 0, lastSuccessAt: 0, openedAt: 0, lastError: '' },
+};
+
+function shouldSkip(provider: string): { skip: boolean; reason?: string } {
+  const cb = breakers[provider];
+  if (!cb) return { skip: false };
+
+  if (cb.state === 'OPEN') {
+    const elapsed = Date.now() - cb.openedAt;
+    if (elapsed < OPEN_DURATION_MS) {
+      const remaining = Math.round((OPEN_DURATION_MS - elapsed) / 1000);
+      return { skip: true, reason: `circuit_open_${remaining}s_remaining` };
+    }
+    cb.state = 'HALF_OPEN';
+    console.log(`[Circuit] ${provider} CLOSED -> HALF_OPEN (probe attempt allowed)`);
+  }
+  return { skip: false };
+}
+
+function recordSuccess(provider: string): void {
+  const cb = breakers[provider];
+  if (!cb) return;
+  const wasOpen = cb.state !== 'CLOSED';
+  cb.state = 'CLOSED';
+  cb.consecutiveFailures = 0;
+  cb.lastSuccessAt = Date.now();
+  cb.openedAt = 0;
+  cb.lastError = '';
+  if (wasOpen) {
+    console.log(`[Circuit] ${provider} -> CLOSED (recovered)`);
+  }
+}
+
+function recordFailure(provider: string, errorMessage: string): void {
+  const cb = breakers[provider];
+  if (!cb) return;
+  cb.consecutiveFailures++;
+  cb.lastFailureAt = Date.now();
+  cb.lastError = errorMessage;
+
+  // HALF_OPEN failure -> reopen immediately
+  if (cb.state === 'HALF_OPEN') {
+    cb.state = 'OPEN';
+    cb.openedAt = Date.now();
+    console.error(`[Circuit] ${provider} HALF_OPEN -> OPEN (probe failed: ${errorMessage})`);
+    return;
+  }
+
+  // CLOSED -> OPEN after threshold reached
+  if (cb.state === 'CLOSED' && cb.consecutiveFailures >= FAILURE_THRESHOLD) {
+    cb.state = 'OPEN';
+    cb.openedAt = Date.now();
+    console.error(`[Circuit] ${provider} CLOSED -> OPEN (${cb.consecutiveFailures} consecutive failures: ${errorMessage})`);
+    alertProviderDown(provider, errorMessage).catch(() => {});
+  }
+}
+
+/**
+ * Read-only snapshot of all provider circuit states.
+ * Exposed via /api/whatsapp/health for monitoring.
+ */
+export function getProviderHealth() {
+  const now = Date.now();
+  return Object.entries(breakers).map(([name, cb]) => ({
+    provider: name,
+    state: cb.state,
+    consecutiveFailures: cb.consecutiveFailures,
+    lastSuccessAt: cb.lastSuccessAt > 0 ? new Date(cb.lastSuccessAt).toISOString() : null,
+    lastFailureAt: cb.lastFailureAt > 0 ? new Date(cb.lastFailureAt).toISOString() : null,
+    openedAt: cb.openedAt > 0 ? new Date(cb.openedAt).toISOString() : null,
+    secondsSinceLastSuccess: cb.lastSuccessAt > 0 ? Math.round((now - cb.lastSuccessAt) / 1000) : null,
+    lastError: cb.lastError || null,
+  }));
+}
+
+
 // Arabic OTP message template
 function otpMessage(code: string): string {
   return `${code} هو رمز التحقق الخاص بك 🔐
@@ -27,6 +130,13 @@ TSH | tsh.sale
 async function sendWasender(phone: string, message: string): Promise<SendResult> {
   const apiKey = process.env.WASENDER_API_KEY;
   if (!apiKey) return { success: false, error: 'Provider not configured', provider: 'wasender' };
+
+  // Circuit breaker check
+  const skip = shouldSkip('wasender');
+  if (skip.skip) {
+    console.warn(`[WhatsApp] wasender SKIPPED — ${skip.reason}`);
+    return { success: false, error: `circuit_open: ${skip.reason}`, provider: 'wasender' };
+  }
 
   const e164 = phone.startsWith('+') ? phone.substring(1) : phone;
 
@@ -44,13 +154,17 @@ async function sendWasender(phone: string, message: string): Promise<SendResult>
 
     if (res.ok && (data.success || data.status === 'sent' || data.id || data.messageId)) {
       console.log('[WhatsApp] WASenderApi sent to:', e164);
+      recordSuccess('wasender');
       return { success: true, provider: 'wasender' };
     }
 
+    const errMsg = data.message || data.error || 'Send failed';
     console.error('[WhatsApp] WASenderApi error:', res.status, data);
-    return { success: false, error: data.message || data.error || 'Send failed', provider: 'wasender' };
+    recordFailure('wasender', errMsg);
+    return { success: false, error: errMsg, provider: 'wasender' };
   } catch (err) {
     console.error('[WhatsApp] WASenderApi exception:', err);
+    recordFailure('wasender', 'Network error');
     return { success: false, error: 'Network error', provider: 'wasender' };
   }
 }
@@ -174,6 +288,13 @@ async function sendOpenClaw(phone: string, message: string): Promise<SendResult>
   const gatewayUrl = process.env.API_GATEWAY_URL || 'http://127.0.0.1:3010';
   const apiKey = process.env.API_KEY || '';
 
+  // Circuit breaker check
+  const skip = shouldSkip('openclaw');
+  if (skip.skip) {
+    console.warn(`[WhatsApp] openclaw SKIPPED — ${skip.reason}`);
+    return { success: false, error: `circuit_open: ${skip.reason}`, provider: 'openclaw' };
+  }
+
   // Format phone for WhatsApp: +9647XXXXXXXX
   let target = phone;
   if (!target.startsWith('+')) target = '+' + target;
@@ -194,13 +315,17 @@ async function sendOpenClaw(phone: string, message: string): Promise<SendResult>
     const data = await res.json();
     if (res.ok && (data.success || data.messageId)) {
       console.log('[WhatsApp] OpenClaw/Gateway sent to:', target);
+      recordSuccess('openclaw');
       return { success: true, provider: 'openclaw' };
     }
 
+    const errMsg = data.error?.message || data.error || `HTTP ${res.status}`;
     console.error('[WhatsApp] OpenClaw/Gateway error:', res.status, data);
-    return { success: false, error: data.error || 'Send failed', provider: 'openclaw' };
+    recordFailure('openclaw', typeof errMsg === 'string' ? errMsg : JSON.stringify(errMsg));
+    return { success: false, error: typeof errMsg === 'string' ? errMsg : 'Send failed', provider: 'openclaw' };
   } catch (err) {
     console.error('[WhatsApp] OpenClaw/Gateway exception:', err);
+    recordFailure('openclaw', 'Network error');
     return { success: false, error: 'Network error', provider: 'openclaw' };
   }
 }
@@ -288,15 +413,18 @@ export async function sendWhatsAppOTP(phone: string, code: string): Promise<Send
   let result = await primaryFn(phone, message);
   if (result.success) return result;
 
-  // --- Retry primary once after 2s ---
-  console.warn(`[WhatsApp] Primary (${PROVIDER}) failed, retrying in 2s...`);
-  await delay(2000);
-  result = await primaryFn(phone, message);
-  if (result.success) return result;
+  // Skip retry if circuit is already open (waste of 2s)
+  const isCircuitOpen = result.error?.startsWith('circuit_open:');
+  if (!isCircuitOpen) {
+    // --- Retry primary once after 2s ---
+    console.warn(`[WhatsApp] Primary (${PROVIDER}) failed, retrying in 2s...`);
+    await delay(2000);
+    result = await primaryFn(phone, message);
+    if (result.success) return result;
+  }
 
-  // --- Primary failed twice — alert + try fallbacks ---
-  console.error(`[WhatsApp] Primary (${PROVIDER}) failed twice: ${result.error}`);
-  alertProviderDown(PROVIDER, result.error || 'Unknown error');
+  // --- Primary failed — try fallbacks ---
+  console.error(`[WhatsApp] Primary (${PROVIDER}) unavailable: ${result.error}`);
 
   // Try each fallback provider (skip the primary we already tried)
   for (const name of FALLBACK_ORDER) {
