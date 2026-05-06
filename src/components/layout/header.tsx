@@ -1,34 +1,36 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { useTranslations } from "next-intl";
-import { ShoppingCart, Search } from "lucide-react";
+import { ShoppingCart, LogOut, User } from "lucide-react";
 import { NotificationDropdown } from "./notification-dropdown";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { AnimatedLogo } from "@/components/ui/animated-logo";
 import { useCatalogMode } from "@/components/providers/catalog-mode-provider";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Separator } from "@/components/ui/separator";
+import { signOut } from "next-auth/react";
+import { useTranslations } from "next-intl";
+import { Link } from "@/i18n/navigation";
 
 interface HeaderProps {
   title?: string;
   cartCount?: number;
   onCartClick?: () => void;
-  onMenuClick?: () => void;
+  user?: { name?: string; email?: string };
+  locale?: "en" | "ar";
 }
 
-export function Header({ title, cartCount = 0, onCartClick }: HeaderProps) {
+export function Header({ title, cartCount = 0, onCartClick, user, locale = "ar" }: HeaderProps) {
   const { isCatalogMode, showCatalogModal } = useCatalogMode();
   const t = useTranslations("nav");
-  const router = useRouter();
-  const [searchQuery, setSearchQuery] = useState("");
 
-  const handleSearchSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const q = searchQuery.trim();
-    if (!q) return;
-    // Route to shop search; lightweight integration for now
-    router.push(`/shop?q=${encodeURIComponent(q)}`);
+  const initials = user?.name?.charAt(0) || "U";
+
+  const handleLogout = async () => {
+    try { localStorage.removeItem("tsh_session_recovery"); } catch {}
+    await signOut({ redirect: false });
+    window.location.href = "/" + locale + "/login";
   };
 
   return (
@@ -36,9 +38,9 @@ export function Header({ title, cartCount = 0, onCartClick }: HeaderProps) {
       className="sticky top-0 z-40 border-b border-border/40 bg-background/80 backdrop-blur-lg supports-[backdrop-filter]:bg-background/60"
       style={{ paddingTop: "env(safe-area-inset-top)" }}
     >
-      <div className="flex h-14 items-center justify-between gap-4 px-4 lg:px-6">
-        {/* === Left/Start: Logo (mobile only) === */}
-        <div className="flex items-center gap-3 lg:hidden">
+      <div className="flex h-14 items-center justify-between px-4 lg:px-6">
+        {/* Logo / Title */}
+        <div className="flex items-center gap-3">
           <div className="flex items-center gap-2.5">
             <AnimatedLogo />
             <div className="flex flex-col">
@@ -49,42 +51,15 @@ export function Header({ title, cartCount = 0, onCartClick }: HeaderProps) {
           </div>
         </div>
 
-        {/* === Page Title (desktop only) === */}
-        {title && (
-          <div className="hidden lg:flex items-center">
-            <h1 className="font-display text-xl font-semibold tracking-tight">
-              {title}
-            </h1>
-          </div>
-        )}
+        {/* Desktop: Breadcrumb-like current page indicator */}
+        {/* This space intentionally left for future search / command palette */}
 
-        {/* === Center: Search Bar (desktop only) === */}
-        <form
-          onSubmit={handleSearchSubmit}
-          className="hidden lg:flex flex-1 max-w-xl mx-auto"
-        >
-          <div className="relative w-full">
-            <Search
-              className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none"
-              strokeWidth={1.5}
-            />
-            <input
-              type="search"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder={t("searchPlaceholder")}
-              className="w-full h-10 ps-10 pe-4 rounded-lg border border-input bg-background/60 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary/40 transition-colors"
-              aria-label={t("searchPlaceholder")}
-            />
-          </div>
-        </form>
-
-        {/* === Right/End: Actions === */}
-        <div className="flex items-center gap-1">
+        {/* Actions */}
+        <div className="flex items-center gap-1 lg:gap-2">
           {/* Notifications */}
           <NotificationDropdown />
 
-          {/* Cart - shows modal in catalog mode, otherwise navigates to cart */}
+          {/* Cart */}
           <Button
             variant="ghost"
             size="icon"
@@ -93,7 +68,6 @@ export function Header({ title, cartCount = 0, onCartClick }: HeaderProps) {
             aria-label="Shopping cart"
           >
             <ShoppingCart className="h-5 w-5 text-foreground/70" strokeWidth={1.5} />
-            {/* Hide cart count badge in catalog mode */}
             {!isCatalogMode && cartCount > 0 && (
               <Badge
                 variant="gold"
@@ -103,6 +77,48 @@ export function Header({ title, cartCount = 0, onCartClick }: HeaderProps) {
               </Badge>
             )}
           </Button>
+
+          {/* Desktop user menu — hidden on mobile (mobile uses drawer) */}
+          {user && (
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="ghost"
+                  className="hidden lg:flex items-center gap-2 h-10 px-2 rounded-full hover:bg-secondary"
+                >
+                  <Avatar className="h-7 w-7 border border-border/50">
+                    <AvatarFallback className="bg-primary/10 text-primary text-xs font-semibold">
+                      {initials}
+                    </AvatarFallback>
+                  </Avatar>
+                  <span className="text-sm font-medium text-foreground/80 max-w-[140px] truncate">
+                    {user.name}
+                  </span>
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="end" className="w-56 p-2">
+                <div className="px-2 py-1.5 mb-1">
+                  <p className="text-sm font-medium truncate">{user.name}</p>
+                  <p className="text-xs text-muted-foreground truncate">{user.email}</p>
+                </div>
+                <Separator className="my-1" />
+                <Link
+                  href="/profile"
+                  className="flex items-center gap-2 px-2 py-1.5 rounded-md text-sm text-foreground/80 hover:bg-muted transition-colors"
+                >
+                  <User className="h-4 w-4" />
+                  {t("profile") || "الملف الشخصي"}
+                </Link>
+                <button
+                  onClick={handleLogout}
+                  className="flex items-center gap-2 w-full px-2 py-1.5 rounded-md text-sm text-destructive hover:bg-destructive/10 transition-colors"
+                >
+                  <LogOut className="h-4 w-4" />
+                  {t("logout")}
+                </button>
+              </PopoverContent>
+            </Popover>
+          )}
         </div>
       </div>
     </header>

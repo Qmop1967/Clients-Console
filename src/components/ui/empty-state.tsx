@@ -9,6 +9,7 @@ import {
   FileText,
   Search,
   Inbox,
+  Lightbulb,
   type LucideIcon,
 } from "lucide-react";
 import { Button } from "./button";
@@ -39,18 +40,60 @@ const emptyStateIcons: Record<string, LucideIcon> = {
   default: Inbox,
 };
 
+type IconAccent = "primary" | "amber" | "emerald" | "rose" | "violet" | "sky";
+
+const iconAccentClasses: Record<IconAccent, { glow: string; ring: string; icon: string }> = {
+  primary: {
+    glow: "from-primary/20 to-primary/5",
+    ring: "bg-primary/5 ring-primary/10",
+    icon: "text-primary/70",
+  },
+  amber: {
+    glow: "from-amber-500/20 to-amber-500/5",
+    ring: "bg-amber-500/5 ring-amber-500/10",
+    icon: "text-amber-600 dark:text-amber-400",
+  },
+  emerald: {
+    glow: "from-emerald-500/20 to-emerald-500/5",
+    ring: "bg-emerald-500/5 ring-emerald-500/10",
+    icon: "text-emerald-600 dark:text-emerald-400",
+  },
+  rose: {
+    glow: "from-rose-500/20 to-rose-500/5",
+    ring: "bg-rose-500/5 ring-rose-500/10",
+    icon: "text-rose-600 dark:text-rose-400",
+  },
+  violet: {
+    glow: "from-violet-500/20 to-violet-500/5",
+    ring: "bg-violet-500/5 ring-violet-500/10",
+    icon: "text-violet-600 dark:text-violet-400",
+  },
+  sky: {
+    glow: "from-sky-500/20 to-sky-500/5",
+    ring: "bg-sky-500/5 ring-sky-500/10",
+    icon: "text-sky-600 dark:text-sky-400",
+  },
+};
+
+export interface EmptyStateAction {
+  label: string;
+  onClick: () => void;
+  variant?: "default" | "gold" | "outline" | "ghost";
+}
+
 export interface EmptyStateProps
-  extends React.HTMLAttributes<HTMLDivElement>,
+  extends Omit<React.HTMLAttributes<HTMLDivElement>, "title">,
     VariantProps<typeof emptyStateVariants> {
   type?: keyof typeof emptyStateIcons;
   icon?: LucideIcon;
+  iconAccent?: IconAccent;
   title: string;
   description?: string;
-  action?: {
-    label: string;
-    onClick: () => void;
-    variant?: "default" | "gold" | "outline";
-  };
+  /** A short, helpful tip displayed below the description with a lightbulb icon. */
+  tip?: string;
+  action?: EmptyStateAction;
+  /** Optional secondary action (e.g., "Learn more"). */
+  secondaryAction?: EmptyStateAction;
 }
 
 function EmptyState({
@@ -58,34 +101,48 @@ function EmptyState({
   size,
   type = "default",
   icon,
+  iconAccent = "primary",
   title,
   description,
+  tip,
   action,
+  secondaryAction,
   ...props
 }: EmptyStateProps) {
   const IconComponent = icon || emptyStateIcons[type] || emptyStateIcons.default;
   const iconSize = size === "lg" ? "h-16 w-16" : size === "sm" ? "h-10 w-10" : "h-12 w-12";
   const titleSize = size === "lg" ? "text-2xl" : size === "sm" ? "text-base" : "text-lg";
   const descSize = size === "lg" ? "text-base" : "text-sm";
+  const accent = iconAccentClasses[iconAccent];
 
   return (
     <div
       className={cn(emptyStateVariants({ size, className }))}
       {...props}
     >
-      {/* Icon with subtle background */}
+      {/* Icon with subtle gradient background */}
       <div className="relative">
-        <div className="absolute inset-0 bg-gradient-to-br from-amber-500/10 to-primary/10 rounded-full blur-xl" />
-        <div className="relative rounded-full bg-muted p-4">
+        <div
+          className={cn(
+            "absolute inset-0 bg-gradient-to-br rounded-full blur-xl",
+            accent.glow
+          )}
+        />
+        <div
+          className={cn(
+            "relative rounded-full p-4 ring-1",
+            accent.ring
+          )}
+        >
           <IconComponent
-            className={cn(iconSize, "text-muted-foreground")}
-            strokeWidth={1.5}
+            className={cn(iconSize, accent.icon)}
+            strokeWidth={1.25}
           />
         </div>
       </div>
 
       {/* Text content */}
-      <div className="space-y-2 max-w-sm">
+      <div className="space-y-2 max-w-md">
         <h3 className={cn("font-display font-semibold text-foreground", titleSize)}>
           {title}
         </h3>
@@ -96,15 +153,41 @@ function EmptyState({
         )}
       </div>
 
-      {/* Action button */}
-      {action && (
-        <Button
-          variant={action.variant || "gold"}
-          onClick={action.onClick}
-          className="mt-2"
-        >
-          {action.label}
-        </Button>
+      {/* Action buttons */}
+      {(action || secondaryAction) && (
+        <div className="flex flex-col sm:flex-row items-center gap-2 mt-1">
+          {action && (
+            <Button
+              variant={action.variant || "gold"}
+              onClick={action.onClick}
+            >
+              {action.label}
+            </Button>
+          )}
+          {secondaryAction && (
+            <Button
+              variant={secondaryAction.variant || "ghost"}
+              onClick={secondaryAction.onClick}
+            >
+              {secondaryAction.label}
+            </Button>
+          )}
+        </div>
+      )}
+
+      {/* Tip / hint */}
+      {tip && (
+        <div className="mt-2 max-w-md w-full">
+          <div className="flex items-start gap-2 rounded-lg border border-amber-200/40 bg-amber-50/40 dark:border-amber-500/20 dark:bg-amber-500/5 px-3 py-2 text-start">
+            <Lightbulb
+              className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400 mt-0.5"
+              strokeWidth={1.5}
+            />
+            <p className="text-xs text-amber-900/80 dark:text-amber-200/80 leading-relaxed">
+              {tip}
+            </p>
+          </div>
+        </div>
       )}
     </div>
   );
@@ -115,6 +198,7 @@ function EmptyCart({ onShop }: { onShop: () => void }) {
   return (
     <EmptyState
       type="cart"
+      iconAccent="amber"
       title="Your cart is empty"
       description="Looks like you haven't added any products yet. Start shopping to fill your cart."
       action={{
@@ -130,6 +214,7 @@ function EmptyOrders({ onShop }: { onShop: () => void }) {
   return (
     <EmptyState
       type="orders"
+      iconAccent="primary"
       title="No orders yet"
       description="You haven't placed any orders. Start shopping to see your order history here."
       action={{
@@ -145,6 +230,7 @@ function EmptySearch({ query, onClear }: { query?: string; onClear: () => void }
   return (
     <EmptyState
       type="search"
+      iconAccent="sky"
       title="No results found"
       description={
         query
@@ -164,6 +250,7 @@ function EmptyProducts() {
   return (
     <EmptyState
       type="products"
+      iconAccent="emerald"
       title="No products available"
       description="There are no products to display at the moment. Please check back later."
     />

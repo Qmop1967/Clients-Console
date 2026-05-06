@@ -15,7 +15,7 @@
  * static asset delivery and lets iOS treat the install as a real PWA.
  */
 
-const CACHE_VERSION = 'tsh-clients-v4-2026-05-02';
+const CACHE_VERSION = 'tsh-clients-v5-2026-05-06';
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 

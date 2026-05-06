@@ -89,10 +89,10 @@ export default function SettingsPage() {
   if (!mounted) return null;
 
   return (
-    <div className="container mx-auto px-4 py-6">
+    <div className="container mx-auto px-4 py-6 lg:max-w-5xl">
       <h1 className="text-2xl font-bold mb-6">{t('title')}</h1>
 
-      <div className="space-y-4">
+      <div className="grid gap-4 lg:grid-cols-2 lg:gap-6">
         {/* Appearance */}
         <Card>
           <CardHeader className="pb-3">
