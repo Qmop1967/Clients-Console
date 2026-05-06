@@ -5,6 +5,7 @@ import { useRouter, usePathname } from "next/navigation";
 import { BottomNav } from "./bottom-nav";
 import { MenuDrawer } from "./menu-drawer";
 import { Header } from "./header";
+import { Sidebar } from "./sidebar";
 import { useSession } from "next-auth/react";
 import { useCart } from "@/components/providers/cart-provider";
 
@@ -26,14 +27,14 @@ export function MainLayout({ children, title, locale }: MainLayoutProps) {
     try {
       const fontScales: Record<string, number> = { small: 0.875, medium: 1, large: 1.125 };
       const densityScales: Record<string, number> = { compact: 0.85, normal: 1, comfortable: 1.15 };
-      
+
       const savedFont = localStorage.getItem('tsh-font-size');
       const savedDensity = localStorage.getItem('tsh-density');
-      
+
       if (savedFont && fontScales[savedFont]) {
         document.documentElement.style.setProperty('--font-scale', String(fontScales[savedFont]));
       }
-      
+
       if (savedDensity && densityScales[savedDensity]) {
         document.documentElement.style.setProperty('--display-density', String(densityScales[savedDensity]));
         // Apply density via zoom on main content
@@ -65,16 +66,37 @@ export function MainLayout({ children, title, locale }: MainLayoutProps) {
 
   return (
     <div className="min-h-screen bg-background">
-      <Header
-        title={title}
-        cartCount={itemCount}
-        onCartClick={handleCartClick}
+      {/* === Desktop Sidebar (lg+ only) === */}
+      <Sidebar
+        user={user}
+        locale={locale}
+        className="hidden lg:flex"
       />
 
-      <main className="pb-20">{children}</main>
+      {/* === Main content area (with offset for sidebar on desktop) === */}
+      <div className="lg:ms-64 flex flex-col min-h-screen">
+        <Header
+          title={title}
+          cartCount={itemCount}
+          onCartClick={handleCartClick}
+          onMenuClick={() => setMenuOpen(true)}
+        />
 
-      <BottomNav onMenuClick={() => setMenuOpen(true)} />
+        <main className="flex-1 pb-20 lg:pb-8 lg:px-6 lg:py-4">
+          <div className="lg:max-w-7xl lg:mx-auto">
+            {children}
+          </div>
+        </main>
+      </div>
 
+      {/* === Mobile-only: BottomNav === */}
+      <div className="lg:hidden">
+        <BottomNav onMenuClick={() => setMenuOpen(true)} />
+      </div>
+
+      {/* === Mobile-only: MenuDrawer (slide-over) ===
+          Note: MenuDrawer can technically open on desktop too, but there's no
+          trigger for it there since the menu button is hidden on lg+. */}
       <MenuDrawer
         open={menuOpen}
         onOpenChange={setMenuOpen}
