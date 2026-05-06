@@ -100,7 +100,10 @@
     "sectionMain": "الرئيسية",
     "sectionFinance": "المالية",
     "sectionShipping": "الشحن",
-    "notifications": "الإشعارات"
+    "notifications": "الإشعارات",
+    "sectionExtras": "الإعدادات والمزيد",
+    "searchPlaceholder": "ابحث عن طلب، فاتورة، منتج...",
+    "wholesaleBadge": "عميل جملة"
   },
   "dashboard": {
     "title": "لوحة التحكم",

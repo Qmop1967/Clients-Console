@@ -100,7 +100,10 @@
     "sectionMain": "Main",
     "sectionFinance": "Finance",
     "sectionShipping": "Shipping",
-    "notifications": "Notifications"
+    "notifications": "Notifications",
+    "sectionExtras": "Settings & More",
+    "searchPlaceholder": "Search orders, invoices, products...",
+    "wholesaleBadge": "Wholesale"
   },
   "dashboard": {
     "title": "Dashboard",
