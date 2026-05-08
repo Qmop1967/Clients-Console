@@ -20,6 +20,7 @@ import {
   Bell,
   Settings,
   HeadphonesIcon,
+  Boxes,
 } from "lucide-react";
 
 interface NavItem {
@@ -42,6 +43,7 @@ const sections: NavSection[] = [
       { key: "shop", href: "/shop", icon: Package },
       { key: "orders", href: "/orders", icon: ShoppingBag },
       { key: "stockCheck", href: "/stock", icon: Search },
+      { key: "consignments", href: "/consignments", icon: Boxes },
     ],
   },
   {
