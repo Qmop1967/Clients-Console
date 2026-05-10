@@ -1,0 +1,302 @@
+"use client";
+
+/**
+ * ProductGallery — rich customer-facing media display.
+ * 
+ * Features:
+ * - Hero image (large) with thumbnail strip
+ * - Lightbox modal: keyboard nav (ESC/arrows), click-outside dismiss
+ * - Mobile swipe (touch events)
+ * - Datasheet section (PDFs separate from images)
+ * - Share button per image (WhatsApp deep link)
+ * - Falls back gracefully to product.image_url if no media
+ * - Lazy loading + blur placeholder
+ *
+ * Created: 2026-05-10 (Phase 8)
+ */
+import { useState, useEffect, useCallback, useRef } from "react";
+import Image from "next/image";
+import { X, ChevronLeft, ChevronRight, FileText, Share2, ZoomIn, Download } from "lucide-react";
+import { cn } from "@/lib/utils";
+
+interface MediaItem {
+  id: number;
+  url: string;
+  thumbnail_url?: string;
+  media_type: string;
+  category?: string;
+  name: string;
+  sequence: number;
+  mime_type?: string;
+  file_size_kb?: number;
+}
+
+interface ProductGalleryProps {
+  productId: string;
+  productName: string;
+  fallbackImageUrl?: string | null;
+  className?: string;
+}
+
+export function ProductGallery({
+  productId,
+  productName,
+  fallbackImageUrl,
+  className,
+}: ProductGalleryProps) {
+  const [media, setMedia] = useState<MediaItem[]>([]);
+  const [loaded, setLoaded] = useState(false);
+  const [activeIdx, setActiveIdx] = useState(0);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const touchStart = useRef<number | null>(null);
+
+  // Fetch media on mount
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`/api/products/${productId}/media`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (cancelled) return;
+        if (data.success && Array.isArray(data.media)) {
+          setMedia(data.media);
+        }
+      })
+      .catch(() => {})
+      .finally(() => !cancelled && setLoaded(true));
+    return () => {
+      cancelled = true;
+    };
+  }, [productId]);
+
+  // Keyboard navigation in lightbox
+  useEffect(() => {
+    if (!lightboxOpen) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setLightboxOpen(false);
+      if (e.key === "ArrowRight") setActiveIdx((i) => (i + 1) % images.length);
+      if (e.key === "ArrowLeft") setActiveIdx((i) => (i - 1 + images.length) % images.length);
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lightboxOpen, media]);
+
+  // Split media by type
+  const images = media.filter((m) => m.media_type !== "datasheet" && !m.mime_type?.includes("pdf"));
+  const datasheets = media.filter((m) => m.media_type === "datasheet" || m.mime_type?.includes("pdf"));
+
+  // Build display list (use media images if any, otherwise fallback)
+  const displayImages = images.length > 0 
+    ? images.map(m => ({ src: m.url, thumb: m.thumbnail_url || m.url, alt: m.name, id: m.id, mediaUrl: m.url }))
+    : fallbackImageUrl
+    ? [{ src: fallbackImageUrl, thumb: fallbackImageUrl, alt: productName, id: -1, mediaUrl: fallbackImageUrl }]
+    : [];
+
+  const hasContent = displayImages.length > 0 || datasheets.length > 0;
+  const currentImage = displayImages[activeIdx];
+
+  // Touch swipe handlers
+  const onTouchStart = (e: React.TouchEvent) => {
+    touchStart.current = e.touches[0].clientX;
+  };
+  const onTouchEnd = (e: React.TouchEvent) => {
+    if (touchStart.current == null) return;
+    const dx = e.changedTouches[0].clientX - touchStart.current;
+    if (Math.abs(dx) > 60) {
+      if (dx < 0) setActiveIdx((i) => (i + 1) % displayImages.length);
+      else setActiveIdx((i) => (i - 1 + displayImages.length) % displayImages.length);
+    }
+    touchStart.current = null;
+  };
+
+  // WhatsApp share
+  const shareToWhatsApp = useCallback(
+    (mediaUrl: string) => {
+      const text = `${productName}\n${mediaUrl}`;
+      const wa = `https://wa.me/?text=${encodeURIComponent(text)}`;
+      window.open(wa, "_blank", "noopener,noreferrer");
+    },
+    [productName]
+  );
+
+  if (!hasContent) {
+    return null; // parent component will show its own fallback
+  }
+
+  return (
+    <div className={cn("space-y-4", className)}>
+      {/* Hero Image with Thumbnails */}
+      {displayImages.length > 0 && (
+        <div className="space-y-3">
+          {/* Main hero */}
+          <div
+            className="group relative aspect-square overflow-hidden rounded-2xl border bg-gradient-to-br from-muted/50 to-muted cursor-zoom-in"
+            onClick={() => setLightboxOpen(true)}
+            onTouchStart={onTouchStart}
+            onTouchEnd={onTouchEnd}
+          >
+            <Image
+              src={currentImage.src}
+              alt={currentImage.alt}
+              fill
+              className="object-contain transition-transform duration-500 group-hover:scale-105"
+              sizes="(max-width: 1024px) 100vw, 50vw"
+              priority={activeIdx === 0}
+              unoptimized={currentImage.src.includes('media.tsh.sale')}
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+            <button
+              type="button"
+              className="absolute right-3 top-3 p-2 rounded-full bg-white/90 backdrop-blur shadow-sm opacity-0 group-hover:opacity-100 transition-opacity"
+              aria-label="Zoom image"
+            >
+              <ZoomIn className="h-4 w-4 text-gray-700" />
+            </button>
+            {displayImages.length > 1 && (
+              <div className="absolute bottom-3 right-3 px-2 py-1 rounded-md bg-black/60 text-white text-xs">
+                {activeIdx + 1} / {displayImages.length}
+              </div>
+            )}
+          </div>
+
+          {/* Thumbnails strip */}
+          {displayImages.length > 1 && (
+            <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-thin">
+              {displayImages.map((img, idx) => (
+                <button
+                  key={img.id}
+                  type="button"
+                  onClick={() => setActiveIdx(idx)}
+                  className={cn(
+                    "relative flex-shrink-0 w-16 h-16 sm:w-20 sm:h-20 rounded-lg overflow-hidden border-2 transition-all",
+                    idx === activeIdx
+                      ? "border-primary ring-2 ring-primary/30"
+                      : "border-transparent hover:border-muted-foreground/30 opacity-70 hover:opacity-100"
+                  )}
+                >
+                  <Image
+                    src={img.thumb}
+                    alt={img.alt}
+                    fill
+                    className="object-cover"
+                    sizes="80px"
+                    unoptimized={img.thumb.includes('media.tsh.sale')}
+                  />
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Datasheets / Documents */}
+      {datasheets.length > 0 && (
+        <div className="space-y-2 rounded-xl border bg-muted/30 p-3">
+          <h4 className="text-sm font-semibold text-foreground/90 flex items-center gap-2">
+            <FileText className="h-4 w-4" />
+            Datasheets &amp; Documents
+          </h4>
+          <div className="space-y-1.5">
+            {datasheets.map((ds) => (
+              <a
+                key={ds.id}
+                href={ds.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 px-3 py-2 rounded-lg bg-background border hover:border-primary/50 hover:bg-primary/5 transition group"
+              >
+                <FileText className="h-4 w-4 text-primary flex-shrink-0" />
+                <span className="text-sm font-medium truncate flex-1">{ds.name}</span>
+                {ds.file_size_kb && (
+                  <span className="text-xs text-muted-foreground">{ds.file_size_kb} KB</span>
+                )}
+                <Download className="h-3.5 w-3.5 text-muted-foreground group-hover:text-primary transition" />
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Quick Share Bar (mobile-friendly, only if real media) */}
+      {images.length > 0 && (
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => shareToWhatsApp(currentImage.mediaUrl)}
+            className="flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-green-600 text-white text-sm font-medium hover:bg-green-700 transition"
+          >
+            <Share2 className="h-4 w-4" />
+            Share via WhatsApp
+          </button>
+        </div>
+      )}
+
+      {/* Lightbox Modal */}
+      {lightboxOpen && currentImage && (
+        <div
+          className="fixed inset-0 z-50 bg-black/95 flex items-center justify-center p-4 animate-in fade-in duration-150"
+          onClick={() => setLightboxOpen(false)}
+          role="dialog"
+          aria-modal="true"
+        >
+          <button
+            type="button"
+            className="absolute top-4 right-4 p-2 text-white/80 hover:text-white z-10"
+            onClick={() => setLightboxOpen(false)}
+            aria-label="Close"
+          >
+            <X className="h-6 w-6" />
+          </button>
+
+          {displayImages.length > 1 && (
+            <>
+              <button
+                type="button"
+                className="absolute left-4 top-1/2 -translate-y-1/2 p-3 rounded-full bg-white/10 hover:bg-white/20 text-white transition z-10"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setActiveIdx((i) => (i - 1 + displayImages.length) % displayImages.length);
+                }}
+                aria-label="Previous"
+              >
+                <ChevronLeft className="h-6 w-6" />
+              </button>
+              <button
+                type="button"
+                className="absolute right-4 top-1/2 -translate-y-1/2 p-3 rounded-full bg-white/10 hover:bg-white/20 text-white transition z-10"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setActiveIdx((i) => (i + 1) % displayImages.length);
+                }}
+                aria-label="Next"
+              >
+                <ChevronRight className="h-6 w-6" />
+              </button>
+            </>
+          )}
+
+          <div
+            className="relative w-full h-full max-w-5xl max-h-[85vh] flex items-center justify-center"
+            onClick={(e) => e.stopPropagation()}
+            onTouchStart={onTouchStart}
+            onTouchEnd={onTouchEnd}
+          >
+            <Image
+              src={currentImage.src}
+              alt={currentImage.alt}
+              fill
+              className="object-contain"
+              sizes="(max-width: 1280px) 100vw, 1280px"
+              priority
+              unoptimized={currentImage.src.includes('media.tsh.sale')}
+            />
+          </div>
+
+          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 px-3 py-1.5 rounded-full bg-white/10 text-white/80 text-sm">
+            {activeIdx + 1} / {displayImages.length}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

@@ -9,6 +9,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { ProductImage } from "./product-image";
+import { ProductGallery } from "./product-gallery";
 import { useCart } from "@/components/providers/cart-provider";
 import { useCatalogMode } from "@/components/providers/catalog-mode-provider";
 import {
@@ -159,21 +160,20 @@ export function ProductDetailContent({ product, locale }: ProductDetailProps) {
       <div className="grid gap-8 lg:grid-cols-2">
         {/* Image Section */}
         <div className="space-y-4">
-          {/* Main Image */}
-          <div className="group relative aspect-square overflow-hidden rounded-2xl border bg-gradient-to-br from-muted/50 to-muted">
-            <ProductImage
-              src={product.image_url}
-              alt={product.name}
-              className="h-full w-full transition-transform duration-500 group-hover:scale-105"
-              priority
+          {/* Main Image / Gallery */}
+          <div className="relative">
+            <ProductGallery
+              productId={product.item_id}
+              productName={product.name}
+              fallbackImageUrl={product.image_url}
             />
 
-            {/* Stock Badge - Hidden in catalog mode */}
+            {/* Stock Badge — overlay on the gallery (top-right) */}
             {!isCatalogMode && (
               <Badge
                 variant={isInStock ? "success" : "destructive"}
                 className={cn(
-                  "absolute right-4 top-4 text-sm px-3 py-1",
+                  "absolute right-3 top-3 z-10 text-sm px-3 py-1 shadow-md",
                   isLowStock && "animate-pulse"
                 )}
               >
@@ -185,20 +185,13 @@ export function ProductDetailContent({ product, locale }: ProductDetailProps) {
               </Badge>
             )}
 
-            {/* Action Buttons */}
-            <div className="absolute left-4 top-4 flex flex-col gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+            {/* Wishlist (still keep on overlay; share is in gallery) */}
+            <div className="absolute left-3 top-3 z-10">
               <Button
                 variant="secondary"
                 size="icon"
-                className="h-10 w-10 rounded-full shadow-lg"
-                onClick={handleShare}
-              >
-                <Share2 className="h-4 w-4" />
-              </Button>
-              <Button
-                variant="secondary"
-                size="icon"
-                className="h-10 w-10 rounded-full shadow-lg"
+                className="h-9 w-9 rounded-full shadow-md"
+                aria-label="Add to wishlist"
               >
                 <Heart className="h-4 w-4" />
               </Button>
