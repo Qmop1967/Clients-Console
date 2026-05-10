@@ -35,6 +35,16 @@ const nextConfig: NextConfig = {
         hostname: "localhost",
         port: "8069",
       },
+      // TSH Media CDN (Cloudflare Worker → AWS S3)
+      {
+        protocol: "https",
+        hostname: "media.tsh.sale",
+      },
+      // Direct AWS S3 fallback (used internally; not for browser usually)
+      {
+        protocol: "https",
+        hostname: "tsh-media.s3.eu-central-1.amazonaws.com",
+      },
     ],
     // Prefer WebP over AVIF for faster encoding (better LCP)
     formats: ["image/webp"],

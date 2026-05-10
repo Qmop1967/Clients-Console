@@ -12,7 +12,7 @@ import { NextRequest, NextResponse } from 'next/server';
 const GATEWAY_URL = process.env.API_GATEWAY_URL || 'http://127.0.0.1:3010';
 const API_KEY = process.env.API_KEY || '';
 
-export const revalidate = 300;
+export const dynamic = 'force-dynamic';
 
 export async function GET(
   _req: NextRequest,
@@ -41,7 +41,7 @@ export async function GET(
       `${GATEWAY_URL}/api/product-media/${productId}?public_only=true`,
       {
         headers: { 'x-api-key': API_KEY },
-        next: { revalidate: 300 },
+        cache: 'no-store',
       }
     );
 
