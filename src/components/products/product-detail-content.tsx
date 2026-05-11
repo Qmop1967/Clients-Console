@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
@@ -151,6 +151,26 @@ export function ProductDetailContent({ product, locale }: ProductDetailProps) {
   // Whether to show the sticky bar (mobile only, when product is purchasable)
   const showStickyBar = !isCatalogMode && hasPrice && isInStock;
 
+  // IntersectionObserver: hide sticky bar when main quantity section is visible
+  const quantitySectionRef = useRef<HTMLDivElement>(null);
+  const [isStickyVisible, setIsStickyVisible] = useState(false);
+
+  useEffect(() => {
+    if (!showStickyBar) return;
+    const el = quantitySectionRef.current;
+    if (!el) return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        // Show sticky bar when quantity section is NOT visible
+        setIsStickyVisible(!entry.isIntersecting);
+      },
+      { threshold: 0.1 }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [showStickyBar]);
+
   return (
     <>
       <div className={cn("space-y-6", showStickyBar && "pb-20 lg:pb-0")}>
@@ -300,11 +320,10 @@ export function ProductDetailContent({ product, locale }: ProductDetailProps) {
             {!isCatalogMode && (
               <div className="p-4 rounded-xl bg-gradient-to-r from-primary/5 to-primary/10 border border-primary/20">
                 {hasPrice ? (
-                  <div className="flex items-baseline gap-2">
+                  <div>
                     <span className="text-3xl md:text-4xl font-bold text-primary">
                       {formatCurrency(product.rate, product.currencyCode)}
                     </span>
-                    <span className="text-sm text-muted-foreground">/ {product.unit}</span>
                   </div>
                 ) : (
                   <div className="space-y-1">
@@ -433,7 +452,7 @@ export function ProductDetailContent({ product, locale }: ProductDetailProps) {
 
             {/* Quantity Section — MOBILE inline (above sticky bar) */}
             {!isCatalogMode && hasPrice && isInStock && (
-              <div className="lg:hidden space-y-3">
+              <div ref={quantitySectionRef} className="lg:hidden space-y-3">
                 <h3 className="text-sm font-semibold text-muted-foreground text-center">
                   {t("wholesaleQuantity") || "اختيار كمية الجملة"}
                 </h3>
@@ -519,7 +538,11 @@ export function ProductDetailContent({ product, locale }: ProductDetailProps) {
 
       {/* ===== STICKY BOTTOM PURCHASE BAR — Mobile Only ===== */}
       {showStickyBar && (
-        <div className="fixed bottom-[60px] inset-x-0 z-40 lg:hidden border-t border-border/50 bg-background/98 backdrop-blur-xl supports-[backdrop-filter]:bg-background/90 safe-area-bottom">
+        <div className={cn(
+          "fixed bottom-[60px] inset-x-0 z-40 lg:hidden border-t border-border/50 bg-background/98 backdrop-blur-xl supports-[backdrop-filter]:bg-background/90 safe-area-bottom",
+          "transition-transform duration-300 ease-out",
+          isStickyVisible ? "translate-y-0" : "translate-y-full"
+        )}>
           <div className="flex items-center gap-3 px-4 py-2.5">
             {/* Compact quantity stepper */}
             <div className="flex items-center gap-1 shrink-0">
