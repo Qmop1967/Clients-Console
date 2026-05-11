@@ -201,7 +201,10 @@
     "noCategoriesDescription": "ستظهر الفئات هنا عند توفر المنتجات.",
     "activeFilters": "الفلاتر النشطة",
     "clearFilter": "مسح الفلتر",
-    "wholesaleQuantity": "اختيار كمية الجملة"
+    "wholesaleQuantity": "اختيار كمية الجملة",
+    "category": "التصنيف",
+    "brand": "العلامة التجارية",
+    "minimumOrder": "الحد الأدنى للطلب"
   },
   "orders": {
     "title": "الطلبات",

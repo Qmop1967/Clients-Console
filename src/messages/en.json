@@ -201,7 +201,10 @@
     "noCategoriesDescription": "Categories will appear here once products are available.",
     "activeFilters": "Active filters",
     "clearFilter": "Clear filter",
-    "wholesaleQuantity": "Wholesale Quantity"
+    "wholesaleQuantity": "Wholesale Quantity",
+    "category": "Category",
+    "brand": "Brand",
+    "minimumOrder": "Minimum Order"
   },
   "orders": {
     "title": "Orders",

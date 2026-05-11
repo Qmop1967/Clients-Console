@@ -30,6 +30,7 @@ import {
   AlertCircle,
   Minus,
   Plus,
+  Layers,
 } from "lucide-react";
 import { WholesaleQuantityInput } from "@/components/ui/wholesale-quantity-input";
 import { cn } from "@/lib/utils/cn";
@@ -347,6 +348,50 @@ export function ProductDetailContent({ product, locale }: ProductDetailProps) {
                 </p>
               </div>
             )}
+
+            {/* Specifications Table */}
+            <div className="space-y-3">
+              <h3 className="font-semibold text-sm flex items-center gap-2">
+                <Layers className="h-4 w-4 text-primary" />
+                {t("specifications")}
+              </h3>
+              <div className="rounded-xl border border-border/50 overflow-hidden">
+                <div className="divide-y divide-border/50">
+                  {product.category_name && (
+                    <div className="flex items-center justify-between px-4 py-2.5 bg-muted/20">
+                      <span className="text-xs text-muted-foreground">{t("category")}</span>
+                      <span className="text-sm font-medium">{product.category_name}</span>
+                    </div>
+                  )}
+                  <div className="flex items-center justify-between px-4 py-2.5">
+                    <span className="text-xs text-muted-foreground">{t("unit")}</span>
+                    <span className="text-sm font-medium">{product.unit}</span>
+                  </div>
+                  {product.brand && (
+                    <div className="flex items-center justify-between px-4 py-2.5 bg-muted/20">
+                      <span className="text-xs text-muted-foreground">{t("brand")}</span>
+                      <span className="text-sm font-medium">{product.brand}</span>
+                    </div>
+                  )}
+                  <div className="flex items-center justify-between px-4 py-2.5">
+                    <span className="text-xs text-muted-foreground">SKU</span>
+                    <span className="text-sm font-medium tabular-nums">{product.sku}</span>
+                  </div>
+                  {!isCatalogMode && (
+                    <div className="flex items-center justify-between px-4 py-2.5 bg-muted/20">
+                      <span className="text-xs text-muted-foreground">{t("availability")}</span>
+                      <span className={cn("text-sm font-medium", stockColor)}>{stockLabel}</span>
+                    </div>
+                  )}
+                  {product.minimum_quantity && product.minimum_quantity > 0 && (
+                    <div className="flex items-center justify-between px-4 py-2.5">
+                      <span className="text-xs text-muted-foreground">{t("minimumOrder")}</span>
+                      <span className="text-sm font-medium">{product.minimum_quantity} {product.unit}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
 
             <Separator />
 
