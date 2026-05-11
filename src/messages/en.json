@@ -200,7 +200,8 @@
     "noCategoriesFound": "No categories found",
     "noCategoriesDescription": "Categories will appear here once products are available.",
     "activeFilters": "Active filters",
-    "clearFilter": "Clear filter"
+    "clearFilter": "Clear filter",
+    "wholesaleQuantity": "Wholesale Quantity"
   },
   "orders": {
     "title": "Orders",

@@ -412,7 +412,7 @@ export function ProductDetailContent({ product, locale }: ProductDetailProps) {
                     "w-full h-14 text-lg font-semibold rounded-xl transition-all duration-300",
                     added
                       ? "bg-green-600 hover:bg-green-600"
-                      : "gradient-primary hover:opacity-90"
+                      : "gradient-primary hover:opacity-90 text-white"
                   )}
                   size="lg"
                 >
@@ -434,6 +434,9 @@ export function ProductDetailContent({ product, locale }: ProductDetailProps) {
             {/* Quantity Section — MOBILE inline (above sticky bar) */}
             {!isCatalogMode && hasPrice && isInStock && (
               <div className="lg:hidden space-y-3">
+                <h3 className="text-sm font-semibold text-muted-foreground text-center">
+                  {t("wholesaleQuantity") || "اختيار كمية الجملة"}
+                </h3>
                 {/* Minimum Quantity Info */}
                 {product.minimum_quantity && product.minimum_quantity > 0 && (
                   <div className="flex items-center gap-1.5">
@@ -544,8 +547,8 @@ export function ProductDetailContent({ product, locale }: ProductDetailProps) {
             </div>
 
             {/* Total price */}
-            <div className="flex-1 text-center">
-              <span className="text-base font-bold text-primary tabular-nums">
+            <div className="flex-1 text-center min-w-0">
+              <span className="text-base font-bold text-primary tabular-nums whitespace-nowrap">
                 {formatCurrency(product.rate * quantity, product.currencyCode)}
               </span>
             </div>
@@ -558,7 +561,7 @@ export function ProductDetailContent({ product, locale }: ProductDetailProps) {
                 "h-10 px-5 text-sm font-semibold rounded-xl transition-all duration-300 shrink-0",
                 added
                   ? "bg-green-600 hover:bg-green-600"
-                  : "gradient-primary hover:opacity-90"
+                  : "gradient-primary hover:opacity-90 text-white"
               )}
             >
               {added ? (
