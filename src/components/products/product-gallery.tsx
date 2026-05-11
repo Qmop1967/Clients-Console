@@ -119,8 +119,21 @@ export function ProductGallery({
     [productName]
   );
 
+  // Branded placeholder when no media is available
   if (!hasContent) {
-    return null; // parent component will show its own fallback
+    return (
+      <div className={cn("space-y-4", className)}>
+        <div className="relative aspect-square overflow-hidden rounded-2xl border bg-gradient-to-br from-muted/50 to-muted flex items-center justify-center">
+          {/* TSH branded placeholder */}
+          <div className="flex flex-col items-center gap-3 text-muted-foreground/60">
+            <div className="w-20 h-20 rounded-2xl bg-muted/80 flex items-center justify-center border border-border/50">
+              <svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+            </div>
+            <span className="text-xs font-medium tracking-wide">TSH</span>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -143,7 +156,26 @@ export function ProductGallery({
               sizes="(max-width: 1024px) 100vw, 50vw"
               priority={activeIdx === 0}
               unoptimized={currentImage.src.includes('media.tsh.sale')}
+              onError={(e) => {
+                const target = e.currentTarget;
+                target.style.display = 'none';
+                // Show fallback in parent container
+                const parent = target.closest('.group');
+                if (parent) {
+                  const fb = parent.querySelector('[data-gallery-fallback]');
+                  if (fb) (fb as HTMLElement).style.display = 'flex';
+                }
+              }}
             />
+            {/* Hidden fallback shown on image error */}
+            <div data-gallery-fallback className="absolute inset-0 items-center justify-center hidden">
+              <div className="flex flex-col items-center gap-3 text-muted-foreground/60">
+                <div className="w-20 h-20 rounded-2xl bg-muted/80 flex items-center justify-center border border-border/50">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+                </div>
+                <span className="text-xs font-medium tracking-wide">TSH</span>
+              </div>
+            </div>
             <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
             <button
               type="button"
