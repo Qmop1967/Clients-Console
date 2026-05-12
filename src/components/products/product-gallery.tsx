@@ -29,6 +29,10 @@ interface MediaItem {
   sequence: number;
   mime_type?: string;
   file_size_kb?: number;
+  // PIM v1 canonical
+  usage?: string;
+  visibility?: string;
+  asset_type?: string;
 }
 
 interface ProductGalleryProps {
@@ -81,12 +85,18 @@ export function ProductGallery({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lightboxOpen, media]);
 
-  // Split media by type
-  const allImages = media.filter((m) => m.media_type !== "datasheet" && !m.mime_type?.includes("pdf"));
-  const datasheets = media.filter((m) => m.media_type === "datasheet" || m.mime_type?.includes("pdf"));
-  // Gallery = ecommerce + customer_facing; Social = social_media (separate section)
-  const galleryImages = allImages.filter((m) => m.category !== "social_media");
-  const socialImages = allImages.filter((m) => m.category === "social_media");
+  // Split media by type — canonical usage with legacy fallback
+  const allImages = media.filter((m) => {
+    const usage = m.usage || (m.media_type === "datasheet" ? "datasheet" : "gallery");
+    return usage !== "datasheet" && usage !== "manual" && !m.mime_type?.includes("pdf");
+  });
+  const datasheets = media.filter((m) => {
+    const usage = m.usage || (m.media_type === "datasheet" ? "datasheet" : "gallery");
+    return usage === "datasheet" || usage === "manual" || m.mime_type?.includes("pdf");
+  });
+  // Gallery = non-social images; Social = social_media (separate section)
+  const galleryImages = allImages.filter((m) => (m.usage || m.category) !== "social" && m.category !== "social_media");
+  const socialImages = allImages.filter((m) => m.usage === "social" || m.category === "social_media");
 
   // Build display list (use gallery images if any, otherwise fallback)
   const displayImages = galleryImages.length > 0 

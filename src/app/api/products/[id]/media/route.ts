@@ -57,10 +57,13 @@ export async function GET(
 
     const customerSafe = (data.media || [])
       .filter((m: any) => {
+        // PIM v1: use canonical visibility with legacy fallback
+        if (m.is_visible === false) return false;
+        const vis = m.visibility;
+        if (vis) return vis === 'client' || vis === 'public';
+        // Legacy fallback
         const aud = m.x_audience;
-        if (aud) {
-          return aud === 'customer' || aud === 'public' || aud === 'rep';
-        }
+        if (aud) return aud === 'customer' || aud === 'public' || aud === 'rep';
         return m.x_is_public === true;
       })
       .map((m: any) => ({
@@ -73,6 +76,10 @@ export async function GET(
         sequence: m.x_sequence ?? 99,
         mime_type: m.x_mime_type,
         file_size_kb: m.x_file_size_kb,
+        // PIM v1 canonical fields
+        usage: m.usage,
+        visibility: m.visibility,
+        asset_type: m.asset_type,
       }))
       .sort((a: any, b: any) => a.sequence - b.sequence);
 
