@@ -155,7 +155,6 @@ export function ProductGallery({
               className="object-contain transition-transform duration-500 group-hover:scale-105"
               sizes="(max-width: 1024px) 100vw, 50vw"
               priority={activeIdx === 0}
-              unoptimized={currentImage.src.includes('media.tsh.sale')}
               onError={(e) => {
                 const target = e.currentTarget;
                 target.style.display = 'none';
@@ -212,7 +211,6 @@ export function ProductGallery({
                     fill
                     className="object-cover"
                     sizes="80px"
-                    unoptimized={img.thumb.includes('media.tsh.sale')}
                   />
                 </button>
               ))}
@@ -320,7 +318,6 @@ export function ProductGallery({
               className="object-contain"
               sizes="(max-width: 1280px) 100vw, 1280px"
               priority
-              unoptimized={currentImage.src.includes('media.tsh.sale')}
             />
           </div>
 
