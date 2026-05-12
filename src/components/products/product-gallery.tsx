@@ -223,7 +223,7 @@ export function ProductGallery({
       )}
 
       {/* Datasheets / Documents */}
-      {datasheets.length > 0 && (
+      {(datasheets.length > 0 || socialImages.length > 0) && (
         <div className="space-y-2 rounded-xl border bg-muted/30 p-3">
           <h4 className="text-sm font-semibold text-foreground/90 flex items-center gap-2">
             <FileText className="h-4 w-4" />
@@ -246,6 +246,25 @@ export function ProductGallery({
                 <Download className="h-3.5 w-3.5 text-muted-foreground group-hover:text-primary transition" />
               </a>
             ))}
+            {socialImages.map((m) => (
+              <a
+                key={m.id}
+                href={m.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                download
+                className="flex items-center gap-2 px-3 py-2 rounded-lg bg-background border hover:border-primary/50 hover:bg-primary/5 transition group"
+              >
+                <ZoomIn className="h-4 w-4 text-primary flex-shrink-0" />
+                <span className="text-sm font-medium truncate flex-1">
+                  {m.name.includes("story") ? "صورة ستوري (9:16)" : "صورة منشور (Instagram)"}
+                </span>
+                {m.file_size_kb && (
+                  <span className="text-xs text-muted-foreground">{m.file_size_kb} KB</span>
+                )}
+                <Download className="h-3.5 w-3.5 text-muted-foreground group-hover:text-primary transition" />
+              </a>
+            ))}
           </div>
         </div>
       )}
@@ -261,54 +280,6 @@ export function ProductGallery({
             <Share2 className="h-4 w-4" />
             Share via WhatsApp
           </button>
-        </div>
-      )}
-
-      {/* Marketing Images for Social Media */}
-      {socialImages.length > 0 && (
-        <div className="space-y-2 rounded-xl border bg-muted/30 p-3">
-          <h4 className="text-sm font-semibold text-foreground/90 flex items-center gap-2">
-            <Share2 className="h-4 w-4" />
-            صور تسويقية للنشر
-          </h4>
-          <div className="grid grid-cols-2 gap-2">
-            {socialImages.map((m) => (
-              <div key={m.id} className="group relative rounded-lg overflow-hidden border bg-background">
-                <div className={cn(
-                  "relative overflow-hidden",
-                  m.name.includes("story") ? "aspect-[9/16]" : "aspect-square"
-                )}>
-                  <Image
-                    src={m.url}
-                    alt={m.name}
-                    fill
-                    className="object-cover"
-                    sizes="(max-width: 768px) 50vw, 200px"
-                    unoptimized={m.url.includes('media.tsh.sale')}
-                  />
-                </div>
-                <div className="p-2 flex items-center gap-1.5">
-                  <a
-                    href={m.url}
-                    download
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-md bg-primary/10 text-primary text-xs font-medium hover:bg-primary/20 transition"
-                  >
-                    <Download className="h-3 w-3" />
-                    {m.name.includes("story") ? "ستوري" : "منشور"}
-                  </a>
-                  <button
-                    type="button"
-                    onClick={() => shareToWhatsApp(m.url)}
-                    className="flex items-center justify-center gap-1 px-2 py-1.5 rounded-md bg-green-600/10 text-green-600 text-xs font-medium hover:bg-green-600/20 transition"
-                  >
-                    <Share2 className="h-3 w-3" />
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
         </div>
       )}
 
