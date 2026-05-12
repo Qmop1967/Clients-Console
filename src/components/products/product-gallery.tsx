@@ -73,8 +73,8 @@ export function ProductGallery({
     if (!lightboxOpen) return;
     const handler = (e: KeyboardEvent) => {
       if (e.key === "Escape") setLightboxOpen(false);
-      if (e.key === "ArrowRight") setActiveIdx((i) => (i + 1) % images.length);
-      if (e.key === "ArrowLeft") setActiveIdx((i) => (i - 1 + images.length) % images.length);
+      if (e.key === "ArrowRight") setActiveIdx((i) => (i + 1) % displayImages.length);
+      if (e.key === "ArrowLeft") setActiveIdx((i) => (i - 1 + displayImages.length) % displayImages.length);
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
@@ -82,17 +82,20 @@ export function ProductGallery({
   }, [lightboxOpen, media]);
 
   // Split media by type
-  const images = media.filter((m) => m.media_type !== "datasheet" && !m.mime_type?.includes("pdf"));
+  const allImages = media.filter((m) => m.media_type !== "datasheet" && !m.mime_type?.includes("pdf"));
   const datasheets = media.filter((m) => m.media_type === "datasheet" || m.mime_type?.includes("pdf"));
+  // Gallery = ecommerce + customer_facing; Social = social_media (separate section)
+  const galleryImages = allImages.filter((m) => m.category !== "social_media");
+  const socialImages = allImages.filter((m) => m.category === "social_media");
 
-  // Build display list (use media images if any, otherwise fallback)
-  const displayImages = images.length > 0 
-    ? images.map(m => ({ src: m.url, thumb: m.thumbnail_url || m.url, alt: m.name, id: m.id, mediaUrl: m.url }))
+  // Build display list (use gallery images if any, otherwise fallback)
+  const displayImages = galleryImages.length > 0 
+    ? galleryImages.map(m => ({ src: m.url, thumb: m.thumbnail_url || m.url, alt: m.name, id: m.id, mediaUrl: m.url }))
     : fallbackImageUrl
     ? [{ src: fallbackImageUrl, thumb: fallbackImageUrl, alt: productName, id: -1, mediaUrl: fallbackImageUrl }]
     : [];
 
-  const hasContent = displayImages.length > 0 || datasheets.length > 0;
+  const hasContent = displayImages.length > 0 || datasheets.length > 0 || socialImages.length > 0;
   const currentImage = displayImages[activeIdx];
 
   // Touch swipe handlers
@@ -248,7 +251,7 @@ export function ProductGallery({
       )}
 
       {/* Quick Share Bar (mobile-friendly, only if real media) */}
-      {images.length > 0 && (
+      {galleryImages.length > 0 && (
         <div className="flex items-center gap-2">
           <button
             type="button"
@@ -258,6 +261,54 @@ export function ProductGallery({
             <Share2 className="h-4 w-4" />
             Share via WhatsApp
           </button>
+        </div>
+      )}
+
+      {/* Marketing Images for Social Media */}
+      {socialImages.length > 0 && (
+        <div className="space-y-2 rounded-xl border bg-muted/30 p-3">
+          <h4 className="text-sm font-semibold text-foreground/90 flex items-center gap-2">
+            <Share2 className="h-4 w-4" />
+            صور تسويقية للنشر
+          </h4>
+          <div className="grid grid-cols-2 gap-2">
+            {socialImages.map((m) => (
+              <div key={m.id} className="group relative rounded-lg overflow-hidden border bg-background">
+                <div className={cn(
+                  "relative overflow-hidden",
+                  m.name.includes("story") ? "aspect-[9/16]" : "aspect-square"
+                )}>
+                  <Image
+                    src={m.url}
+                    alt={m.name}
+                    fill
+                    className="object-cover"
+                    sizes="(max-width: 768px) 50vw, 200px"
+                    unoptimized={m.url.includes('media.tsh.sale')}
+                  />
+                </div>
+                <div className="p-2 flex items-center gap-1.5">
+                  <a
+                    href={m.url}
+                    download
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-md bg-primary/10 text-primary text-xs font-medium hover:bg-primary/20 transition"
+                  >
+                    <Download className="h-3 w-3" />
+                    {m.name.includes("story") ? "ستوري" : "منشور"}
+                  </a>
+                  <button
+                    type="button"
+                    onClick={() => shareToWhatsApp(m.url)}
+                    className="flex items-center justify-center gap-1 px-2 py-1.5 rounded-md bg-green-600/10 text-green-600 text-xs font-medium hover:bg-green-600/20 transition"
+                  >
+                    <Share2 className="h-3 w-3" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
