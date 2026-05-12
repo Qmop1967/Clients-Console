@@ -51,7 +51,7 @@ export async function odooUnlink(model: string, ids: number[]): Promise<boolean>
 }
 
 export function getOdooImageUrl(productTemplateId: number, size: '128x128' | '256x256' | '512x512' | '1920x1920' = '256x256'): string {
-  return `/api/images/${productTemplateId}?size=${size}&v=4`;
+  return `/api/images/${productTemplateId}?size=${size}&v=5`;
 }
 
 export function getOdooBaseUrl(): string { return GATEWAY_URL; }
