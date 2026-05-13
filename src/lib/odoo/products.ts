@@ -94,10 +94,13 @@ function odooProductToProduct(p: OdooProduct): Product {
     category_id: Array.isArray(p.categ_id) ? String(p.categ_id[0]) : undefined,
     category_name: Array.isArray(p.categ_id) ? p.categ_id[1] : undefined,
     brand: undefined,
-    // Image: use URL-based approach (image_256 may be empty after import)
-    image_name: templateId ? `odoo-${templateId}` : undefined,
-    image_document_id: templateId ? String(templateId) : undefined,
-    image_url: templateId ? getOdooImageUrl(templateId, '256x256') : undefined,
+    // Image: use pp_id (product_product.id) — gateway resolves to template
+    // FIX 2026-05-14: Was passing tmpl_id, caused 64-product collision on storefront.
+    // See memory/daily/2026-05-14-clients-image-collision.md and BAN-IMG-CLI-1.
+    // image_document_id intentionally keeps tmpl_id — used by pricelist (line ~393).
+    image_name: `odoo-${p.id}`,
+    image_document_id: templateId ? String(templateId) : undefined, // tmpl_id for pricelist
+    image_url: getOdooImageUrl(p.id, '256x256'),
     minimum_quantity: undefined,
   };
 }
@@ -308,12 +311,13 @@ export async function getProductsByCategory(
 
 /**
  * Get product image URL
- * Odoo stores images as base64 in image_1920 field
- * We use the /web/image/ controller URL instead
+ * Uses item.item_id which is product_product.id (pp_id) per gateway contract.
+ * FIX 2026-05-14: Was using image_document_id (tmpl_id), caused collision.
+ * Gateway /api/image/product/:id expects pp_id and resolves to template internally.
  */
 export function getProductImageUrl(item: Product): string | null {
-  if (item.image_document_id) {
-    return getOdooImageUrl(parseInt(item.image_document_id, 10), '256x256');
+  if (item.item_id) {
+    return getOdooImageUrl(parseInt(item.item_id, 10), '256x256');
   }
   return null;
 }

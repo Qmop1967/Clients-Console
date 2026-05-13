@@ -50,8 +50,21 @@ export async function odooUnlink(model: string, ids: number[]): Promise<boolean>
   return gw('/api/odoo/call', { model, method: 'unlink', args: [ids] });
 }
 
-export function getOdooImageUrl(productTemplateId: number, size: '128x128' | '256x256' | '512x512' | '1920x1920' = '256x256'): string {
-  return `/api/images/${productTemplateId}?size=${size}&v=5`;
+/**
+ * Build URL for product image proxy.
+ *
+ * GATEWAY CONTRACT (since 2026-05-13 fix dd37e3b):
+ *   /api/image/product/:id MUST receive product_product.id (pp_id), NOT product_template.id.
+ *   Gateway internally resolves pp_id → template via product.product lookup.
+ *
+ * BAN-IMG-CLI-1: Never pass product_tmpl_id here. Doing so triggers ID collision
+ *   (e.g. pp=2498 belongs to TP-Link Switch, but tmpl=2498 is Handbor Cleaning Kit).
+ *
+ * @param productId  product_product.id (pp_id) — the variant ID, not template ID
+ * @param size       requested image size
+ */
+export function getOdooImageUrl(productId: number, size: '128x128' | '256x256' | '512x512' | '1920x1920' = '256x256'): string {
+  return `/api/images/${productId}?size=${size}&v=6`;
 }
 
 export function getOdooBaseUrl(): string { return GATEWAY_URL; }
