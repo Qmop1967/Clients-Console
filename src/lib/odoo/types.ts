@@ -56,6 +56,7 @@ export interface OdooPartner {
   active: boolean;
   // Custom fields (TSH-specific)
   x_currency?: string | false; // 'USD' | 'IQD'
+  parent_id?: [number, string] | false;
   create_date: string;
   write_date: string;
 }

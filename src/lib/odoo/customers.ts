@@ -277,7 +277,53 @@ export async function getCustomerByPhone(phone: string): Promise<Customer | null
       console.error(`[Odoo Customers] AMBIGUOUS_PHONE ${phone} matched partners ${ids}`);
       throw new Error(`AMBIGUOUS_PHONE:${ids}`);
     }
-    return partners.length === 1 ? odooPartnerToCustomer(partners[0]) : null;
+
+    // Found as direct customer
+    if (partners.length === 1) {
+      return odooPartnerToCustomer(partners[0]);
+    }
+
+    // --- Delegate (employee) fallback ---
+    // Search child contacts (parent_id set) with matching phone
+    const delegateDomain: unknown[] = [
+      '&', '&', ['parent_id', '!=', false], ['active', '=', true],
+      '|', '|', '|',
+      ['phone', 'in', allVariants],
+      ['mobile', 'in', allVariants],
+      ['phone', 'ilike', last10],
+      ['mobile', 'ilike', last10],
+    ];
+
+    const childContacts = await odooSearchRead<OdooPartner>(
+      'res.partner',
+      delegateDomain,
+      [...PARTNER_FIELDS, 'parent_id'],
+      { limit: 2, order: 'id ASC' }
+    );
+
+    if (childContacts.length === 1) {
+      const child = childContacts[0];
+      const parentId = Array.isArray(child.parent_id) ? child.parent_id[0] : child.parent_id;
+      if (parentId) {
+        const parent = await getCustomerById(parentId);
+        if (parent && parent.status === 'active') {
+          console.log('[Odoo Customers] Delegate login:', {
+            childId: child.id, childName: child.name,
+            parentId, parentName: parent.contact_name,
+          });
+          parent.delegate_contact_id = String(child.id);
+          parent.delegate_name = String(child.name || '');
+          return parent;
+        }
+      }
+    }
+
+    if (childContacts.length > 1) {
+      const ids = childContacts.map(p => p.id).join(',');
+      console.error(`[Odoo Customers] AMBIGUOUS_DELEGATE_PHONE ${phone} matched contacts ${ids}`);
+    }
+
+    return null;
   } catch (error) {
     if (error instanceof Error && error.message.startsWith('AMBIGUOUS_PHONE')) throw error;
     console.error(`[Odoo Customers] Error fetching customer by phone ${phone}:`, error);

@@ -13,7 +13,10 @@ async function findCustomerByPhone(phone: string): Promise<boolean> {
   const short = bare.replace('964', '');
   const last10 = bare.slice(-10);
 
+  const phoneVariants = [local, normalized, bare, short, `'+${bare}`, `'+${local}`];
+
   try {
+    // 1. Direct customer search (customer_rank > 0)
     const res = await fetch(`${gatewayUrl}/api/odoo/search_read`, {
       method: 'POST',
       headers: {
@@ -25,8 +28,8 @@ async function findCustomerByPhone(phone: string): Promise<boolean> {
         domain: [
           '&', ['customer_rank', '>', 0],
           '|', '|', '|', '|', '|',
-          ['phone', 'in', [local, normalized, bare, short, `'+${bare}`, `'+${local}`]],
-          ['mobile', 'in', [local, normalized, bare, short, `'+${bare}`, `'+${local}`]],
+          ['phone', 'in', phoneVariants],
+          ['mobile', 'in', phoneVariants],
           ['phone', 'ilike', last10],
           ['mobile', 'ilike', last10],
           ['phone', 'ilike', local],
@@ -39,7 +42,40 @@ async function findCustomerByPhone(phone: string): Promise<boolean> {
 
     const data = await res.json();
     const records = data?.data || data?.result || data || [];
-    return Array.isArray(records) && records.length > 0;
+    if (Array.isArray(records) && records.length > 0) return true;
+
+    // 2. Delegate search: child contacts with parent_id (employee of a customer)
+    const delegateRes = await fetch(`${gatewayUrl}/api/odoo/search_read`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+      },
+      body: JSON.stringify({
+        model: 'res.partner',
+        domain: [
+          '&', '&', ['parent_id', '!=', false], ['active', '=', true],
+          '|', '|', '|', '|', '|',
+          ['phone', 'in', phoneVariants],
+          ['mobile', 'in', phoneVariants],
+          ['phone', 'ilike', last10],
+          ['mobile', 'ilike', last10],
+          ['phone', 'ilike', local],
+          ['mobile', 'ilike', local],
+        ],
+        fields: ['id', 'name', 'parent_id'],
+        limit: 1,
+      }),
+    });
+
+    const delegateData = await delegateRes.json();
+    const delegateRecords = delegateData?.data || delegateData?.result || delegateData || [];
+    if (Array.isArray(delegateRecords) && delegateRecords.length > 0) {
+      console.log('[OTP Send] Delegate found:', delegateRecords[0]?.name, '-> parent:', delegateRecords[0]?.parent_id);
+      return true;
+    }
+
+    return false;
   } catch (err) {
     console.error('[OTP Send] Gateway error:', err);
     return false;

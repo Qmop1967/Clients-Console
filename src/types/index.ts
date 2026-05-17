@@ -26,6 +26,9 @@ export interface Customer {
   shipping_address?: Address;
   created_time: string;
   last_modified_time: string;
+  // Delegate (employee) login fields
+  delegate_contact_id?: string;
+  delegate_name?: string;
 }
 
 export interface Address {
@@ -146,6 +149,9 @@ export interface SalesOrder {
   shipments?: Shipment[];
   created_time: string;
   last_modified_time: string;
+  // Delegate (employee) login fields
+  delegate_contact_id?: string;
+  delegate_name?: string;
   // Receipt tracking custom fields
   cf_overall_receive_status?: 'pending' | 'partial' | 'completed';
   cf_receive_timeline?: string; // JSON array of receipt events
@@ -164,6 +170,9 @@ export interface ShipmentPackage {
   line_items: ShipmentPackageLineItem[];
   created_time: string;
   last_modified_time: string;
+  // Delegate (employee) login fields
+  delegate_contact_id?: string;
+  delegate_name?: string;
 }
 
 export interface ShipmentPackageLineItem {
@@ -192,6 +201,9 @@ export interface Shipment {
   documents?: Document[];
   created_time: string;
   last_modified_time: string;
+  // Delegate (employee) login fields
+  delegate_contact_id?: string;
+  delegate_name?: string;
   // Handoff fields (from Odoo stock.picking)
   fulfillment_stage?: string;
   handoff_state?: string;
@@ -264,6 +276,9 @@ export interface Invoice {
   payments: PaymentInfo[];
   created_time: string;
   last_modified_time: string;
+  // Delegate (employee) login fields
+  delegate_contact_id?: string;
+  delegate_name?: string;
 }
 
 export interface PaymentInfo {
@@ -292,6 +307,9 @@ export interface Payment {
   invoices: PaymentInvoice[];
   created_time: string;
   last_modified_time: string;
+  // Delegate (employee) login fields
+  delegate_contact_id?: string;
+  delegate_name?: string;
 }
 
 export interface PaymentInvoice {
@@ -318,6 +336,9 @@ export interface CreditNote {
   line_items: LineItem[];
   created_time: string;
   last_modified_time: string;
+  // Delegate (employee) login fields
+  delegate_contact_id?: string;
+  delegate_name?: string;
 }
 
 // Account Statement

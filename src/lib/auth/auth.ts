@@ -41,11 +41,14 @@ export const {
 
           return {
             id: customer.contact_id,
-            name: customer.contact_name,
+            name: customer.delegate_name || customer.contact_name,
             email: customer.email || `${customer.contact_id}@tsh.local`,
             odooContactId: customer.contact_id,
             priceListId: customer.pricebook_id || customer.price_list_id || '',
             currencyCode: customer.currency_code || 'IQD',
+            delegateContactId: customer.delegate_contact_id || '',
+            delegateName: customer.delegate_name || '',
+            companyName: customer.contact_name,
           };
         } catch (error) {
           console.error('[Auth] Error during phone login:', error);
@@ -113,6 +116,9 @@ export const {
         token.odooContactId = (user as any).odooContactId;
         token.priceListId = (user as any).priceListId;
         token.currencyCode = (user as any).currencyCode;
+        token.delegateContactId = (user as any).delegateContactId || '';
+        token.delegateName = (user as any).delegateName || '';
+        token.companyName = (user as any).companyName || '';
       }
       return token;
     },
@@ -122,6 +128,9 @@ export const {
         session.user.odooPartnerId = token.odooContactId as string;
         session.user.priceListId = token.priceListId as string;
         session.user.currencyCode = token.currencyCode as string;
+        session.user.delegateContactId = (token.delegateContactId as string) || '';
+        session.user.delegateName = (token.delegateName as string) || '';
+        session.user.companyName = (token.companyName as string) || '';
       }
       return session;
     },
@@ -181,6 +190,9 @@ declare module 'next-auth' {
     odooPartnerId?: string;
     priceListId?: string;
     currencyCode?: string;
+    delegateContactId?: string;
+    delegateName?: string;
+    companyName?: string;
   }
 
   interface Session {
@@ -191,6 +203,9 @@ declare module 'next-auth' {
       odooPartnerId?: string;
       priceListId?: string;
       currencyCode?: string;
+      delegateContactId?: string;
+      delegateName?: string;
+      companyName?: string;
     };
   }
 }
@@ -201,5 +216,8 @@ declare module '@auth/core/jwt' {
     odooContactId?: string;
     priceListId?: string;
     currencyCode?: string;
+    delegateContactId?: string;
+    delegateName?: string;
+    companyName?: string;
   }
 }
