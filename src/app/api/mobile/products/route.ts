@@ -29,6 +29,8 @@ interface ProductWithPrice {
   display_price: number;
   price_currency: string;
   in_price_list: boolean;
+  image_version?: number;
+  image_url?: string | null;
 }
 
 interface MobileProduct {
@@ -40,7 +42,8 @@ interface MobileProduct {
   category_id: string | null;
   category_name: string | null;
   unit: string | null;
-  image_url: string;
+  image_url: string | null;
+  image_version: number | null;
   stock: number;
   in_stock: boolean;
   price: number | null;
@@ -59,7 +62,10 @@ function transformProductForMobile(item: ProductWithPrice, baseUrl: string): Mob
     category_id: item.category_id ?? null,
     category_name: item.category_name ?? null,
     unit: item.unit ?? null,
-    image_url: `${baseUrl}/api/images/${item.item_id}`,
+    image_url: item.image_version
+      ? `${baseUrl}/api/images/${item.item_id}?v=${item.image_version}`
+      : null,
+    image_version: item.image_version ?? null,
     stock,
     in_stock: stock > 0,
     price: item.display_price ?? null,

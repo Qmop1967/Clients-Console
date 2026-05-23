@@ -63,8 +63,38 @@ export async function odooUnlink(model: string, ids: number[]): Promise<boolean>
  * @param productId  product_product.id (pp_id) — the variant ID, not template ID
  * @param size       requested image size
  */
-export function getOdooImageUrl(productId: number, size: '128x128' | '256x256' | '512x512' | '1920x1920' = '256x256'): string {
-  return `/api/images/${productId}?size=${size}&v=6`;
+export function getOdooImageUrl(productId: number, size: '128x128' | '256x256' | '512x512' | '1920x1920' = '256x256', version?: number): string {
+  // version = gateway-computed image_1920 attachment write_date (epoch s). Busts browser/edge
+  // cache on set-main/unset-main. Static fallback only when no version supplied.
+  const v = version ? String(version) : '6';
+  return `/api/images/${productId}?size=${size}&v=${v}`;
+}
+
+/**
+ * Batched image-version lookup via the GATEWAY (which reads ir.attachment; the client may not).
+ * GET /api/products/image-versions?ids=... -> { versions: { variantId: epochSeconds } }.
+ * version 0 / absent => no image_1920 => placeholder. Non-fatal on error (returns {}).
+ */
+export async function getImageVersions(productIds: number[]): Promise<Map<number, number>> {
+  const out = new Map<number, number>();
+  const ids = Array.from(new Set(productIds.filter((n) => Number.isInteger(n) && n > 0)));
+  if (!ids.length) return out;
+  try {
+    const res = await fetch(`${GATEWAY_URL}/api/products/image-versions?ids=${ids.join(',')}`, {
+      method: 'GET',
+      headers: { 'x-api-key': API_KEY },
+      cache: 'no-store',
+    });
+    const data = await res.json();
+    if (data && data.success && data.versions) {
+      for (const [k, v] of Object.entries(data.versions as Record<string, number>)) {
+        if (v) out.set(parseInt(k, 10), v as number); // omit 0 => placeholder
+      }
+    }
+  } catch (err) {
+    console.error('[Odoo Client] getImageVersions failed (non-fatal):', err);
+  }
+  return out;
 }
 
 export function getOdooBaseUrl(): string { return GATEWAY_URL; }

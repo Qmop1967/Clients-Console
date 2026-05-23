@@ -5,7 +5,7 @@
 // Maintains same return types (Product, Category) for page compatibility
 // ============================================
 
-import { odooSearchRead, odooRead, odooCount, getOdooImageUrl } from './client';
+import { odooSearchRead, odooRead, odooCount, getOdooImageUrl, getImageVersions } from './client';
 import type { OdooProduct, OdooCategory as OdooCategoryType } from './types';
 import type { Product, Category, PaginatedResponse } from '@/types';
 
@@ -77,8 +77,17 @@ const PRODUCT_DETAIL_FIELDS = [
 // Conversion: Odoo → Product (for page compatibility)
 // ============================================
 
-function odooProductToProduct(p: OdooProduct): Product {
+/**
+ * Batched image-version map via the gateway (gateway reads ir.attachment; client may not).
+ * Map<variantId, version>. Missing => placeholder. ONE gateway call per page.
+ */
+async function fetchImageVersions(products: OdooProduct[]): Promise<Map<number, number>> {
+  return getImageVersions(products.map((p) => p.id));
+}
+
+function odooProductToProduct(p: OdooProduct, versionMap?: Map<number, number>): Product {
   const templateId = Array.isArray(p.product_tmpl_id) ? p.product_tmpl_id[0] : 0;
+  const imageVersion = versionMap?.get(p.id);
   return {
     item_id: String(p.id),
     name: p.name,
@@ -100,7 +109,10 @@ function odooProductToProduct(p: OdooProduct): Product {
     // image_document_id intentionally keeps tmpl_id — used by pricelist (line ~393).
     image_name: `odoo-${p.id}`,
     image_document_id: templateId ? String(templateId) : undefined, // tmpl_id for pricelist
-    image_url: getOdooImageUrl(p.id, '256x256'),
+    // Versioned URL busts browser/edge cache on set-main/unset-main.
+    // No version (no image_1920 attachment) => null => placeholder fallback preserved.
+    image_url: imageVersion ? getOdooImageUrl(p.id, '256x256', imageVersion) : null,
+    image_version: imageVersion,
     minimum_quantity: undefined,
   };
 }
@@ -160,8 +172,9 @@ export async function getProducts(options: {
       odooCount('product.product', domain),
     ]);
 
+    const versionMap = await fetchImageVersions(products);
     return {
-      data: products.map(odooProductToProduct),
+      data: products.map((p) => odooProductToProduct(p, versionMap)),
       page_context: {
         page,
         per_page: perPage,
@@ -201,7 +214,10 @@ export async function getAllProducts(): Promise<Product[]> {
       { order: 'write_date DESC, id DESC', limit: 0 }
     );
 
-    return products.map(odooProductToProduct);
+    {
+      const versionMap = await fetchImageVersions(products);
+      return products.map((p) => odooProductToProduct(p, versionMap));
+    }
   } catch (error) {
     console.error('[Odoo Products] Error fetching all products:', error);
     return [];
@@ -219,7 +235,10 @@ export async function getProductById(id: number | string): Promise<Product | nul
     const products = await odooRead<OdooProduct>('product.product', [numId], PRODUCT_DETAIL_FIELDS);
     if (!products.length) return null;
 
-    return odooProductToProduct(products[0]);
+    {
+      const versionMap = await fetchImageVersions(products);
+      return odooProductToProduct(products[0], versionMap);
+    }
   } catch (error) {
     console.error(`[Odoo Products] Error fetching product ${id}:`, error);
     return null;
@@ -259,8 +278,9 @@ export async function searchProducts(
       odooCount('product.product', domain),
     ]);
 
+    const versionMap = await fetchImageVersions(products);
     return {
-      data: products.map(odooProductToProduct),
+      data: products.map((p) => odooProductToProduct(p, versionMap)),
       page_context: {
         page,
         per_page: perPage,

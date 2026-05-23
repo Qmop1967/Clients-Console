@@ -65,7 +65,8 @@ export interface Product {
   image_type?: string;
   image_document_id?: string;
   has_attachment?: boolean;
-  image_url?: string; // Constructed URL
+  image_url?: string | null; // Constructed URL (null => placeholder)
+  image_version?: number; // gateway-provided image_1920 write_date (cache-bust key)
   category_id?: string;
   category_name?: string;
   brand?: string;

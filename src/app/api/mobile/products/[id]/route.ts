@@ -54,7 +54,10 @@ export async function GET(
         category_id: product.category_id || null,
         category_name: product.category_name || null,
         unit: product.unit || null,
-        image_url: product.image_url || `${baseUrl}/api/images/${product.item_id}`,
+        image_url: product.image_version
+          ? `${baseUrl}/api/images/${product.item_id}?v=${product.image_version}`
+          : null,
+        image_version: product.image_version ?? null,
         stock,
         in_stock: stock > 0,
         price: priceInfo.rate,
