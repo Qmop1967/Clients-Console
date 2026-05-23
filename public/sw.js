@@ -8,14 +8,17 @@
  *
  * Strategy:
  * - Network-first for HTML navigations (always fresh, fall back to cache offline)
- * - Cache-first for /_next/static/*, /icons/*, and static images (immutable)
+ * - Cache-first for /_next/static/* and /icons/* (hashed/immutable)
+ * - Stale-while-revalidate for other same-origin images (refresh in background)
+ * - /api/images/* is NOT handled here (Rule 3 bypasses /api) — its own
+ *   versioned-URL + Cache-Control headers govern it (immutable when ?v=)
  * - Bypass completely: /api/*, /api/auth/*, and any non-GET requests
  *
  * The SW MUST NOT touch auth or API requests — it only accelerates
  * static asset delivery and lets iOS treat the install as a real PWA.
  */
 
-const CACHE_VERSION = 'v1778710792';
+const CACHE_VERSION = 'v1779534831';
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 
@@ -73,13 +76,23 @@ self.addEventListener('fetch', (event) => {
   // and cart mutations. Auth is the #1 reason to be conservative here.
   if (url.pathname.startsWith('/api/')) return;
 
-  // Rule 4: Static assets — cache-first (they are immutable, hashed URLs).
+  // Rule 4a: Hashed/immutable assets — cache-first (URL changes when content does).
   if (
     url.pathname.startsWith('/_next/static/') ||
     url.pathname.startsWith('/icons/') ||
-    /\.(png|jpe?g|webp|gif|svg|ico|woff2?|ttf|otf)$/i.test(url.pathname)
+    /\.(woff2?|ttf|otf)$/i.test(url.pathname)
   ) {
     event.respondWith(cacheFirst(req));
+    return;
+  }
+
+  // Rule 4b: Other same-origin images — stale-while-revalidate, NOT cache-first.
+  // cache-first pinned old product images forever (the hard-refresh tail). SWR
+  // serves the cached copy instantly but refreshes in the background, so a changed
+  // image self-heals on the next load. (Versioned /api/images URLs never reach here
+  // — Rule 3 bypasses /api — so this only covers non-versioned same-origin images.)
+  if (/\.(png|jpe?g|webp|gif|svg|ico)$/i.test(url.pathname)) {
+    event.respondWith(staleWhileRevalidate(req));
     return;
   }
 
