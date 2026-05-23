@@ -54,23 +54,43 @@ export function ProductGallery({
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const touchStart = useRef<number | null>(null);
 
-  // Fetch media on mount
-  useEffect(() => {
-    let cancelled = false;
-    fetch(`/api/products/${productId}/media`)
-      .then((r) => r.json())
-      .then((data) => {
-        if (cancelled) return;
-        if (data.success && Array.isArray(data.media)) {
-          setMedia(data.media);
-        }
-      })
-      .catch(() => {})
-      .finally(() => !cancelled && setLoaded(true));
-    return () => {
-      cancelled = true;
-    };
+  // Fetch media (reusable so we can re-run on focus/visibility for fresh image state).
+  const fetchMedia = useCallback(async () => {
+    try {
+      const r = await fetch(`/api/products/${productId}/media`, { cache: "no-store" });
+      const data = await r.json();
+      if (data.success && Array.isArray(data.media)) setMedia(data.media);
+    } catch {
+      /* non-fatal */
+    } finally {
+      setLoaded(true);
+    }
   }, [productId]);
+
+  // Fetch on mount.
+  useEffect(() => {
+    fetchMedia();
+  }, [fetchMedia]);
+
+  // Step 3: revalidate product media when the user returns to the tab/window, so
+  // set-main/unset-main/delete reflect WITHOUT a manual reload. Debounced + page-scoped:
+  // fires only on transition to visible/focus, and at most once per 1.5s.
+  useEffect(() => {
+    let last = 0;
+    const revalidate = () => {
+      if (document.visibilityState !== "visible") return;
+      const now = Date.now();
+      if (now - last < 1500) return;
+      last = now;
+      fetchMedia();
+    };
+    document.addEventListener("visibilitychange", revalidate);
+    window.addEventListener("focus", revalidate);
+    return () => {
+      document.removeEventListener("visibilitychange", revalidate);
+      window.removeEventListener("focus", revalidate);
+    };
+  }, [fetchMedia]);
 
   // Keyboard navigation in lightbox
   useEffect(() => {

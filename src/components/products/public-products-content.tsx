@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect, useCallback, memo, useRef, useDeferredValue } from "react";
 import { useTranslations, useLocale } from "next-intl";
-import { useSearchParams, usePathname } from "next/navigation";
+import { useSearchParams, usePathname, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
@@ -334,8 +334,29 @@ export function PublicProductsContent({
   const t = useTranslations("products");
   const locale = useLocale();
   const pathname = usePathname();
+  const router = useRouter();
   const searchParams = useSearchParams();
   const isInitialMount = useRef(true);
+
+  // Step 3: revalidate the (force-dynamic) list on tab return so set-main/unset-main
+  // reflect WITHOUT a manual reload. router.refresh() re-runs the server fetch (fresh
+  // no-store metadata). Debounced + page-scoped: only on transition to visible, max 1/2s.
+  useEffect(() => {
+    let last = 0;
+    const revalidate = () => {
+      if (document.visibilityState !== "visible") return;
+      const now = Date.now();
+      if (now - last < 2000) return;
+      last = now;
+      router.refresh();
+    };
+    document.addEventListener("visibilitychange", revalidate);
+    window.addEventListener("focus", revalidate);
+    return () => {
+      document.removeEventListener("visibilitychange", revalidate);
+      window.removeEventListener("focus", revalidate);
+    };
+  }, [router]);
 
   // PERFORMANCE: Check auth client-side to keep server render cacheable
   const { data: session } = useSession();
