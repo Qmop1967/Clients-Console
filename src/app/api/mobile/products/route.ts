@@ -134,7 +134,9 @@ export async function GET(request: NextRequest): Promise<Response> {
     const totalPages = Math.ceil(totalItems / perPage);
     const paginatedProducts = products.slice((page - 1) * perPage, page * perPage);
 
-    return mobileSuccess({
+    // no-store: list metadata carries per-product image_version; must be fresh so
+    // image changes reflect on normal reload/navigation. Binaries cached via versioned URL.
+    const _res = mobileSuccess({
       products: paginatedProducts,
       currency: currencyCode,
       price_list: priceListInfo?.name || 'Unknown',
@@ -146,6 +148,8 @@ export async function GET(request: NextRequest): Promise<Response> {
       total_pages: totalPages,
       has_more: page < totalPages,
     });
+    _res.headers.set('Cache-Control', 'no-store, must-revalidate');
+    return _res;
   } catch (error) {
     console.error('[Mobile Products] Error:', error);
 

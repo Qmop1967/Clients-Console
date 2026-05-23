@@ -12,6 +12,9 @@ export async function GET(
 ) {
   const { itemId } = await params;
   const size = request.nextUrl.searchParams.get('size') || '256x256';
+  // immutable ONLY when the URL is versioned (?v=). Un-versioned callers (invoices,
+  // credit-notes, order-detail) get a short cache so their images still refresh.
+  const hasVersion = !!request.nextUrl.searchParams.get('v');
 
   try {
     const imageUrl = `${GATEWAY_URL}/api/image/product/${itemId}?size=${size}`;
@@ -45,7 +48,10 @@ export async function GET(
       status: 200,
       headers: {
         'Content-Type': contentType,
-        'Cache-Control': 'public, max-age=3600, stale-while-revalidate=1800',
+        // Versioned URL is immutable -> cache 1yr; un-versioned -> short cache.
+        'Cache-Control': hasVersion
+          ? 'public, max-age=31536000, immutable'
+          : 'public, max-age=600, stale-while-revalidate=300',
       },
     });
   } catch (error) {

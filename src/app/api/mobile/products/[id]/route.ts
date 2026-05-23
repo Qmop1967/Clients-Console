@@ -44,7 +44,10 @@ export async function GET(
     const priceList = await getCustomerPriceList(priceListId, [id]);
     const priceInfo = getItemPriceFromList(id, priceList);
 
-    return mobileSuccess({
+    // no-store: product metadata carries image_version; must always be fresh so
+    // set-main/unset-main reflect on normal reload/navigation. Image BINARIES are
+    // cached aggressively via the versioned /api/images URL (immutable), not here.
+    const _res = mobileSuccess({
       product: {
         id: product.item_id,
         name: product.name,
@@ -66,6 +69,8 @@ export async function GET(
         minimum_quantity: product.minimum_quantity || null,
       },
     });
+    _res.headers.set('Cache-Control', 'no-store, must-revalidate');
+    return _res;
   } catch (error) {
     console.error('[Mobile Product Detail] Error:', error);
     return mobileError('SERVER_ERROR', 'Failed to load product', 'فشل تحميل المنتج', 500);

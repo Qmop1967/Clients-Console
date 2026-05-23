@@ -88,7 +88,9 @@ export async function GET(
       {
         status: 200,
         headers: {
-          'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=600',
+          // no-store: this DAM media list is what the gallery actually renders;
+          // it must reflect set-main/unset-main/delete immediately (no edge cache tail).
+          'Cache-Control': 'no-store, must-revalidate',
         },
       }
     );
