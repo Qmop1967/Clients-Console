@@ -73,6 +73,7 @@ const PRODUCT_DETAIL_FIELDS = [
   'description',
   'x_alias_name',
   'x_more_detail',
+  'x_use_cases',
 ];
 
 // ============================================
@@ -118,6 +119,7 @@ function odooProductToProduct(p: OdooProduct, versionMap?: Map<number, number>):
     minimum_quantity: undefined,
     alias_name: p.x_alias_name ? String(p.x_alias_name) : undefined,
     more_detail: p.x_more_detail ? String(p.x_more_detail) : undefined,
+    use_cases: p.x_use_cases ? String(p.x_use_cases) : undefined,
   };
 }
 

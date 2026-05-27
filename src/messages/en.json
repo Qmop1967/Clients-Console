@@ -205,7 +205,8 @@
     "category": "Category",
     "brand": "Brand",
     "minimumOrder": "Minimum Order",
-    "technicalSpecs": "Technical Specifications"
+    "technicalSpecs": "Technical Specifications",
+    "uses": "Uses"
   },
   "orders": {
     "title": "Orders",

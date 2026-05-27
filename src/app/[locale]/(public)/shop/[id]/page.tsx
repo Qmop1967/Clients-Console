@@ -56,6 +56,7 @@ type FetchResult = {
     minimum_quantity?: number;
     alias_name?: string;
     more_detail?: string;
+    use_cases?: string;
   };
 } | {
   success: false;
@@ -112,6 +113,7 @@ async function fetchProductData(productId: string, priceListId?: string): Promis
         minimum_quantity: product.minimum_quantity,
         alias_name: product.alias_name,
         more_detail: product.more_detail,
+        use_cases: product.use_cases,
       }
     };
   } catch (error) {

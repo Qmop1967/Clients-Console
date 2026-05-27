@@ -54,6 +54,7 @@ interface ProductDetailProps {
     minimum_quantity?: number;
     alias_name?: string;
     more_detail?: string;
+    use_cases?: string;
   };
   locale: string;
 }
@@ -358,7 +359,25 @@ export function ProductDetailContent({ product, locale }: ProductDetailProps) {
               </div>
             )}
 
-            {/* Technical Specifications — from enrichment data */}
+            {/* Uses / Use Cases — from x_use_cases */}
+            {product.use_cases && (
+              <div className="space-y-2">
+                <h3 className="font-semibold text-sm flex items-center gap-2">
+                  <Zap className="h-4 w-4 text-primary" />
+                  {t("uses")}
+                </h3>
+                <div className="grid gap-1.5">
+                  {product.use_cases.split("\n").filter(Boolean).map((line, i) => (
+                    <div key={i} className="flex items-start gap-2 px-3 py-1.5 rounded-lg bg-muted/20 border border-border/30">
+                      <Check className="h-3.5 w-3.5 text-primary mt-0.5 shrink-0" />
+                      <span className="text-xs leading-relaxed">{line.trim()}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+                        {/* Technical Specifications — from enrichment data */}
             {product.more_detail && (() => {
               const LABEL_AR: Record<string, string> = {
                 "Bluetooth Version": "إصدار البلوتوث",

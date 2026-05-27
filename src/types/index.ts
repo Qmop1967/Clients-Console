@@ -92,6 +92,7 @@ export interface Product {
   // Enrichment fields
   alias_name?: string;
   more_detail?: string;
+  use_cases?: string;
 }
 
 // Price List

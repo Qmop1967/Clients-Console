@@ -205,7 +205,8 @@
     "category": "التصنيف",
     "brand": "العلامة التجارية",
     "minimumOrder": "الحد الأدنى للطلب",
-    "technicalSpecs": "المواصفات الفنية"
+    "technicalSpecs": "المواصفات الفنية",
+    "uses": "الاستخدامات"
   },
   "orders": {
     "title": "الطلبات",

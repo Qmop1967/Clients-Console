@@ -33,6 +33,7 @@ export interface OdooProduct {
   x_brand?: string | false;
   x_alias_name?: string | false;
   x_more_detail?: string | false;
+  x_use_cases?: string | false;
 }
 
 export interface OdooPartner {
