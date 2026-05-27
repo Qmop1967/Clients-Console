@@ -359,35 +359,57 @@ export function ProductDetailContent({ product, locale }: ProductDetailProps) {
             )}
 
             {/* Technical Specifications — from enrichment data */}
-            {product.more_detail && (
-              <div className="space-y-3">
-                <h3 className="font-semibold text-sm flex items-center gap-2">
-                  <Package className="h-4 w-4 text-primary" />
-                  {t("technicalSpecs") || "المواصفات الفنية"}
-                </h3>
-                <div className="rounded-xl border border-primary/20 overflow-hidden bg-primary/5">
-                  <div className="divide-y divide-border/50">
-                    {product.more_detail.split("\n").filter(Boolean).map((line, i) => {
-                      const colonIdx = line.indexOf(":");
-                      const key = colonIdx > 0 ? line.slice(0, colonIdx).trim() : null;
-                      const value = colonIdx > 0 ? line.slice(colonIdx + 1).trim() : line.trim();
-                      return (
-                        <div key={i} className={cn("flex items-center justify-between px-4 py-2.5 gap-4", i % 2 === 0 ? "bg-transparent" : "bg-primary/5")}>
-                          {key ? (
+            {product.more_detail && (() => {
+              const LABEL_AR: Record<string, string> = {
+                "Bluetooth Version": "إصدار البلوتوث",
+                "USB Interface": "منفذ USB",
+                "Power": "الطاقة",
+                "Wireless Range": "مدى الاتصال",
+                "Frequency": "التردد",
+                "Audio Profiles": "ملفات الصوت",
+                "Data Rate": "سرعة البيانات",
+                "LED Indicator": "مؤشر LED",
+                "Color": "اللون",
+                "Compatibility": "التوافق",
+                "Plug & Play": "تشغيل مباشر",
+                "Weight": "الوزن",
+                "Dimensions": "الأبعاد",
+                "Battery": "البطارية",
+                "Chipset": "المعالج",
+                "Protocol": "البروتوكول",
+                "Warranty": "الضمان",
+              };
+              const specs = product.more_detail.split("\n").filter(Boolean).map(line => {
+                const idx = line.indexOf(":");
+                return idx > 0
+                  ? { key: line.slice(0, idx).trim(), value: line.slice(idx + 1).trim() }
+                  : { key: null, value: line.trim() };
+              });
+              return (
+                <div className="space-y-2">
+                  <h3 className="font-semibold text-sm flex items-center gap-2">
+                    <Package className="h-4 w-4 text-primary" />
+                    {t("technicalSpecs")}
+                  </h3>
+                  <div className="rounded-xl border border-border/50 overflow-hidden">
+                    <div className="divide-y divide-border/30">
+                      {specs.map((spec, i) => (
+                        <div key={i} className={cn("grid grid-cols-[1fr,1.5fr] items-baseline px-3 py-1.5", i % 2 === 0 ? "bg-muted/10" : "bg-transparent")}>
+                          {spec.key ? (
                             <>
-                              <span className="text-xs text-muted-foreground shrink-0">{key}</span>
-                              <span className="text-sm font-medium text-end">{value}</span>
+                              <span className="text-xs text-muted-foreground">{LABEL_AR[spec.key] || spec.key}</span>
+                              <span className="text-xs font-medium" dir="ltr">{spec.value}</span>
                             </>
                           ) : (
-                            <span className="text-sm">{value}</span>
+                            <span className="text-xs col-span-2">{spec.value}</span>
                           )}
                         </div>
-                      );
-                    })}
+                      ))}
+                    </div>
                   </div>
                 </div>
-              </div>
-            )}
+              );
+            })()}
 
             {/* Specifications Table */}
             <div className="space-y-3">

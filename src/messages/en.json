@@ -204,7 +204,8 @@
     "wholesaleQuantity": "Wholesale Quantity",
     "category": "Category",
     "brand": "Brand",
-    "minimumOrder": "Minimum Order"
+    "minimumOrder": "Minimum Order",
+    "technicalSpecs": "Technical Specifications"
   },
   "orders": {
     "title": "Orders",

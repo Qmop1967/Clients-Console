@@ -204,7 +204,8 @@
     "wholesaleQuantity": "اختيار كمية الجملة",
     "category": "التصنيف",
     "brand": "العلامة التجارية",
-    "minimumOrder": "الحد الأدنى للطلب"
+    "minimumOrder": "الحد الأدنى للطلب",
+    "technicalSpecs": "المواصفات الفنية"
   },
   "orders": {
     "title": "الطلبات",
