@@ -116,8 +116,8 @@ function odooProductToProduct(p: OdooProduct, versionMap?: Map<number, number>):
     image_url: imageVersion ? getOdooImageUrl(p.id, '256x256', imageVersion) : null,
     image_version: imageVersion,
     minimum_quantity: undefined,
-    alias_name: (p.x_alias_name && p.x_alias_name !== false) ? String(p.x_alias_name) : undefined,
-    more_detail: (p.x_more_detail && p.x_more_detail !== false) ? String(p.x_more_detail) : undefined,
+    alias_name: p.x_alias_name ? String(p.x_alias_name) : undefined,
+    more_detail: p.x_more_detail ? String(p.x_more_detail) : undefined,
   };
 }
 
