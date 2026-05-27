@@ -54,6 +54,8 @@ type FetchResult = {
     inPriceList: boolean;
     currencyCode: string;
     minimum_quantity?: number;
+    alias_name?: string;
+    more_detail?: string;
   };
 } | {
   success: false;
@@ -108,6 +110,8 @@ async function fetchProductData(productId: string, priceListId?: string): Promis
         inPriceList: priceInfo.inPriceList,
         currencyCode: priceList?.currency_code || "IQD",
         minimum_quantity: product.minimum_quantity,
+        alias_name: product.alias_name,
+        more_detail: product.more_detail,
       }
     };
   } catch (error) {

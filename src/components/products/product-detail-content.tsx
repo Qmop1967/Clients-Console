@@ -52,6 +52,8 @@ interface ProductDetailProps {
     inPriceList: boolean;
     currencyCode: string;
     minimum_quantity?: number;
+    alias_name?: string;
+    more_detail?: string;
   };
   locale: string;
 }
@@ -292,6 +294,13 @@ export function ProductDetailContent({ product, locale }: ProductDetailProps) {
               {product.name}
             </h1>
 
+            {/* Alias / Local Name */}
+            {product.alias_name && (
+              <p className="text-sm text-muted-foreground -mt-3">
+                {product.alias_name}
+              </p>
+            )}
+
             {/* SKU + Stock + Unit — compact info row (single source, no duplication) */}
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
               <button
@@ -346,6 +355,37 @@ export function ProductDetailContent({ product, locale }: ProductDetailProps) {
                 <p className="text-sm text-muted-foreground leading-relaxed">
                   {product.description}
                 </p>
+              </div>
+            )}
+
+            {/* Technical Specifications — from enrichment data */}
+            {product.more_detail && (
+              <div className="space-y-3">
+                <h3 className="font-semibold text-sm flex items-center gap-2">
+                  <Package className="h-4 w-4 text-primary" />
+                  {t("technicalSpecs") || "المواصفات الفنية"}
+                </h3>
+                <div className="rounded-xl border border-primary/20 overflow-hidden bg-primary/5">
+                  <div className="divide-y divide-border/50">
+                    {product.more_detail.split("\n").filter(Boolean).map((line, i) => {
+                      const colonIdx = line.indexOf(":");
+                      const key = colonIdx > 0 ? line.slice(0, colonIdx).trim() : null;
+                      const value = colonIdx > 0 ? line.slice(colonIdx + 1).trim() : line.trim();
+                      return (
+                        <div key={i} className={cn("flex items-center justify-between px-4 py-2.5 gap-4", i % 2 === 0 ? "bg-transparent" : "bg-primary/5")}>
+                          {key ? (
+                            <>
+                              <span className="text-xs text-muted-foreground shrink-0">{key}</span>
+                              <span className="text-sm font-medium text-end">{value}</span>
+                            </>
+                          ) : (
+                            <span className="text-sm">{value}</span>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
               </div>
             )}
 

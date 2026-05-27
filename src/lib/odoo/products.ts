@@ -71,6 +71,8 @@ const PRODUCT_LIST_FIELDS = [
 const PRODUCT_DETAIL_FIELDS = [
   ...PRODUCT_LIST_FIELDS,
   'description',
+  'x_alias_name',
+  'x_more_detail',
 ];
 
 // ============================================
@@ -114,6 +116,8 @@ function odooProductToProduct(p: OdooProduct, versionMap?: Map<number, number>):
     image_url: imageVersion ? getOdooImageUrl(p.id, '256x256', imageVersion) : null,
     image_version: imageVersion,
     minimum_quantity: undefined,
+    alias_name: (p.x_alias_name && p.x_alias_name !== false) ? String(p.x_alias_name) : undefined,
+    more_detail: (p.x_more_detail && p.x_more_detail !== false) ? String(p.x_more_detail) : undefined,
   };
 }
 
@@ -337,7 +341,7 @@ export async function getProductsByCategory(
  */
 export function getProductImageUrl(item: Product): string | null {
   if (item.item_id) {
-    return getOdooImageUrl(parseInt(item.item_id, 10), '256x256');
+    return getOdooImageUrl(parseInt(item.item_id, 10), '256x256', item.image_version);
   }
   return null;
 }

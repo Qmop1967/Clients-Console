@@ -89,6 +89,9 @@ export interface Product {
   }>;
   // Minimum quantity restriction (from custom field)
   minimum_quantity?: number;
+  // Enrichment fields
+  alias_name?: string;
+  more_detail?: string;
 }
 
 // Price List

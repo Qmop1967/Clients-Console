@@ -31,6 +31,8 @@ export interface OdooProduct {
   // Custom fields (TSH-specific)
   x_minimum_quantity?: number;
   x_brand?: string | false;
+  x_alias_name?: string | false;
+  x_more_detail?: string | false;
 }
 
 export interface OdooPartner {
