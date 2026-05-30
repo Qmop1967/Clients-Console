@@ -18,31 +18,34 @@ export default async function PublicLayout({
   const tCommon = await getTranslations("common");
   const dir = localeDirection[locale as Locale] || "ltr";
 
+  const footer = (
+    <footer className="hidden md:block border-t bg-muted/50 py-8 mt-8">
+      <div className="container mx-auto px-4 text-center text-sm text-muted-foreground">
+        <p>&copy; {new Date().getFullYear()} TSH. {tFooter("allRightsReserved")}</p>
+        <p className="mt-2">
+          <Link href={`/${locale}/login`} className="hover:underline">
+            {tCommon("login")}
+          </Link>
+          {" | "}
+          <Link href="#" className="hover:underline">
+            {tFooter("contactUs")}
+          </Link>
+        </p>
+      </div>
+    </footer>
+  );
+
   return (
-    <div dir={dir} className="min-h-screen bg-background">
+    // Fixed app-shell: only <main> scrolls; header + bottom nav are shrink-0 flex
+    // children (no position:fixed) so they never detach during iOS momentum scroll.
+    <div dir={dir} className="fixed inset-0 flex flex-col overflow-hidden bg-background">
       {/* Public Header with Cart */}
       <PublicHeader locale={locale} />
 
       {/* Main Content with Bottom Nav */}
-      <PublicLayoutClient locale={locale}>
+      <PublicLayoutClient locale={locale} footer={footer}>
         {children}
       </PublicLayoutClient>
-
-      {/* Footer - Hidden on mobile, visible on desktop */}
-      <footer className="hidden md:block border-t bg-muted/50 py-8 mb-16 md:mb-0">
-        <div className="container mx-auto px-4 text-center text-sm text-muted-foreground">
-          <p>&copy; {new Date().getFullYear()} TSH. {tFooter("allRightsReserved")}</p>
-          <p className="mt-2">
-            <Link href={`/${locale}/login`} className="hover:underline">
-              {tCommon("login")}
-            </Link>
-            {" | "}
-            <Link href="#" className="hover:underline">
-              {tFooter("contactUs")}
-            </Link>
-          </p>
-        </div>
-      </footer>
     </div>
   );
 }

@@ -32,7 +32,7 @@ export function PublicHeader({ locale }: PublicHeaderProps) {
   const logoHref = `/${locale}/shop`;
 
   return (
-    <header className="sticky top-0 z-50 border-b border-border/50 bg-background/95 backdrop-blur-xl supports-[backdrop-filter]:bg-background/80 safe-area-inset-top">
+    <header className="shrink-0 z-50 border-b border-border/50 bg-background/95 backdrop-blur-xl supports-[backdrop-filter]:bg-background/80 safe-area-inset-top">
       <div className="container mx-auto flex h-14 items-center justify-between px-4">
         {/* Logo - Animated computer → TSH logo */}
         <Link

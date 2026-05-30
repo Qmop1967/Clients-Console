@@ -9,9 +9,10 @@ import { useRouter, usePathname } from "next/navigation";
 interface PublicLayoutClientProps {
   children: React.ReactNode;
   locale: string;
+  footer?: React.ReactNode;
 }
 
-export function PublicLayoutClient({ children, locale }: PublicLayoutClientProps) {
+export function PublicLayoutClient({ children, locale, footer }: PublicLayoutClientProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const router = useRouter();
   const pathname = usePathname();
@@ -33,8 +34,11 @@ export function PublicLayoutClient({ children, locale }: PublicLayoutClientProps
 
   return (
     <>
-      {/* Main Content with padding for bottom nav and safe areas */}
-      <main className="container mx-auto px-4 py-4 pb-28 momentum-scroll">{children}</main>
+      {/* ONLY this area scrolls (flex-1). overscroll-none stops rubber-band chaining to the shell. */}
+      <main className="flex-1 overflow-y-auto overscroll-none [-webkit-overflow-scrolling:touch]">
+        <div className="container mx-auto px-4 py-4 pb-6">{children}</div>
+        {footer}
+      </main>
 
       {/* Bottom Navigation */}
       <PublicBottomNav onMenuClick={() => setMenuOpen(true)} />
