@@ -288,7 +288,7 @@ export function ProductGallery({
 
           {/* Thumbnails strip */}
           {displayImages.length > 1 && (
-            <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-thin">
+            <div dir="ltr" className="flex gap-2 overflow-x-auto pb-1 scrollbar-thin">
               {displayImages.map((img, idx) => (
                 <button
                   key={img.id}
