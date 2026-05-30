@@ -43,6 +43,12 @@ export default function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL('/' + locale + '/login', baseUrl));
   }
 
+  // Public share pages (product /p/:id, category /c/:id) — no auth, for WhatsApp/social sharing
+  const seg = pathname.split("/");
+  if ((seg[2] === "p" || seg[2] === "c") && seg[3]) {
+    return intlMiddleware(request);
+  }
+
   // Allow only login/API paths without authentication
   if (isPublicPath(pathname)) {
     return intlMiddleware(request);

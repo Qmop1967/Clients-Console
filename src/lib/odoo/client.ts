@@ -26,8 +26,8 @@ export async function odooSearch(model: string, domain: unknown[] = [], options:
   return (records || []).map((r: any) => r.id);
 }
 
-export async function odooRead<T = Record<string, unknown>>(model: string, ids: number[], fields: string[] = []): Promise<T[]> {
-  return gw('/api/odoo/call', { model, method: 'read', args: [ids], kwargs: { fields } });
+export async function odooRead<T = Record<string, unknown>>(model: string, ids: number[], fields: string[] = [], context?: Record<string, unknown>): Promise<T[]> {
+  return gw('/api/odoo/call', { model, method: 'read', args: [ids], kwargs: context ? { fields, context } : { fields } });
 }
 
 export async function odooSearchRead<T = Record<string, unknown>>(model: string, domain: unknown[] = [], fields: string[] = [], options: { offset?: number; limit?: number; order?: string } = {}): Promise<T[]> {

@@ -233,12 +233,12 @@ export async function getAllProducts(): Promise<Product[]> {
 /**
  * Get single product by ID
  */
-export async function getProductById(id: number | string): Promise<Product | null> {
+export async function getProductById(id: number | string, lang?: string): Promise<Product | null> {
   try {
     const numId = typeof id === 'string' ? parseInt(id, 10) : id;
     if (isNaN(numId)) return null;
 
-    const products = await odooRead<OdooProduct>('product.product', [numId], PRODUCT_DETAIL_FIELDS);
+    const products = await odooRead<OdooProduct>('product.product', [numId], PRODUCT_DETAIL_FIELDS, lang ? { lang } : undefined);
     if (!products.length) return null;
 
     {
