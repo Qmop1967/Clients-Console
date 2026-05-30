@@ -80,6 +80,7 @@ export async function GET(
         usage: m.usage,
         visibility: m.visibility,
         asset_type: m.asset_type,
+        is_main: m.x_is_main === true,
       }))
       .sort((a: any, b: any) => a.sequence - b.sequence);
 

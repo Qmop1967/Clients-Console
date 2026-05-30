@@ -16,7 +16,7 @@
  */
 import { useState, useEffect, useCallback, useRef } from "react";
 import Image from "next/image";
-import { X, ChevronLeft, ChevronRight, FileText, Share2, ZoomIn, Download } from "lucide-react";
+import { X, ChevronLeft, ChevronRight, FileText, Share2, ZoomIn, Download, Play } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface MediaItem {
@@ -33,6 +33,7 @@ interface MediaItem {
   usage?: string;
   visibility?: string;
   asset_type?: string;
+  is_main?: boolean;
 }
 
 interface ProductGalleryProps {
@@ -128,14 +129,46 @@ export function ProductGallery({
   });
   const videos = media.filter(isVideo);
   // Gallery = non-social images; Social = social_media (separate section)
-  const galleryImages = allImages.filter((m) => (m.usage || m.category) !== "social" && m.category !== "social_media");
+  const galleryImages = allImages
+    .filter((m) => (m.usage || m.category) !== "social" && m.category !== "social_media")
+    // Main/hero image first, then by sequence (sequences are often equal → stable by id)
+    .sort((a, b) => {
+      const am = (a as any).is_main === true ? 0 : 1;
+      const bm = (b as any).is_main === true ? 0 : 1;
+      if (am !== bm) return am - bm;
+      const aseq = a.sequence ?? 99, bseq = b.sequence ?? 99;
+      if (aseq !== bseq) return aseq - bseq;
+      return (a.id ?? 0) - (b.id ?? 0);
+    });
   const socialImages = allImages.filter((m) => m.usage === "social" || m.category === "social_media");
 
-  // Build display list (use gallery images if any, otherwise fallback)
-  const displayImages = galleryImages.length > 0 
-    ? galleryImages.map(m => ({ src: m.url, thumb: m.thumbnail_url || m.url, alt: m.name, id: m.id, mediaUrl: m.url }))
+  // Convert a YouTube/Vimeo watch URL into an embeddable player URL (inline, not a popup).
+  const toEmbedUrl = (u: string): { embed: string | null; thumb: string | null } => {
+    if (typeof u !== "string" || !u) return { embed: null, thumb: null };
+    const yt = u.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|shorts\/))([\w-]{6,})/i);
+    if (yt) return { embed: `https://www.youtube.com/embed/${yt[1]}`, thumb: `https://img.youtube.com/vi/${yt[1]}/hqdefault.jpg` };
+    const vm = u.match(/vimeo\.com\/(?:video\/)?(\d+)/i);
+    if (vm) return { embed: `https://player.vimeo.com/video/${vm[1]}`, thumb: null };
+    if (/\.mp4($|\?)/i.test(u)) return { embed: u, thumb: null }; // direct file → <video>
+    return { embed: null, thumb: null };
+  };
+
+  // Build display list: images first (hero first), then videos as playable entries.
+  const imageEntries = galleryImages.map(m => ({
+    src: m.url, thumb: m.thumbnail_url || m.url, alt: m.name, id: m.id, mediaUrl: m.url,
+    isVid: false as const, embed: null as string | null, isMp4: false,
+  }));
+  const videoEntries = videos.map(m => {
+    const { embed, thumb } = toEmbedUrl(m.url);
+    return {
+      src: thumb || "", thumb: thumb || "", alt: m.name || productName, id: m.id, mediaUrl: m.url,
+      isVid: true as const, embed, isMp4: typeof m.url === "string" && /\.mp4($|\?)/i.test(m.url),
+    };
+  }).filter(v => v.embed || v.isMp4);
+  const displayImages = imageEntries.length > 0 || videoEntries.length > 0
+    ? [...imageEntries, ...videoEntries]
     : fallbackImageUrl
-    ? [{ src: fallbackImageUrl, thumb: fallbackImageUrl, alt: productName, id: -1, mediaUrl: fallbackImageUrl }]
+    ? [{ src: fallbackImageUrl, thumb: fallbackImageUrl, alt: productName, id: -1, mediaUrl: fallbackImageUrl, isVid: false as const, embed: null as string | null, isMp4: false }]
     : [];
 
   const hasContent = displayImages.length > 0 || datasheets.length > 0 || socialImages.length > 0;
@@ -187,13 +220,27 @@ export function ProductGallery({
       {/* Hero Image with Thumbnails */}
       {displayImages.length > 0 && (
         <div className="space-y-3">
-          {/* Main hero */}
+          {/* Main hero — inline video player for video entries, image otherwise */}
           <div
-            className="group relative aspect-square overflow-hidden rounded-2xl border bg-gradient-to-br from-muted/50 to-muted cursor-zoom-in"
-            onClick={() => setLightboxOpen(true)}
+            className={cn(
+              "group relative aspect-square overflow-hidden rounded-2xl border bg-gradient-to-br from-muted/50 to-muted",
+              currentImage.isVid ? "" : "cursor-zoom-in"
+            )}
+            onClick={() => { if (!currentImage.isVid) setLightboxOpen(true); }}
             onTouchStart={onTouchStart}
             onTouchEnd={onTouchEnd}
           >
+            {currentImage.isVid && currentImage.embed && !currentImage.isMp4 ? (
+              <iframe
+                src={currentImage.embed}
+                title={currentImage.alt}
+                className="absolute inset-0 w-full h-full"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen
+              />
+            ) : currentImage.isVid && currentImage.isMp4 ? (
+              <video src={currentImage.mediaUrl} controls className="absolute inset-0 w-full h-full object-contain" />
+            ) : (
             <Image
               src={currentImage.src}
               alt={currentImage.alt}
@@ -212,6 +259,7 @@ export function ProductGallery({
                 }
               }}
             />
+            )}
             {/* Hidden fallback shown on image error */}
             <div data-gallery-fallback className="absolute inset-0 items-center justify-center hidden">
               <div className="flex flex-col items-center gap-3 text-muted-foreground/60">
@@ -221,16 +269,18 @@ export function ProductGallery({
                 <span className="text-xs font-medium tracking-wide">TSH</span>
               </div>
             </div>
-            <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-            <button
-              type="button"
-              className="absolute right-3 top-3 p-2 rounded-full bg-white/90 backdrop-blur shadow-sm opacity-0 group-hover:opacity-100 transition-opacity"
-              aria-label="Zoom image"
-            >
-              <ZoomIn className="h-4 w-4 text-gray-700" />
-            </button>
+            <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
+            {!currentImage.isVid && (
+              <button
+                type="button"
+                className="absolute right-3 top-3 p-2 rounded-full bg-white/90 backdrop-blur shadow-sm opacity-0 group-hover:opacity-100 transition-opacity"
+                aria-label="Zoom image"
+              >
+                <ZoomIn className="h-4 w-4 text-gray-700" />
+              </button>
+            )}
             {displayImages.length > 1 && (
-              <div className="absolute bottom-3 right-3 px-2 py-1 rounded-md bg-black/60 text-white text-xs">
+              <div dir="ltr" className="absolute bottom-3 right-3 px-2 py-1 rounded-md bg-black/60 text-white text-xs">
                 {activeIdx + 1} / {displayImages.length}
               </div>
             )}
@@ -251,13 +301,29 @@ export function ProductGallery({
                       : "border-transparent hover:border-muted-foreground/30 opacity-70 hover:opacity-100"
                   )}
                 >
-                  <Image
-                    src={img.thumb}
-                    alt={img.alt}
-                    fill
-                    className="object-cover"
-                    sizes="80px"
-                  />
+                  {img.isVid ? (
+                    img.thumb ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={img.thumb} alt={img.alt} className="absolute inset-0 w-full h-full object-cover" loading="lazy" />
+                    ) : (
+                      <div className="absolute inset-0 bg-black/70" />
+                    )
+                  ) : (
+                    <Image
+                      src={img.thumb}
+                      alt={img.alt}
+                      fill
+                      className="object-cover"
+                      sizes="80px"
+                    />
+                  )}
+                  {img.isVid && (
+                    <span className="absolute inset-0 flex items-center justify-center">
+                      <span className="flex items-center justify-center w-7 h-7 rounded-full bg-black/60 backdrop-blur">
+                        <Play className="h-3.5 w-3.5 text-white fill-white ml-0.5" />
+                      </span>
+                    </span>
+                  )}
                 </button>
               ))}
             </div>
@@ -376,17 +442,29 @@ export function ProductGallery({
             onTouchStart={onTouchStart}
             onTouchEnd={onTouchEnd}
           >
-            <Image
-              src={currentImage.src}
-              alt={currentImage.alt}
-              fill
-              className="object-contain"
-              sizes="(max-width: 1280px) 100vw, 1280px"
-              priority
-            />
+            {currentImage.isVid && currentImage.embed && !currentImage.isMp4 ? (
+              <iframe
+                src={currentImage.embed}
+                title={currentImage.alt}
+                className="w-full h-full"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen
+              />
+            ) : currentImage.isVid && currentImage.isMp4 ? (
+              <video src={currentImage.mediaUrl} controls className="w-full h-full object-contain" />
+            ) : (
+              <Image
+                src={currentImage.src}
+                alt={currentImage.alt}
+                fill
+                className="object-contain"
+                sizes="(max-width: 1280px) 100vw, 1280px"
+                priority
+              />
+            )}
           </div>
 
-          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 px-3 py-1.5 rounded-full bg-white/10 text-white/80 text-sm">
+          <div dir="ltr" className="absolute bottom-4 left-1/2 -translate-x-1/2 px-3 py-1.5 rounded-full bg-white/10 text-white/80 text-sm">
             {activeIdx + 1} / {displayImages.length}
           </div>
         </div>
