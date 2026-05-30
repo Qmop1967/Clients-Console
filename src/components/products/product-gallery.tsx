@@ -105,15 +105,28 @@ export function ProductGallery({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lightboxOpen, media]);
 
-  // Split media by type — canonical usage with legacy fallback
+  // Helpers — guard against Odoo serializing empty fields as boolean false
+  // (mime_type can be false, not a string; optional chaining does NOT guard false).
+  const mimeIncludes = (m: MediaItem, needle: string) =>
+    typeof m.mime_type === "string" && m.mime_type.includes(needle);
+  const isVideo = (m: MediaItem) =>
+    m.media_type === "video" ||
+    m.asset_type === "video" ||
+    (typeof m.url === "string" && /youtu\.be|youtube|vimeo|\.mp4($|\?)/i.test(m.url));
+
+  // Split media by type — canonical usage with legacy fallback.
+  // Images = NOT datasheet/manual/pdf AND NOT video (videos are not <Image>-renderable).
   const allImages = media.filter((m) => {
+    if (isVideo(m)) return false;
     const usage = m.usage || (m.media_type === "datasheet" ? "datasheet" : "gallery");
-    return usage !== "datasheet" && usage !== "manual" && !m.mime_type?.includes("pdf");
+    return usage !== "datasheet" && usage !== "manual" && !mimeIncludes(m, "pdf");
   });
   const datasheets = media.filter((m) => {
+    if (isVideo(m)) return false;
     const usage = m.usage || (m.media_type === "datasheet" ? "datasheet" : "gallery");
-    return usage === "datasheet" || usage === "manual" || m.mime_type?.includes("pdf");
+    return usage === "datasheet" || usage === "manual" || mimeIncludes(m, "pdf");
   });
+  const videos = media.filter(isVideo);
   // Gallery = non-social images; Social = social_media (separate section)
   const galleryImages = allImages.filter((m) => (m.usage || m.category) !== "social" && m.category !== "social_media");
   const socialImages = allImages.filter((m) => m.usage === "social" || m.category === "social_media");
