@@ -8,7 +8,7 @@
 
 import { NextRequest } from 'next/server';
 import { getMobileAuth, mobileSuccess, mobileError } from '@/lib/auth/mobile-middleware';
-import { getProductsWithPrices } from '@/lib/odoo/products';
+import { getProductsWithPricesCached as getProductsWithPrices } from '@/lib/odoo/products';
 import { PRICE_LIST_IDS, PRICE_LIST_INFO } from '@/lib/odoo/pricelists';
 
 // Allow 60 seconds for product fetching with prices

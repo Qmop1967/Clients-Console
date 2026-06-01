@@ -8,6 +8,7 @@
 import { odooSearchRead, odooRead, odooCount, getOdooImageUrl, getImageVersions } from './client';
 import type { OdooProduct, OdooCategory as OdooCategoryType } from './types';
 import type { Product, Category, PaginatedResponse } from '@/types';
+import { unstable_cache } from 'next/cache';
 
 // ============================================
 // Warehouse Product Isolation (Phase C — 2026-04-30)
@@ -474,3 +475,21 @@ export async function getProductsWithConsumerPrices(): Promise<{
 // Aliases for backward compatibility
 export const getAllProductsComplete = getAllProducts;
 export const getProductsMetadataSafe = getAllProducts;
+
+// ============================================
+// Cached catalog reads (quota-savers) — added 2026-06-01
+// Catalog data is non-personalized (keyed only by pricelist tier), so the gateway
+// is hit ~once per revalidate window instead of on every SSR render / bot ping.
+// Pricing here is pricelist-tier based (not per-customer) so sharing is correct.
+// NOTE: stock can be up to `revalidate` seconds stale on browse pages (acceptable; cart re-validates).
+// ============================================
+export const getProductsWithPricesCached = unstable_cache(
+  (pricelistId: string) => getProductsWithPrices(pricelistId),
+  ['sf-products-with-prices-v1'],
+  { revalidate: 60, tags: ['products'] }
+);
+export const getCategoriesCached = unstable_cache(
+  () => getCategories(),
+  ['sf-categories-v1'],
+  { revalidate: 300, tags: ['categories'] }
+);

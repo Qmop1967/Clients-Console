@@ -3,7 +3,7 @@ import { getTranslations } from "next-intl/server";
 import { ShopContainer } from "@/components/products/shop-container";
 import { ProductsSkeleton } from "@/components/products/products-skeleton";
 import { LCPImagePreload } from "@/components/products/lcp-image-preload";
-import { getProductsWithPrices, getProductImageUrl, getCategories, getDirectImageUrls } from "@/lib/odoo/products";
+import { getProductsWithPricesCached as getProductsWithPrices, getProductImageUrl, getCategoriesCached as getCategories, getDirectImageUrls } from "@/lib/odoo/products";
 import { auth } from "@/lib/auth/auth";
 import { PRICE_LIST_IDS } from "@/lib/odoo/pricelists";
 

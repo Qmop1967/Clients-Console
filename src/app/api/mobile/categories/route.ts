@@ -5,7 +5,7 @@
 
 import { NextRequest } from 'next/server';
 import { mobileSuccess, mobileError } from '@/lib/auth/mobile-middleware';
-import { getCategories } from '@/lib/odoo/products';
+import { getCategoriesCached as getCategories } from '@/lib/odoo/products';
 
 export async function GET(request: NextRequest) {
   try {
