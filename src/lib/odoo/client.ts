@@ -5,10 +5,10 @@
 const GATEWAY_URL = process.env.API_GATEWAY_URL || 'http://localhost:3010';
 const API_KEY = process.env.API_KEY || 'tsh-client-2026-key';
 
-async function gw(path: string, body: any): Promise<any> {
+async function gw(path: string, body: any, extraHeaders?: Record<string, string>): Promise<any> {
   const res = await fetch(`${GATEWAY_URL}${path}`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-api-key': API_KEY },
+    headers: { 'Content-Type': 'application/json', 'x-api-key': API_KEY, ...(extraHeaders || {}) },
     body: JSON.stringify(body),
     cache: 'no-store',
   });
@@ -32,6 +32,12 @@ export async function odooRead<T = Record<string, unknown>>(model: string, ids: 
 
 export async function odooSearchRead<T = Record<string, unknown>>(model: string, domain: unknown[] = [], fields: string[] = [], options: { offset?: number; limit?: number; order?: string } = {}): Promise<T[]> {
   return gw('/api/odoo/search_read', { model, domain, fields, limit: options.limit, offset: options.offset, order: options.order });
+}
+
+// Auth/login customer lookups — tagged with x-tsh-auth-lookup so the gateway exempts them
+// from the per-role daily quota. Customer login must never be blocked by storefront browsing volume.
+export async function odooSearchReadAuth<T = Record<string, unknown>>(model: string, domain: unknown[] = [], fields: string[] = [], options: { offset?: number; limit?: number; order?: string } = {}): Promise<T[]> {
+  return gw('/api/odoo/search_read', { model, domain, fields, limit: options.limit, offset: options.offset, order: options.order }, { 'x-tsh-auth-lookup': '1' });
 }
 
 export async function odooCount(model: string, domain: unknown[] = []): Promise<number> {

@@ -5,7 +5,7 @@
 // Maintains same return types (Customer) for page compatibility
 // ============================================
 
-import { odooSearchRead, odooRead } from './client';
+import { odooSearchRead, odooSearchReadAuth, odooRead } from './client';
 import type { OdooPartner } from './types';
 import type { Customer } from '@/types';
 
@@ -85,7 +85,7 @@ export async function getCustomerByEmail(email: string): Promise<Customer | null
     const cleaned = (email || '').trim().toLowerCase();
     if (!cleaned || !cleaned.includes('@')) return null;
 
-    const partners = await odooSearchRead<OdooPartner>(
+    const partners = await odooSearchReadAuth<OdooPartner>(
       'res.partner',
       [
         '&', '&',
@@ -106,7 +106,7 @@ export async function getCustomerByEmail(email: string): Promise<Customer | null
   } catch (error) {
     if (error instanceof Error && error.message.startsWith('AMBIGUOUS_EMAIL')) throw error;
     console.error(`[Odoo Customers] Error fetching customer by email ${email}:`, error);
-    return null;
+    throw error; // surface infra/quota errors instead of false CUSTOMER_NOT_FOUND
   }
 }
 
@@ -265,7 +265,7 @@ export async function getCustomerByPhone(phone: string): Promise<Customer | null
       ['mobile', 'ilike', last10],
     ];
 
-    const partners = await odooSearchRead<OdooPartner>(
+    const partners = await odooSearchReadAuth<OdooPartner>(
       'res.partner',
       domain,
       PARTNER_FIELDS,
@@ -294,7 +294,7 @@ export async function getCustomerByPhone(phone: string): Promise<Customer | null
       ['mobile', 'ilike', last10],
     ];
 
-    const childContacts = await odooSearchRead<OdooPartner>(
+    const childContacts = await odooSearchReadAuth<OdooPartner>(
       'res.partner',
       delegateDomain,
       [...PARTNER_FIELDS, 'parent_id'],
@@ -327,7 +327,7 @@ export async function getCustomerByPhone(phone: string): Promise<Customer | null
   } catch (error) {
     if (error instanceof Error && error.message.startsWith('AMBIGUOUS_PHONE')) throw error;
     console.error(`[Odoo Customers] Error fetching customer by phone ${phone}:`, error);
-    return null;
+    throw error; // surface infra/quota errors instead of false not-found
   }
 }
 
