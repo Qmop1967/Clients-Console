@@ -200,20 +200,70 @@ export async function createSalesOrder(data: {
   try {
     const partnerId = parseInt(data.customer_id, 10);
 
-    // Create the order header
+    // --- Server-side price enforcement (never trust the client cart rate) ---
+    // The browser cart can hold a stale price (e.g. an old USD price after a
+    // USD->IQD pricelist conversion) or a tampered one. Re-resolve every line
+    // against the customer's CURRENT pricelist before writing to Odoo.
+    const productIds = data.line_items
+      .map((i) => parseInt(i.item_id, 10))
+      .filter((id) => !isNaN(id));
+
+    let enforcePricelistId = 0;
+    const enforcedPrices = new Map<number, number>(); // productId -> pricelist price
+    const listPriceFallback = new Map<number, number>(); // productId -> list_price
+    try {
+      const partners = await odooRead<{ id: number; property_product_pricelist: [number, string] | false }>(
+        'res.partner', [partnerId], ['property_product_pricelist']
+      );
+      const pl = partners[0]?.property_product_pricelist;
+      enforcePricelistId = Array.isArray(pl) ? pl[0] : 0;
+
+      const prods = await odooRead<{ id: number; product_tmpl_id: [number, string] | false; list_price: number }>(
+        'product.product', productIds, ['product_tmpl_id', 'list_price']
+      );
+      const templateIdMap = new Map<number, number>();
+      for (const p of prods) {
+        if (Array.isArray(p.product_tmpl_id)) templateIdMap.set(p.id, p.product_tmpl_id[0]);
+        listPriceFallback.set(p.id, p.list_price || 0);
+      }
+
+      if (enforcePricelistId) {
+        const { getProductPrices } = await import('./pricelists');
+        const priceMap = await getProductPrices(productIds, enforcePricelistId, templateIdMap);
+        for (const [pid, price] of priceMap) enforcedPrices.set(pid, price);
+      }
+    } catch (e) {
+      console.error('[Odoo Orders] Price enforcement lookup failed:', e);
+    }
+
+    const resolvePrice = (pid: number, cartRate: number): number => {
+      const plPrice = enforcedPrices.get(pid);
+      if (plPrice !== undefined && plPrice > 0) return plPrice; // authoritative pricelist price
+      const lp = listPriceFallback.get(pid);
+      if (lp !== undefined && lp > 0) return lp; // product base price (company ccy / IQD)
+      return cartRate; // last resort
+    };
+
+    // Create the order header (pin the resolved pricelist explicitly)
     const orderId = await odooCreate('sale.order', {
       partner_id: partnerId,
       note: data.notes || false,
       x_order_source: 'client_portal',
+      ...(enforcePricelistId ? { pricelist_id: enforcePricelistId } : {}),
     });
 
-    // Create order lines
+    // Create order lines with server-enforced prices
     for (const item of data.line_items) {
+      const pid = parseInt(item.item_id, 10);
+      const enforced = resolvePrice(pid, item.rate);
+      if (Math.abs(enforced - (item.rate || 0)) > 0.01) {
+        console.warn(`[Odoo Orders] price enforced product=${pid} cart=${item.rate} -> pricelist=${enforced}`);
+      }
       await odooCreate('sale.order.line', {
         order_id: orderId,
-        product_id: parseInt(item.item_id, 10),
+        product_id: pid,
         product_uom_qty: item.quantity,
-        price_unit: item.rate,
+        price_unit: enforced,
       });
     }
 
@@ -665,6 +715,43 @@ export async function mergeToDraftOrder(data: {
       if (pid) existingByProduct.set(pid, line);
     }
 
+    // Server-side price enforcement for newly-added products (see createSalesOrder)
+    const mProductIds = data.items
+      .map((i) => parseInt(i.item_id, 10))
+      .filter((id) => !isNaN(id));
+    let mPricelistId = 0;
+    const mEnforced = new Map<number, number>();
+    const mListPrice = new Map<number, number>();
+    try {
+      const partners = await odooRead<{ id: number; property_product_pricelist: [number, string] | false }>(
+        'res.partner', [partnerId], ['property_product_pricelist']
+      );
+      const plRef = partners[0]?.property_product_pricelist;
+      mPricelistId = Array.isArray(plRef) ? plRef[0] : 0;
+      const prods = await odooRead<{ id: number; product_tmpl_id: [number, string] | false; list_price: number }>(
+        'product.product', mProductIds, ['product_tmpl_id', 'list_price']
+      );
+      const tmplMap = new Map<number, number>();
+      for (const p of prods) {
+        if (Array.isArray(p.product_tmpl_id)) tmplMap.set(p.id, p.product_tmpl_id[0]);
+        mListPrice.set(p.id, p.list_price || 0);
+      }
+      if (mPricelistId) {
+        const { getProductPrices } = await import('./pricelists');
+        const priceMap = await getProductPrices(mProductIds, mPricelistId, tmplMap);
+        for (const [pid, price] of priceMap) mEnforced.set(pid, price);
+      }
+    } catch (e) {
+      console.error('[Odoo Orders] merge price enforcement lookup failed:', e);
+    }
+    const mResolve = (pid: number, cartRate: number): number => {
+      const plp = mEnforced.get(pid);
+      if (plp !== undefined && plp > 0) return plp;
+      const lp = mListPrice.get(pid);
+      if (lp !== undefined && lp > 0) return lp;
+      return cartRate;
+    };
+
     let addedCount = 0;
     let updatedCount = 0;
 
@@ -686,7 +773,7 @@ export async function mergeToDraftOrder(data: {
           order_id: data.orderId,
           product_id: productId,
           product_uom_qty: item.quantity,
-          price_unit: item.rate,
+          price_unit: mResolve(productId, item.rate),
         });
         addedCount++;
       }
