@@ -198,94 +198,32 @@ export async function createSalesOrder(data: {
   autoConfirm?: boolean;
 }): Promise<CreateOrderResult> {
   try {
-    const partnerId = parseInt(data.customer_id, 10);
-
-    // --- Server-side price enforcement (never trust the client cart rate) ---
-    // The browser cart can hold a stale price (e.g. an old USD price after a
-    // USD->IQD pricelist conversion) or a tampered one. Re-resolve every line
-    // against the customer's CURRENT pricelist before writing to Odoo.
-    const productIds = data.line_items
-      .map((i) => parseInt(i.item_id, 10))
-      .filter((id) => !isNaN(id));
-
-    let enforcePricelistId = 0;
-    const enforcedPrices = new Map<number, number>(); // productId -> pricelist price
-    const listPriceFallback = new Map<number, number>(); // productId -> list_price
-    try {
-      const partners = await odooRead<{ id: number; property_product_pricelist: [number, string] | false }>(
-        'res.partner', [partnerId], ['property_product_pricelist']
-      );
-      const pl = partners[0]?.property_product_pricelist;
-      enforcePricelistId = Array.isArray(pl) ? pl[0] : 0;
-
-      const prods = await odooRead<{ id: number; product_tmpl_id: [number, string] | false; list_price: number }>(
-        'product.product', productIds, ['product_tmpl_id', 'list_price']
-      );
-      const templateIdMap = new Map<number, number>();
-      for (const p of prods) {
-        if (Array.isArray(p.product_tmpl_id)) templateIdMap.set(p.id, p.product_tmpl_id[0]);
-        listPriceFallback.set(p.id, p.list_price || 0);
-      }
-
-      if (enforcePricelistId) {
-        const { getProductPrices } = await import('./pricelists');
-        const priceMap = await getProductPrices(productIds, enforcePricelistId, templateIdMap);
-        for (const [pid, price] of priceMap) enforcedPrices.set(pid, price);
-      }
-    } catch (e) {
-      console.error('[Odoo Orders] Price enforcement lookup failed:', e);
-    }
-
-    const resolvePrice = (pid: number, cartRate: number): number => {
-      const plPrice = enforcedPrices.get(pid);
-      if (plPrice !== undefined && plPrice > 0) return plPrice; // authoritative pricelist price
-      const lp = listPriceFallback.get(pid);
-      if (lp !== undefined && lp > 0) return lp; // product base price (company ccy / IQD)
-      return cartRate; // last resort
-    };
-
-    // Create the order header (pin the resolved pricelist explicitly)
-    const orderId = await odooCreate('sale.order', {
-      partner_id: partnerId,
-      note: data.notes || false,
-      x_order_source: 'client_portal',
-      ...(enforcePricelistId ? { pricelist_id: enforcePricelistId } : {}),
+    // Order creation goes through the central gateway, which enforces the
+    // customer pricelist price server-side (price integrity). The storefront
+    // no longer writes price_unit directly to Odoo.
+    const GATEWAY_URL = process.env.API_GATEWAY_URL || 'http://127.0.0.1:3010';
+    const API_KEY = process.env.API_KEY || '';
+    const resp = await fetch(`${GATEWAY_URL}/api/client/orders`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': API_KEY,
+        'x-partner-id': String(data.customer_id),
+      },
+      cache: 'no-store',
+      body: JSON.stringify({
+        items: data.line_items.map((li) => ({ item_id: li.item_id, quantity: li.quantity })),
+        notes: data.notes || false,
+        autoConfirm: data.autoConfirm !== false,
+      }),
     });
-
-    // Create order lines with server-enforced prices
-    for (const item of data.line_items) {
-      const pid = parseInt(item.item_id, 10);
-      const enforced = resolvePrice(pid, item.rate);
-      if (Math.abs(enforced - (item.rate || 0)) > 0.01) {
-        console.warn(`[Odoo Orders] price enforced product=${pid} cart=${item.rate} -> pricelist=${enforced}`);
-      }
-      await odooCreate('sale.order.line', {
-        order_id: orderId,
-        product_id: pid,
-        product_uom_qty: item.quantity,
-        price_unit: enforced,
-      });
+    const gw: any = await resp.json().catch(() => ({}));
+    if (!resp.ok || !gw || gw.success !== true || !gw.order_id) {
+      return { success: false, error: (gw && gw.error) || 'Failed to create order' };
     }
 
-    // Auto-confirm: client-created orders don't need approval
-    if (data.autoConfirm !== false) {
-      try {
-        const GATEWAY_URL = process.env.API_GATEWAY_URL || "http://localhost:3010";
-        const API_KEY = process.env.API_KEY || "tsh-client-2026-key";
-        await fetch(`${GATEWAY_URL}/api/odoo/call`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "x-api-key": API_KEY },
-          body: JSON.stringify({ model: "sale.order", method: "action_confirm", args: [[orderId]] }),
-        });
-        console.log(`[Odoo Orders] Auto-confirmed client order ${orderId}`);
-      } catch (confirmErr) {
-        console.error(`[Odoo Orders] Auto-confirm failed for ${orderId} (order created as draft):`, confirmErr);
-        // Order still created as draft — not a fatal error
-      }
-    }
-
-    // Read back the created order
-    const order = await getOrder(String(orderId), data.customer_id);
+    // Read back the created order (read path unchanged)
+    const order = await getOrder(String(gw.order_id), data.customer_id);
     return { success: true, order: order || undefined };
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
@@ -677,127 +615,33 @@ export async function mergeToDraftOrder(data: {
   notes?: string;
 }): Promise<MergeResult> {
   try {
-    const partnerId = parseInt(data.customerId, 10);
-
-    // 1. Verify order exists, belongs to customer, and is draft
-    const orders = await odooRead<OdooSaleOrder>('sale.order', [data.orderId], [
-      'id', 'name', 'state', 'partner_id', 'order_line', 'note',
-    ]);
-
-    if (!orders.length) {
-      return { success: false, error: 'Order not found' };
+    // Merge goes through the central gateway, which enforces pricelist prices
+    // for newly-added lines server-side. No direct price writes from the storefront.
+    const GATEWAY_URL = process.env.API_GATEWAY_URL || 'http://127.0.0.1:3010';
+    const API_KEY = process.env.API_KEY || '';
+    const resp = await fetch(`${GATEWAY_URL}/api/client/orders/${data.orderId}/merge`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': API_KEY,
+        'x-partner-id': String(data.customerId),
+      },
+      cache: 'no-store',
+      body: JSON.stringify({
+        items: data.items.map((it) => ({ item_id: it.item_id, quantity: it.quantity })),
+        notes: data.notes,
+      }),
+    });
+    const gw: any = await resp.json().catch(() => ({}));
+    if (!resp.ok || !gw || gw.success !== true) {
+      return { success: false, error: (gw && gw.error) || 'Failed to merge items' };
     }
-
-    const order = orders[0];
-    const orderPartnerId = Array.isArray(order.partner_id) ? order.partner_id[0] : order.partner_id;
-
-    if (orderPartnerId !== partnerId) {
-      return { success: false, error: 'Order does not belong to this customer' };
-    }
-
-    if (order.state !== 'draft' && order.state !== 'sent') {
-      return { success: false, error: 'Only draft orders can be modified' };
-    }
-
-    // 2. Get existing lines to detect duplicates
-    const existingLines = order.order_line?.length
-      ? await odooSearchRead<OdooSaleOrderLine>(
-          'sale.order.line',
-          [['id', 'in', order.order_line]],
-          ['id', 'product_id', 'product_uom_qty', 'price_unit']
-        )
-      : [];
-
-    // Map: productId → existing line
-    const existingByProduct = new Map<number, OdooSaleOrderLine>();
-    for (const line of existingLines) {
-      const pid = Array.isArray(line.product_id) ? line.product_id[0] : 0;
-      if (pid) existingByProduct.set(pid, line);
-    }
-
-    // Server-side price enforcement for newly-added products (see createSalesOrder)
-    const mProductIds = data.items
-      .map((i) => parseInt(i.item_id, 10))
-      .filter((id) => !isNaN(id));
-    let mPricelistId = 0;
-    const mEnforced = new Map<number, number>();
-    const mListPrice = new Map<number, number>();
-    try {
-      const partners = await odooRead<{ id: number; property_product_pricelist: [number, string] | false }>(
-        'res.partner', [partnerId], ['property_product_pricelist']
-      );
-      const plRef = partners[0]?.property_product_pricelist;
-      mPricelistId = Array.isArray(plRef) ? plRef[0] : 0;
-      const prods = await odooRead<{ id: number; product_tmpl_id: [number, string] | false; list_price: number }>(
-        'product.product', mProductIds, ['product_tmpl_id', 'list_price']
-      );
-      const tmplMap = new Map<number, number>();
-      for (const p of prods) {
-        if (Array.isArray(p.product_tmpl_id)) tmplMap.set(p.id, p.product_tmpl_id[0]);
-        mListPrice.set(p.id, p.list_price || 0);
-      }
-      if (mPricelistId) {
-        const { getProductPrices } = await import('./pricelists');
-        const priceMap = await getProductPrices(mProductIds, mPricelistId, tmplMap);
-        for (const [pid, price] of priceMap) mEnforced.set(pid, price);
-      }
-    } catch (e) {
-      console.error('[Odoo Orders] merge price enforcement lookup failed:', e);
-    }
-    const mResolve = (pid: number, cartRate: number): number => {
-      const plp = mEnforced.get(pid);
-      if (plp !== undefined && plp > 0) return plp;
-      const lp = mListPrice.get(pid);
-      if (lp !== undefined && lp > 0) return lp;
-      return cartRate;
-    };
-
-    let addedCount = 0;
-    let updatedCount = 0;
-
-    // 3. Process each cart item
-    for (const item of data.items) {
-      const productId = parseInt(item.item_id, 10);
-      const existing = existingByProduct.get(productId);
-
-      if (existing) {
-        // Product exists — increment quantity
-        const newQty = existing.product_uom_qty + item.quantity;
-        await odooWrite('sale.order.line', [existing.id], {
-          product_uom_qty: newQty,
-        });
-        updatedCount++;
-      } else {
-        // New product — add line
-        await odooCreate('sale.order.line', {
-          order_id: data.orderId,
-          product_id: productId,
-          product_uom_qty: item.quantity,
-          price_unit: mResolve(productId, item.rate),
-        });
-        addedCount++;
-      }
-    }
-
-    // 4. Append merge note
-    const now = new Date().toLocaleString('en-US', { timeZone: 'Asia/Baghdad' });
-    const mergeNote = `[${now}] Client merged ${data.items.length} item(s) from cart`;
-    const existingNote = order.note || '';
-    const separator = existingNote ? '\n' : '';
-    const fullNote = data.notes
-      ? `${existingNote}${separator}${mergeNote}\n${data.notes}`
-      : `${existingNote}${separator}${mergeNote}`;
-
-    await odooWrite('sale.order', [data.orderId], { note: fullNote });
-
-    // 5. Read back updated order
     const updatedOrder = await getOrder(String(data.orderId), data.customerId);
-
     return {
       success: true,
       order: updatedOrder || undefined,
-      addedCount,
-      updatedCount,
+      addedCount: typeof gw.addedCount === 'number' ? gw.addedCount : 0,
+      updatedCount: typeof gw.updatedCount === 'number' ? gw.updatedCount : 0,
     };
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
