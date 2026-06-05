@@ -65,6 +65,7 @@ export async function POST(req: NextRequest) {
       headers: {
         'Content-Type': 'application/json',
         'x-api-key': apiKey,
+        ...(((session?.user as any)?.actorToken) ? { 'x-actor-token': (session?.user as any).actorToken } : {}),
         'x-user-id': String(sessionUserId),
       },
       body: JSON.stringify({

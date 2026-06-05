@@ -21,6 +21,7 @@ export async function GET(request: NextRequest) {
       {
         headers: {
           'x-api-key': API_KEY,
+          ...(((session.user as any).actorToken) ? { 'x-actor-token': (session.user as any).actorToken } : {}),
           'x-user-id': String(session.user.id),
         },
         next: { revalidate: 0 },
@@ -50,6 +51,7 @@ export async function POST(request: NextRequest) {
         method: 'POST',
         headers: {
           'x-api-key': API_KEY,
+          ...(((session.user as any).actorToken) ? { 'x-actor-token': (session.user as any).actorToken } : {}),
           'x-user-id': String(session.user.id),
           'Content-Type': 'application/json',
         },
@@ -63,6 +65,7 @@ export async function POST(request: NextRequest) {
         method: 'POST',
         headers: {
           'x-api-key': API_KEY,
+          ...(((session.user as any).actorToken) ? { 'x-actor-token': (session.user as any).actorToken } : {}),
           'x-user-id': String(session.user.id),
           'Content-Type': 'application/json',
         },

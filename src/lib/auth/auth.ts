@@ -3,6 +3,23 @@ import { authConfig } from './auth.config';
 import Credentials from 'next-auth/providers/credentials';
 import { getCustomerByPhone, getCustomerById } from '@/lib/odoo/customers';
 
+// M2-clients (S-exec-3B): mint a gateway-signed Actor Token for this OTP-authenticated
+// client session. Server-side only; non-fatal — absent token keeps legacy_bridge.
+async function mintActorToken(partnerId: string | number, name?: string | null): Promise<string | null> {
+  try {
+    const gw = process.env.API_GATEWAY_URL || 'http://127.0.0.1:3010';
+    const res = await fetch(`${gw}/api/auth/actor-token`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.API_KEY || '' },
+      body: JSON.stringify({ partner_id: partnerId, name }),
+    });
+    const data = await res.json();
+    if (data.success && data.data?.token) return data.data.token as string;
+  } catch (err) { console.warn('[Auth] actor token mint failed (non-fatal):', err); }
+  return null;
+}
+
+
 export const {
   handlers: { GET, POST },
   auth,
@@ -113,6 +130,7 @@ export const {
     async jwt({ token, user }) {
       if (user) {
         token.id = user.id;
+        token.actorToken = await mintActorToken((user as any).odooContactId || user.id, user.name);
         token.odooContactId = (user as any).odooContactId;
         token.priceListId = (user as any).priceListId;
         token.currencyCode = (user as any).currencyCode;
@@ -125,6 +143,7 @@ export const {
     async session({ session, token }) {
       if (token && session.user) {
         session.user.id = token.id as string;
+        (session.user as any).actorToken = (token.actorToken as string) || undefined;
         session.user.odooPartnerId = token.odooContactId as string;
         session.user.priceListId = token.priceListId as string;
         session.user.currencyCode = token.currencyCode as string;
