@@ -30,7 +30,7 @@ export async function GET(
     if (!res.ok) {
       return new NextResponse(null, {
         status: 404,
-        headers: { 'Cache-Control': 'public, max-age=300' },
+        headers: { 'Cache-Control': 'no-store' },
       });
     }
 
@@ -43,7 +43,7 @@ export async function GET(
     if (buffer.length < 1000) {
       return new NextResponse(null, {
         status: 404,
-        headers: { 'Cache-Control': 'public, max-age=300' },
+        headers: { 'Cache-Control': 'no-store' },
       });
     }
 
