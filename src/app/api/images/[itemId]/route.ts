@@ -17,7 +17,10 @@ export async function GET(
   const hasVersion = !!request.nextUrl.searchParams.get('v');
 
   try {
-    const imageUrl = `${GATEWAY_URL}/api/image/product/${itemId}?size=${size}`;
+    // Forward the version (?v=) so the Gateway's Redis cache is version-keyed
+    // and product image updates invalidate cleanly.
+    const versionParam = request.nextUrl.searchParams.get('v');
+    const imageUrl = `${GATEWAY_URL}/api/image/product/${itemId}?size=${size}${versionParam ? `&v=${encodeURIComponent(versionParam)}` : ''}`;
     const res = await fetch(imageUrl, {
       signal: AbortSignal.timeout(10000),
       headers: { 'x-api-key': API_KEY },
