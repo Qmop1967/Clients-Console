@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
+import { getLocalizedName, hasLocalizedName } from "@/lib/product-name";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -53,6 +54,7 @@ interface ProductDetailProps {
     currencyCode: string;
     minimum_quantity?: number;
     alias_name?: string;
+    localized_names?: { ar?: string; ckb?: string; kmr?: string; tm?: string };
     more_detail?: string;
     use_cases?: string;
   };
@@ -60,6 +62,8 @@ interface ProductDetailProps {
 }
 
 export function ProductDetailContent({ product, locale }: ProductDetailProps) {
+  const displayName = getLocalizedName(product, locale);
+  const isTranslatedName = hasLocalizedName(product, locale);
   const t = useTranslations("products");
   const tCart = useTranslations("cart");
   const tCommon = useTranslations("common");
@@ -193,7 +197,7 @@ export function ProductDetailContent({ product, locale }: ProductDetailProps) {
             </>
           )}
           <span className="text-foreground font-medium truncate max-w-[160px]">
-            {product.name}
+            {displayName}
           </span>
         </nav>
 
@@ -292,8 +296,15 @@ export function ProductDetailContent({ product, locale }: ProductDetailProps) {
 
             {/* Product Name */}
             <h1 className="text-2xl md:text-3xl lg:text-4xl font-bold leading-tight">
-              {product.name}
+              {displayName}
             </h1>
+
+            {/* Canonical English name (when a translated name is displayed) */}
+            {isTranslatedName && (
+              <p className="text-sm text-muted-foreground -mt-3" dir="ltr">
+                {product.name}
+              </p>
+            )}
 
             {/* Alias / Local Name */}
             {product.alias_name && (

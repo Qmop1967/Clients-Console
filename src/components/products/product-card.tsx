@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useCallback, memo } from "react";
-import { useTranslations } from "next-intl";
+import { useTranslations, useLocale } from "next-intl";
+import { getLocalizedName } from "@/lib/product-name";
 import Image from "next/image";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -22,6 +23,7 @@ interface ProductCardProps {
     category_name?: string;
     unit?: string;
     minimum_quantity?: number;
+    localized_names?: { ar?: string; ckb?: string; kmr?: string; tm?: string };
   };
   currencyCode: string;
 }
@@ -30,6 +32,8 @@ interface ProductCardProps {
 export const ProductCard = memo(function ProductCard({ product, currencyCode }: ProductCardProps) {
   const t = useTranslations("products");
   const tCart = useTranslations("cart");
+  const locale = useLocale();
+  const displayName = getLocalizedName(product, locale);
   const tCatalog = useTranslations("catalogMode");
   const [added, setAdded] = useState(false);
   const [imgError, setImgError] = useState(false);
@@ -77,7 +81,7 @@ export const ProductCard = memo(function ProductCard({ product, currencyCode }: 
         {product.image_url && !imgError ? (
           <Image
             src={product.image_url}
-            alt={product.name}
+            alt={displayName}
             fill
             className="object-cover transition-transform duration-500 group-hover:scale-105"
             sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
@@ -103,7 +107,7 @@ export const ProductCard = memo(function ProductCard({ product, currencyCode }: 
 
         {/* Name - Serif font for luxury */}
         <h2 className="mb-1.5 line-clamp-2 font-display text-base font-medium leading-snug text-foreground">
-          {product.name}
+          {displayName}
         </h2>
 
         {/* SKU - Subtle */}

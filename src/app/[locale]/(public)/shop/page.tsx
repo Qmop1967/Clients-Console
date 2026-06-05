@@ -56,6 +56,7 @@ async function fetchShopData(priceListId?: string) {
     const productsWithPrices = allProducts.map((product) => ({
       item_id: product.item_id,
       name: product.name,
+      localized_names: product.localized_names,
       sku: product.sku,
       description: product.description,
       rate: product.display_price || 0,

@@ -32,6 +32,10 @@ export interface OdooProduct {
   x_minimum_quantity?: number;
   x_brand?: string | false;
   x_alias_name?: string | false;
+  x_name_ar?: string | false;
+  x_name_ckb?: string | false;
+  x_name_kmr?: string | false;
+  x_name_tm?: string | false;
   x_more_detail?: string | false;
   x_use_cases?: string | false;
 }

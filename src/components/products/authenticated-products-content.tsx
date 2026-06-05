@@ -3,6 +3,7 @@
 import { useState, useMemo, useEffect, useCallback, memo } from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { useTranslations, useLocale } from "next-intl";
+import { getLocalizedName } from "@/lib/product-name";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { Input } from "@/components/ui/input";
@@ -26,6 +27,7 @@ const PRODUCTS_PER_PAGE = 24;
 interface AuthenticatedProduct {
   item_id: string;
   name: string;
+  localized_names?: { ar?: string; ckb?: string; kmr?: string; tm?: string };
   sku: string;
   description?: string;
   rate: number;
@@ -74,6 +76,7 @@ const ProductCardWithCart = memo(function ProductCardWithCart({
   const [quantity, setQuantity] = useState(1);
   const [added, setAdded] = useState(false);
 
+  const displayName = getLocalizedName(product, locale);
   const isInStock = product.available_stock > 0;
   const isLowStock = product.available_stock > 0 && product.available_stock <= 5;
   const hasPrice = product.inPriceList !== false && product.rate > 0;
@@ -131,7 +134,7 @@ const ProductCardWithCart = memo(function ProductCardWithCart({
       <div className="relative img-hover-zoom">
         <ProductImage
           src={product.image_url}
-          alt={product.name}
+          alt={displayName}
           className="aspect-square"
           priority={priority}
         />
@@ -154,7 +157,7 @@ const ProductCardWithCart = memo(function ProductCardWithCart({
         <div className="space-y-2">
           {/* Product Name */}
           <h2 className="font-semibold text-sm line-clamp-2 min-h-[2.5rem] group-hover:text-primary transition-colors duration-200">
-            {product.name}
+            {displayName}
           </h2>
 
           {/* SKU & Brand */}

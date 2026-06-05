@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useEffect, useCallback, memo, useRef, useDeferredValue } from "react";
 import { useTranslations, useLocale } from "next-intl";
+import { getLocalizedName } from "@/lib/product-name";
 import { useSearchParams, usePathname, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
@@ -43,6 +44,7 @@ type SortOption = "name-asc" | "name-desc" | "price-asc" | "price-desc" | "stock
 interface PublicProduct {
   item_id: string;
   name: string;
+  localized_names?: { ar?: string; ckb?: string; kmr?: string; tm?: string };
   sku: string;
   description?: string;
   rate: number;
@@ -89,6 +91,7 @@ const ProductCardWithCart = memo(function ProductCardWithCart({
   locale: string;
   priority?: boolean;
 }) {
+  const displayName = getLocalizedName(product, locale);
   const t = useTranslations("products");
   const tCatalog = useTranslations("catalogMode");
   const { addItem, getItemQuantity } = useCart();
@@ -160,7 +163,7 @@ const ProductCardWithCart = memo(function ProductCardWithCart({
         {/* LCP OPTIMIZATION: sizes must match grid layout (grid-cols-2 on mobile = 50vw) */}
         <ProductImage
           src={product.image_url}
-          alt={product.name}
+          alt={displayName}
           className="aspect-square"
           priority={priority}
           sizes="(max-width: 1024px) 50vw, (max-width: 1280px) 33vw, 25vw"
@@ -184,7 +187,7 @@ const ProductCardWithCart = memo(function ProductCardWithCart({
         <div className="space-y-1.5 sm:space-y-2">
           {/* Product Name */}
           <h2 className="font-semibold text-xs sm:text-sm line-clamp-3 min-h-[2.75rem] sm:min-h-[3.75rem] group-hover:text-primary transition-colors duration-200">
-            {product.name}
+            {displayName}
           </h2>
 
           {/* SKU & Brand */}

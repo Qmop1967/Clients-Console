@@ -42,6 +42,7 @@ type FetchResult = {
   product: {
     item_id: string;
     name: string;
+    localized_names?: { ar?: string; ckb?: string; kmr?: string; tm?: string };
     sku: string;
     description: string;
     rate: number;
@@ -99,6 +100,7 @@ async function fetchProductData(productId: string, priceListId?: string): Promis
       product: {
         item_id: product.item_id,
         name: product.name,
+        localized_names: product.localized_names,
         sku: product.sku,
         description: product.description || "",
         rate: priceInfo.rate,

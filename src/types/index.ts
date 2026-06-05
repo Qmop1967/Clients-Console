@@ -91,6 +91,8 @@ export interface Product {
   minimum_quantity?: number;
   // Enrichment fields
   alias_name?: string;
+  /** Localized product names per UI language (fallback: English `name`) */
+  localized_names?: { ar?: string; ckb?: string; kmr?: string; tm?: string };
   more_detail?: string;
   use_cases?: string;
 }

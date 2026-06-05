@@ -66,7 +66,7 @@ const PRODUCT_LIST_FIELDS = [
   'type', 'categ_id', 'product_tmpl_id', 'uom_id', 'active', 'sale_ok',
   'qty_available', 'virtual_available', 'free_qty',
   'description_sale', 'weight', 'volume',
-
+  'x_name_ar', 'x_name_ckb', 'x_name_kmr', 'x_name_tm',
 ];
 
 const PRODUCT_DETAIL_FIELDS = [
@@ -119,6 +119,12 @@ function odooProductToProduct(p: OdooProduct, versionMap?: Map<number, number>):
     image_version: imageVersion,
     minimum_quantity: undefined,
     alias_name: p.x_alias_name ? String(p.x_alias_name) : undefined,
+    localized_names: {
+      ar: p.x_name_ar ? String(p.x_name_ar) : undefined,
+      ckb: p.x_name_ckb ? String(p.x_name_ckb) : undefined,
+      kmr: p.x_name_kmr ? String(p.x_name_kmr) : undefined,
+      tm: p.x_name_tm ? String(p.x_name_tm) : undefined,
+    },
     more_detail: p.x_more_detail ? String(p.x_more_detail) : undefined,
     use_cases: p.x_use_cases ? String(p.x_use_cases) : undefined,
   };
