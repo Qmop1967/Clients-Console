@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, memo } from "react";
-import Image from "next/image";
 import { Package } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 
@@ -10,11 +9,9 @@ interface ProductImageProps {
   alt: string;
   className?: string;
   priority?: boolean;
+  // kept for caller compatibility; native <img> ignores it
   sizes?: string;
 }
-
-// Simple gray placeholder - minimal data URL for fast initial render
-const PLACEHOLDER_BLUR = "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjQwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iNDAwIiBoZWlnaHQ9IjQwMCIgZmlsbD0iI2YwZjBmMCIvPjwvc3ZnPg==";
 
 // Memoized placeholder component for fast render
 const ImagePlaceholder = memo(function ImagePlaceholder({ className }: { className?: string }) {
@@ -25,57 +22,49 @@ const ImagePlaceholder = memo(function ImagePlaceholder({ className }: { classNa
   );
 });
 
+// IMPORTANT (perf/stability): renders a NATIVE <img> pointing at the Gateway image
+// URL (/api/images/{id}?size=...&v=...), which is ALREADY correctly sized. This
+// deliberately BYPASSES the Next.js /_next/image optimizer, whose per-thumbnail
+// sharp re-encode (24 imgs/page at w=1080 on retina) spiked memory and OOM-restarted
+// tsh-clients. The Gateway + Cloudflare handle sizing/caching instead.
 export const ProductImage = memo(function ProductImage({
   src,
   alt,
   className,
   priority = false,
-  // LCP OPTIMIZATION: Default sizes match 2-column mobile grid (50vw)
-  sizes = "(max-width: 1024px) 50vw, (max-width: 1280px) 33vw, 25vw",
 }: ProductImageProps) {
   const [hasError, setHasError] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
-  // If no source or error occurred, show placeholder immediately
   if (!src || hasError) {
     return <ImagePlaceholder className={className} />;
   }
 
   return (
     <div className={cn("relative overflow-hidden bg-muted", className)}>
-      <Image
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
         src={src}
         alt={alt}
-        fill
-        sizes={sizes}
-        priority={priority}
         loading={priority ? "eager" : "lazy"}
-        fetchPriority={priority ? "high" : "auto"}
-        // LCP OPTIMIZATION: Aggressive quality reduction for mobile
-        // Mobile thumbnails are ~150-200px, so 50/40 quality is visually acceptable
-        // Desktop gets slightly higher quality via responsive sizing
-        quality={priority ? 55 : 45}
-        className={cn(
-          "object-contain transition-opacity duration-150",
-          isLoading ? "opacity-0" : "opacity-100"
-        )}
-        placeholder="blur"
-        blurDataURL={PLACEHOLDER_BLUR}
+        decoding="async"
+        {...(priority ? { fetchpriority: "high" } : {})}
         onLoad={() => setIsLoading(false)}
         onError={() => {
           setHasError(true);
           setIsLoading(false);
         }}
+        className={cn(
+          "absolute inset-0 h-full w-full object-contain transition-opacity duration-150",
+          isLoading ? "opacity-0" : "opacity-100"
+        )}
       />
-      {/* Show placeholder only while loading - no animation for performance */}
-      {isLoading && (
-        <div className="absolute inset-0 bg-muted" />
-      )}
+      {isLoading && <div className="absolute inset-0 bg-muted" />}
     </div>
   );
 });
 
-// Smaller variant for list views - memoized for performance
+// Smaller variant for list views - native <img>, no optimizer
 export const ProductImageSmall = memo(function ProductImageSmall({
   src,
   alt,
@@ -93,17 +82,14 @@ export const ProductImageSmall = memo(function ProductImageSmall({
 
   return (
     <div className={cn("relative overflow-hidden bg-muted", className)}>
-      <Image
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
         src={src}
         alt={alt}
-        fill
-        sizes="80px"
-        quality={60}
         loading="lazy"
-        className="object-contain"
+        decoding="async"
         onError={() => setHasError(true)}
-        // PERFORMANCE: Use Next.js optimization for all images
-        unoptimized={false}
+        className="absolute inset-0 h-full w-full object-contain"
       />
     </div>
   );
