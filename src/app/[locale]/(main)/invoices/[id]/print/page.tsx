@@ -2,6 +2,7 @@ import { auth } from "@/lib/auth/auth";
 import { redirect, notFound } from "next/navigation";
 import { getInvoice } from "@/lib/odoo/invoices";
 import InvoicePrintView from "@/components/invoices/invoice-print-view";
+import { odooRead } from "@/lib/odoo/client";
 
 export async function generateMetadata({
   params,
@@ -25,5 +26,17 @@ export default async function InvoicePrintPage({
 
   if (!invoice) notFound();
 
-  return <InvoicePrintView invoice={invoice} />;
+  // Document language follows customer preference (x_doc_language), not UI locale
+  let docLang = "ar";
+  try {
+    const pid = parseInt(String(session.user.odooPartnerId || "0"));
+    if (pid) {
+      const rows = await odooRead<{ x_doc_language?: string | false }>(
+        "res.partner", [pid], ["x_doc_language"]
+      );
+      if (rows?.[0]?.x_doc_language) docLang = String(rows[0].x_doc_language);
+    }
+  } catch { /* default ar */ }
+
+  return <InvoicePrintView invoice={invoice} docLang={docLang} />;
 }

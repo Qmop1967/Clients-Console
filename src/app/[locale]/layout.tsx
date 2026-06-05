@@ -18,7 +18,7 @@ import { Plus_Jakarta_Sans, Cormorant_Garamond, Cairo, IBM_Plex_Sans_Arabic } fr
 // Body font - Latin (used for most UI text)
 // PERF: Minimal weights - 400 for body, 600 for emphasis (use CSS font-weight for 500)
 const plusJakartaSans = Plus_Jakarta_Sans({
-  subsets: ["latin"],
+  subsets: ["latin", "latin-ext"],
   weight: ["400", "600"],
   variable: "--font-jakarta",
   display: "swap",
@@ -28,7 +28,7 @@ const plusJakartaSans = Plus_Jakarta_Sans({
 // Display font - Latin (used for headings, prices)
 // PERF: Single weight - CSS can fake lighter/heavier with font-synthesis
 const cormorantGaramond = Cormorant_Garamond({
-  subsets: ["latin"],
+  subsets: ["latin", "latin-ext"],
   weight: ["600"],
   style: ["normal"],
   variable: "--font-cormorant",

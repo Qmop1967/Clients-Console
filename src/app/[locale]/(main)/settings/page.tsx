@@ -8,7 +8,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Link } from '@/i18n/navigation';
-import { Palette, Type, Maximize2, Globe, Bell, User, Sun, Moon, Monitor, ChevronRight } from 'lucide-react';
+import { Palette, Type, Maximize2, Globe, Bell, User, Sun, Moon, Monitor, ChevronRight, FileText } from 'lucide-react';
+import { locales, localeNames, type Locale } from '@/i18n/config';
+import { useToast } from '@/hooks/use-toast';
 
 type FontSize = 'small' | 'medium' | 'large';
 type Density = 'compact' | 'normal' | 'comfortable';
@@ -29,9 +31,23 @@ export default function SettingsPage() {
   const [notifPayments, setNotifPayments] = useState(true);
   const [notifPromotions, setNotifPromotions] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [docLang, setDocLang] = useState<string>('ar');
+  const { toast } = useToast();
 
   useEffect(() => {
     setMounted(true);
+    // Load language preferences from server (fallback to localStorage)
+    const cachedDocLang = localStorage.getItem('tsh-doc-lang');
+    if (cachedDocLang) setDocLang(cachedDocLang);
+    fetch('/api/preferences')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => {
+        if (j?.success && j.data?.docLanguage) {
+          setDocLang(j.data.docLanguage);
+          localStorage.setItem('tsh-doc-lang', j.data.docLanguage);
+        }
+      })
+      .catch(() => {});
     // Load saved preferences
     const savedFont = localStorage.getItem('tsh-font-size') as FontSize;
     const savedDensity = localStorage.getItem('tsh-density') as Density;
@@ -74,9 +90,35 @@ export default function SettingsPage() {
   };
 
   const handleLocaleChange = (newLocale: string) => {
+    // Persist preference to customer profile (fire-and-forget)
+    fetch('/api/preferences', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ uiLanguage: newLocale }),
+    }).catch(() => {});
     const segments = pathname.split('/');
     segments[1] = newLocale;
     router.push(segments.join('/'));
+  };
+
+  const handleDocLangChange = async (newLang: string) => {
+    setDocLang(newLang);
+    localStorage.setItem('tsh-doc-lang', newLang);
+    try {
+      const r = await fetch('/api/preferences', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ docLanguage: newLang }),
+      });
+      const j = await r.json();
+      if (j?.success) {
+        toast({ description: t('prefsSaved') });
+      } else {
+        toast({ description: t('prefsSaveError'), variant: 'destructive' });
+      }
+    } catch {
+      toast({ description: t('prefsSaveError'), variant: 'destructive' });
+    }
   };
 
   const handleNotifToggle = (key: string, value: boolean, setter: (v: boolean) => void) => {
@@ -186,23 +228,44 @@ export default function SettingsPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="flex gap-2">
-              <Button
-                variant={currentLocale === 'ar' ? 'default' : 'outline'}
-                size="sm"
-                className="flex-1 gap-1.5"
-                onClick={() => handleLocaleChange('ar')}
-              >
-                🇮🇶 العربية
-              </Button>
-              <Button
-                variant={currentLocale === 'en' ? 'default' : 'outline'}
-                size="sm"
-                className="flex-1 gap-1.5"
-                onClick={() => handleLocaleChange('en')}
-              >
-                🇬🇧 English
-              </Button>
+            <div className="grid grid-cols-2 gap-2">
+              {locales.map((loc) => (
+                <Button
+                  key={loc}
+                  variant={currentLocale === loc ? 'default' : 'outline'}
+                  size="sm"
+                  className="gap-1.5"
+                  onClick={() => handleLocaleChange(loc)}
+                >
+                  {localeNames[loc as Locale]}
+                </Button>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Document Language */}
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <FileText className="h-4 w-4" />
+              {t('documentLanguage')}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-xs text-muted-foreground mb-3">{t('documentLanguageHint')}</p>
+            <div className="grid grid-cols-2 gap-2">
+              {locales.map((loc) => (
+                <Button
+                  key={loc}
+                  variant={docLang === loc ? 'default' : 'outline'}
+                  size="sm"
+                  className="gap-1.5"
+                  onClick={() => handleDocLangChange(loc)}
+                >
+                  {localeNames[loc as Locale]}
+                </Button>
+              ))}
             </div>
           </CardContent>
         </Card>

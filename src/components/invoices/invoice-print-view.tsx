@@ -7,7 +7,10 @@ import html2canvas from "html2canvas";
 import { jsPDF } from "jspdf";
 import type { Invoice } from "@/types";
 
+import { docT, docDir, normalizeDocLang } from "@/lib/doc-i18n";
+
 interface InvoicePrintViewProps {
+  docLang?: string;
   invoice: Invoice;
 }
 
@@ -18,8 +21,11 @@ function formatMoney(amount: number, currency?: string): string {
   return Math.round(amount).toLocaleString("en-US");
 }
 
-export default function InvoicePrintView({ invoice }: InvoicePrintViewProps) {
+export default function InvoicePrintView({ invoice, docLang }: InvoicePrintViewProps) {
   const [generatingPdf, setGeneratingPdf] = useState("");
+  const dl = normalizeDocLang(docLang);
+  const t = docT(dl);
+  const docDirection = docDir(dl);
 
   const cur = invoice.currency_code || "IQD";
   const curSymbol = cur === "USD" ? "$" : "د.ع";
@@ -71,8 +77,8 @@ export default function InvoicePrintView({ invoice }: InvoicePrintViewProps) {
       if (navigator.canShare?.({ files: [file] })) {
         await navigator.share({
           files: [file],
-          title: invoice.invoice_number || "فاتورة",
-          text: (invoice.invoice_number || "فاتورة") + " - " + (invoice.customer_name || ""),
+          title: invoice.invoice_number || t.invoice,
+          text: (invoice.invoice_number || t.invoice) + " - " + (invoice.customer_name || ""),
         });
       } else {
         const url = URL.createObjectURL(blob);
@@ -147,7 +153,7 @@ export default function InvoicePrintView({ invoice }: InvoicePrintViewProps) {
       `}</style>
 
       {/* A4 Document */}
-      <div className="invoice-page" dir="rtl">
+      <div className="invoice-page" dir={docDirection}>
         
         {/* Brand Bar */}
         <div style={{ height: "6px", background: "linear-gradient(90deg, #1e40af, #3b82f6, #06b6d4)" }} />
@@ -176,7 +182,7 @@ export default function InvoicePrintView({ invoice }: InvoicePrintViewProps) {
             </div>
           </div>
           <div style={{ textAlign: "left" }}>
-            <h1 style={{ fontSize: "22pt", fontWeight: 900, color: "#1e293b", margin: 0, letterSpacing: "-0.5px" }}>فاتورة</h1>
+            <h1 style={{ fontSize: "22pt", fontWeight: 900, color: "#1e293b", margin: 0, letterSpacing: "-0.5px" }}>{t.invoice}</h1>
             <div className="en" style={{ fontSize: "9pt", fontWeight: 600, color: "#94a3b8", letterSpacing: "3px", textAlign: "left" }}>INVOICE</div>
           </div>
         </div>
@@ -186,13 +192,13 @@ export default function InvoicePrintView({ invoice }: InvoicePrintViewProps) {
           <div style={{ fontSize: "7.5pt", color: "#64748b", display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
             <span className="mono" style={{ direction: "ltr" }}>+964 771 388 4329</span>
             <span style={{ color: "#cbd5e1" }}>|</span>
-            <span>بغداد، العراق</span>
+            <span>{t.baghdadIraq}</span>
             <span style={{ color: "#cbd5e1" }}>|</span>
             <span className="en" style={{ fontWeight: 600 }}>tsh.sale</span>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
             <div style={{ fontSize: "6.5pt", color: "#94a3b8", lineHeight: 1.3, textAlign: "left" }}>
-              <div>تحقق</div>
+              <div>{t.verify}</div>
               <div className="en">Verify</div>
             </div>
             <div style={{ width: "40px", height: "40px", background: "#fff", border: "1px solid #e2e8f0", borderRadius: "5px", padding: "2px" }}>
@@ -209,23 +215,23 @@ export default function InvoicePrintView({ invoice }: InvoicePrintViewProps) {
             <table style={{ width: "100%", fontSize: "9pt", borderSpacing: "0 6px", borderCollapse: "separate" }}>
               <tbody>
                 <tr>
-                  <td style={{ color: "#64748b", fontWeight: 500, width: "42%" }}>رقم الفاتورة</td>
+                  <td style={{ color: "#64748b", fontWeight: 500, width: "42%" }}>{t.invoiceNumber}</td>
                   <td className="mono" style={{ fontWeight: 700, fontSize: "11pt", color: "#1e293b" }}>{invoice.invoice_number}</td>
                 </tr>
                 <tr>
-                  <td style={{ color: "#64748b", fontWeight: 500 }}>التاريخ</td>
+                  <td style={{ color: "#64748b", fontWeight: 500 }}>{t.date}</td>
                   <td className="mono" style={{ color: "#1e293b" }}>{invoice.date}</td>
                 </tr>
                 <tr>
-                  <td style={{ color: "#64748b", fontWeight: 500 }}>الاستحقاق</td>
+                  <td style={{ color: "#64748b", fontWeight: 500 }}>{t.dueDate}</td>
                   <td className="mono" style={{ color: "#1e293b" }}>{invoice.due_date}</td>
                 </tr>
                 <tr>
-                  <td style={{ color: "#64748b", fontWeight: 500 }}>العملة</td>
+                  <td style={{ color: "#64748b", fontWeight: 500 }}>{t.currency}</td>
                   <td className="mono">{cur}</td>
                 </tr>
                 <tr>
-                  <td style={{ color: "#64748b", fontWeight: 500 }}>الحالة</td>
+                  <td style={{ color: "#64748b", fontWeight: 500 }}>{t.status}</td>
                   <td>
                     <span style={{
                       display: "inline-block", padding: "2px 10px", fontSize: "8pt", fontWeight: 700,
@@ -234,7 +240,7 @@ export default function InvoicePrintView({ invoice }: InvoicePrintViewProps) {
                       color: isUnpaid ? "#dc2626" : "#16a34a",
                       border: `1px solid ${isUnpaid ? "#fecaca" : "#bbf7d0"}`,
                     }}>
-                      {isUnpaid ? "غير مدفوعة" : "مدفوعة"}
+                      {isUnpaid ? t.unpaid : t.paid}
                     </span>
                   </td>
                 </tr>
@@ -245,13 +251,13 @@ export default function InvoicePrintView({ invoice }: InvoicePrintViewProps) {
           {/* Customer Info */}
           <div style={{ background: "#f8fafc", borderRadius: "8px", padding: "14px", border: "1px solid #e2e8f0" }}>
             <div style={{ fontSize: "8pt", color: "#94a3b8", fontWeight: 600, marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.5px" }}>
-              فاتورة إلى
+              {t.invoiceTo}
             </div>
             <div style={{ fontSize: "11pt", fontWeight: 700, color: "#1e293b", marginBottom: "8px", lineHeight: 1.4 }}>
               {(invoice.customer_name || "").replace(/^[.\s-]+|[.\s-]+$/g, "")}
             </div>
             <div style={{ fontSize: "8.5pt", color: "#64748b", lineHeight: 1.8 }}>
-              <div style={{ color: "#94a3b8" }}>العراق</div>
+              <div style={{ color: "#94a3b8" }}>{t.iraq}</div>
             </div>
           </div>
         </div>
@@ -260,9 +266,9 @@ export default function InvoicePrintView({ invoice }: InvoicePrintViewProps) {
         {lines.length > 0 && (
           <>
             <div style={{ fontSize: "8pt", color: "#94a3b8", marginBottom: "6px", display: "flex", gap: "12px", fontWeight: 500 }}>
-              <span>{lines.length} منتج</span>
+              <span>{lines.length} {t.products}</span>
               <span style={{ color: "#cbd5e1" }}>|</span>
-              <span>{totalQty.toLocaleString("en-US")} قطعة</span>
+              <span>{totalQty.toLocaleString("en-US")} {t.pieces}</span>
             </div>
 
             <table dir="ltr" style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed", marginBottom: "18px", border: "1px solid #e2e8f0" }}>
@@ -275,7 +281,7 @@ export default function InvoicePrintView({ invoice }: InvoicePrintViewProps) {
               </colgroup>
               <thead>
                 <tr>
-                  {["#", "Description / الوصف", "Qty", "Price", "Total"].map((h, i) => (
+                  {["#", dl === "en" ? "Description" : "Description / " + t.description, "Qty", "Price", "Total"].map((h, i) => (
                     <th key={h} style={{
                       background: "#f0f4f8", padding: "8px 6px", fontSize: "8pt", fontWeight: 600,
                       color: "#64748b", borderBottom: "2px solid #94a3b8",
@@ -308,14 +314,14 @@ export default function InvoicePrintView({ invoice }: InvoicePrintViewProps) {
           {/* Notes */}
           <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
             <div style={{ background: "#f8fafc", borderRadius: "8px", padding: "12px", border: "1px solid #e2e8f0" }}>
-              <div style={{ fontSize: "8pt", color: "#94a3b8", fontWeight: 600, marginBottom: "6px" }}>ملاحظات</div>
+              <div style={{ fontSize: "8pt", color: "#94a3b8", fontWeight: 600, marginBottom: "6px" }}>{t.notes}</div>
               {invoice.notes ? (
                 <div style={{ fontSize: "8.5pt", color: "#64748b", lineHeight: 1.5 }}>
                   {invoice.notes.replace(/<[^>]*>/g, "")}
                 </div>
               ) : (
                 <p style={{ fontSize: "8.5pt", color: "#94a3b8", margin: 0 }}>
-                  تُقبل المرتجعات خلال 7 أيام من تاريخ الشراء.
+                  {t.returnPolicy}
                 </p>
               )}
             </div>
@@ -326,27 +332,27 @@ export default function InvoicePrintView({ invoice }: InvoicePrintViewProps) {
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "9.5pt" }}>
               <tbody>
                 <tr>
-                  <td style={{ padding: "9px 14px", borderBottom: "1px solid #e2e8f0", color: "#64748b", fontWeight: 500 }}>المجموع</td>
+                  <td style={{ padding: "9px 14px", borderBottom: "1px solid #e2e8f0", color: "#64748b", fontWeight: 500 }}>{t.subtotal}</td>
                   <td className="mono" style={{ padding: "9px 14px", borderBottom: "1px solid #e2e8f0", textAlign: "left" }}>{formatMoney(invoice.sub_total || invoice.total, cur)}</td>
                 </tr>
                 {(invoice.tax_total || 0) > 0 && (
                 <tr>
-                  <td style={{ padding: "9px 14px", borderBottom: "1px solid #e2e8f0", color: "#64748b", fontWeight: 500 }}>الضريبة</td>
+                  <td style={{ padding: "9px 14px", borderBottom: "1px solid #e2e8f0", color: "#64748b", fontWeight: 500 }}>{t.tax}</td>
                   <td className="mono" style={{ padding: "9px 14px", borderBottom: "1px solid #e2e8f0", textAlign: "left" }}>{formatMoney(invoice.tax_total, cur)}</td>
                 </tr>
                 )}
                 <tr style={{ background: "#1e293b" }}>
-                  <td style={{ padding: "12px 14px", color: "#fff", fontWeight: 700, fontSize: "10pt" }}>الإجمالي</td>
+                  <td style={{ padding: "12px 14px", color: "#fff", fontWeight: 700, fontSize: "10pt" }}>{t.total}</td>
                   <td className="mono" style={{ padding: "12px 14px", textAlign: "left", fontSize: "16pt", fontWeight: 800, color: "#fff" }}>
                     {formatMoney(invoice.total, cur)} <span style={{ fontSize: "9pt", fontWeight: 500, opacity: 0.7 }}>{curSymbol}</span>
                   </td>
                 </tr>
                 <tr>
-                  <td style={{ padding: "9px 14px", borderBottom: "1px solid #e2e8f0", color: "#64748b", fontWeight: 500 }}>المدفوع</td>
+                  <td style={{ padding: "9px 14px", borderBottom: "1px solid #e2e8f0", color: "#64748b", fontWeight: 500 }}>{t.paidAmount}</td>
                   <td className="mono" style={{ padding: "9px 14px", borderBottom: "1px solid #e2e8f0", textAlign: "left", color: "#16a34a" }}>{formatMoney(amountPaid, cur)}</td>
                 </tr>
                 <tr>
-                  <td style={{ padding: "10px 14px", fontWeight: 700, color: "#1e293b", fontSize: "10pt" }}>المتبقي</td>
+                  <td style={{ padding: "10px 14px", fontWeight: 700, color: "#1e293b", fontSize: "10pt" }}>{t.amountDue}</td>
                   <td className="mono" style={{ padding: "10px 14px", textAlign: "left", fontWeight: 800, fontSize: "13pt", color: isUnpaid ? "#dc2626" : "#1e293b" }}>
                     {formatMoney(invoice.balance, cur)} <span style={{ fontSize: "8pt", fontWeight: 500, color: "#94a3b8" }}>{curSymbol}</span>
                   </td>
@@ -359,10 +365,10 @@ export default function InvoicePrintView({ invoice }: InvoicePrintViewProps) {
         {/* ═══ STAMPS ═══ */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px", marginBottom: "16px" }}>
           <div style={{ borderTop: "2px dashed #cbd5e1", paddingTop: "10px", textAlign: "center" }}>
-            <div style={{ fontSize: "8pt", color: "#94a3b8", marginBottom: "40px" }}>ختم وتوقيع البائع</div>
+            <div style={{ fontSize: "8pt", color: "#94a3b8", marginBottom: "40px" }}>{t.sellerStamp}</div>
           </div>
           <div style={{ borderTop: "2px dashed #cbd5e1", paddingTop: "10px", textAlign: "center" }}>
-            <div style={{ fontSize: "8pt", color: "#94a3b8", marginBottom: "40px" }}>ختم وتوقيع المشتري</div>
+            <div style={{ fontSize: "8pt", color: "#94a3b8", marginBottom: "40px" }}>{t.buyerStamp}</div>
           </div>
         </div>
 
@@ -370,7 +376,7 @@ export default function InvoicePrintView({ invoice }: InvoicePrintViewProps) {
         <div style={{ marginTop: "auto", paddingTop: "10px", borderTop: "2px solid #1e40af" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
             <div>
-              <div style={{ fontSize: "9pt", color: "#1e293b", fontWeight: 700, marginBottom: "2px" }}>شكراً لتعاملكم معنا</div>
+              <div style={{ fontSize: "9pt", color: "#1e293b", fontWeight: 700, marginBottom: "2px" }}>{t.thanks}</div>
               <div style={{ fontSize: "7pt", color: "#94a3b8", lineHeight: 1.5 }}>شركة يد العنكبوت التقنية — بغداد، العراق</div>
             </div>
             <div style={{ textAlign: "left" }}>

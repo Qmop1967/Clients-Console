@@ -791,7 +791,11 @@
     "notifPayments": "Payment notifications",
     "notifPromotions": "Promotions & news",
     "account": "Account",
-    "viewProfile": "View Profile"
+    "viewProfile": "View Profile",
+    "documentLanguage": "Document Language",
+    "documentLanguageHint": "Applies to invoices, credit notes, receipts and account statements",
+    "prefsSaved": "Preferences saved",
+    "prefsSaveError": "Failed to save preferences"
   },
   "notifications": {
     "title": "Notifications",

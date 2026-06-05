@@ -1,6 +1,7 @@
 "use client";
 
 import { ShoppingCart, LogOut, User } from "lucide-react";
+import type { Locale } from "@/i18n/config";
 import { NotificationDropdown } from "./notification-dropdown";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -18,7 +19,7 @@ interface HeaderProps {
   cartCount?: number;
   onCartClick?: () => void;
   user?: { name?: string; email?: string };
-  locale?: "en" | "ar";
+  locale?: Locale;
 }
 
 export function Header({ title, cartCount = 0, onCartClick, user, locale = "ar" }: HeaderProps) {

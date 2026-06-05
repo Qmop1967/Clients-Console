@@ -15,7 +15,7 @@ export const authConfig: NextAuthConfig = {
       const isPublicPath = publicPaths.some(path => pathname.includes(path));
 
       // Also allow root paths
-      const isRootPath = pathname === '/' || /^\/[a-z]{2}$/.test(pathname);
+      const isRootPath = pathname === '/' || /^\/[a-z]{2,3}$/.test(pathname);
 
       if (isPublicPath || isRootPath) return true;
       if (!isLoggedIn) return false;

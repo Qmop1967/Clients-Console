@@ -791,7 +791,11 @@
     "notifPayments": "إشعارات المدفوعات",
     "notifPromotions": "العروض والأخبار",
     "account": "الحساب",
-    "viewProfile": "عرض الملف الشخصي"
+    "viewProfile": "عرض الملف الشخصي",
+    "documentLanguage": "لغة المستندات",
+    "documentLanguageHint": "تُطبَّق على الفاتورة وإشعار الدائن ووصل القبض وكشف الحساب",
+    "prefsSaved": "تم حفظ التفضيلات",
+    "prefsSaveError": "فشل حفظ التفضيلات"
   },
   "notifications": {
     "title": "الإشعارات",

@@ -1,6 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
+import type { Locale } from "@/i18n/config";
 import { usePathname } from "next/navigation";
 import { Link } from "@/i18n/navigation";
 import {
@@ -40,8 +41,8 @@ interface MenuDrawerProps {
     name?: string;
     email?: string;
   };
-  locale: "en" | "ar";
-  onLocaleChange: (locale: "en" | "ar") => void;
+  locale: Locale;
+  onLocaleChange: (locale: Locale) => void;
 }
 
 interface NavSection {

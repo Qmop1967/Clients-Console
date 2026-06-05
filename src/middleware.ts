@@ -38,7 +38,7 @@ export default function middleware(request: NextRequest) {
   const baseUrl = `${proto}://${host}`;
 
   // Root path -> redirect to login
-  if (pathname === '/' || /^\/[a-z]{2}\/?$/.test(pathname)) {
+  if (pathname === '/' || /^\/[a-z]{2,3}\/?$/.test(pathname)) {
     const locale = pathname.split('/')[1] || defaultLocale;
     return NextResponse.redirect(new URL('/' + locale + '/login', baseUrl));
   }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import type { Locale } from "@/i18n/config";
 import { useSession } from "next-auth/react";
 import { PublicBottomNav } from "./public-bottom-nav";
 import { MenuDrawer } from "./menu-drawer";
@@ -18,7 +19,7 @@ export function PublicLayoutClient({ children, locale, footer }: PublicLayoutCli
   const pathname = usePathname();
   const { data: session } = useSession();
 
-  const handleLocaleChange = (newLocale: "en" | "ar") => {
+  const handleLocaleChange = (newLocale: Locale) => {
     // Replace the locale in the pathname
     const segments = pathname.split("/");
     segments[1] = newLocale;
@@ -48,7 +49,7 @@ export function PublicLayoutClient({ children, locale, footer }: PublicLayoutCli
         open={menuOpen}
         onOpenChange={setMenuOpen}
         user={user}
-        locale={locale as "en" | "ar"}
+        locale={locale as Locale}
         onLocaleChange={handleLocaleChange}
       />
     </>

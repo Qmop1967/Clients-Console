@@ -1,18 +1,24 @@
 import { getRequestConfig } from 'next-intl/server';
 
-export const locales = ['en', 'ar'] as const;
+export const locales = ['ar', 'en', 'ckb', 'kmr', 'tm'] as const;
 export type Locale = (typeof locales)[number];
 
 export const defaultLocale: Locale = 'ar';
 
 export const localeNames: Record<Locale, string> = {
-  en: 'English',
   ar: 'العربية',
+  en: 'English',
+  ckb: 'کوردی سۆرانی',
+  kmr: 'کوردی کرمانجی',
+  tm: 'Türkmençe',
 };
 
 export const localeDirection: Record<Locale, 'ltr' | 'rtl'> = {
-  en: 'ltr',
   ar: 'rtl',
+  en: 'ltr',
+  ckb: 'rtl',
+  kmr: 'rtl',
+  tm: 'ltr',
 };
 
 export default getRequestConfig(async ({ requestLocale }) => {

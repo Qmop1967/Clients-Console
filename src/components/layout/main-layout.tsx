@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import type { Locale } from "@/i18n/config";
 import { useRouter, usePathname } from "next/navigation";
 import { BottomNav } from "./bottom-nav";
 import { MenuDrawer } from "./menu-drawer";
@@ -12,7 +13,7 @@ import { useCart } from "@/components/providers/cart-provider";
 interface MainLayoutProps {
   children: React.ReactNode;
   title?: string;
-  locale: "en" | "ar";
+  locale: Locale;
 }
 
 export function MainLayout({ children, title, locale }: MainLayoutProps) {
@@ -45,7 +46,7 @@ export function MainLayout({ children, title, locale }: MainLayoutProps) {
     } catch {}
   }, []);
 
-  const handleLocaleChange = (newLocale: "en" | "ar") => {
+  const handleLocaleChange = (newLocale: Locale) => {
     const segments = pathname.split("/");
     segments[1] = newLocale;
     router.push(segments.join("/"));
