@@ -12,8 +12,20 @@ async function gw(path: string, body: any, extraHeaders?: Record<string, string>
     body: JSON.stringify(body),
     cache: 'no-store',
   });
-  const data = await res.json();
-  if (!data.success) throw new Error(data.error || 'Gateway call failed');
+  let data: any;
+  try {
+    data = await res.json();
+  } catch {
+    const e: any = new Error(`Gateway returned malformed response (HTTP ${res.status})`);
+    e.status = res.status;
+    throw e;
+  }
+  if (!data.success) {
+    const e: any = new Error(data.error || 'Gateway call failed');
+    e.code = data.code;
+    e.status = res.status;
+    throw e;
+  }
   return data.data;
 }
 

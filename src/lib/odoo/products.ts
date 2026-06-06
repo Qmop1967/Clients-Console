@@ -259,6 +259,23 @@ export async function getProductById(id: number | string, lang?: string): Promis
 }
 
 /**
+ * Strict product read for product DETAIL pages.
+ * Unlike getProductById, this does NOT swallow transport errors:
+ *   - returns null ONLY when the product genuinely doesn't exist (empty read)
+ *   - rethrows gateway/transport errors (e.g. 429 RATE_LIMIT_EXCEEDED, network)
+ * so the detail page can tell "not found" (404) apart from "temporarily
+ * unavailable" (retry) instead of mis-rendering every transient hiccup as 404.
+ */
+export async function getProductByIdStrict(id: number | string, lang?: string): Promise<Product | null> {
+  const numId = typeof id === 'string' ? parseInt(id, 10) : id;
+  if (isNaN(numId)) return null;
+  const products = await odooRead<OdooProduct>('product.product', [numId], PRODUCT_DETAIL_FIELDS, lang ? { lang } : undefined);
+  if (!products.length) return null;
+  const versionMap = await fetchImageVersions(products);
+  return odooProductToProduct(products[0], versionMap);
+}
+
+/**
  * Search products by name or SKU
  */
 export async function searchProducts(

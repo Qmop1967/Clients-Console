@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { ProductDetailContent } from "@/components/products/product-detail-content";
-import { getProduct, getProductImageUrl } from "@/lib/odoo/products";
+import { getProduct, getProductByIdStrict, getProductImageUrl } from "@/lib/odoo/products";
 import { getCustomerPriceList, getItemPriceFromList, PRICE_LIST_IDS } from "@/lib/odoo/pricelists";
 import { getUnifiedStock } from "@/lib/odoo/stock";
 import { getCustomer } from "@/lib/odoo/customers";
@@ -71,7 +71,7 @@ async function fetchProductData(productId: string, priceListId?: string): Promis
     const effectivePriceListId = priceListId || PRICE_LIST_IDS.CONSUMER;
 
     const [product, stockResult, priceList] = await Promise.all([
-      getProduct(productId),
+      getProductByIdStrict(productId),
       getUnifiedStock(productId, {
         fetchOnMiss: true,
         context: 'product-detail',
@@ -121,7 +121,9 @@ async function fetchProductData(productId: string, priceListId?: string): Promis
   } catch (error) {
     console.error("Error fetching product:", error);
     const errorMsg = error instanceof Error ? error.message : String(error);
-    if (errorMsg.includes("429") || errorMsg.includes("rate") || errorMsg.includes("blocked")) {
+    const errCode = (error as { code?: string } | null)?.code;
+    const errStatus = (error as { status?: number } | null)?.status;
+    if (errCode === "RATE_LIMIT_EXCEEDED" || errStatus === 429 || errorMsg.includes("429") || errorMsg.includes("rate") || errorMsg.includes("blocked")) {
       return { success: false, error: "rate_limited" };
     }
     return { success: false, error: "error" };

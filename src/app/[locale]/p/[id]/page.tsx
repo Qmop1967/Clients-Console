@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { getProduct } from "@/lib/odoo/products";
+import { getProduct, getProductByIdStrict } from "@/lib/odoo/products";
 
 // Public product share page — no auth (allowed in middleware), for WhatsApp/social sharing.
 export const revalidate = 120;
@@ -79,7 +79,19 @@ export async function generateMetadata({ params }: PageProps) {
 export default async function PublicProductPage({ params }: PageProps) {
   const { locale, id } = await params;
   const isAr = locale !== "en";
-  const product = await getProduct(id, isAr ? "ar_001" : "en_US");
+  let product: Awaited<ReturnType<typeof getProductByIdStrict>> = null;
+  try {
+    product = await getProductByIdStrict(id, isAr ? "ar_001" : "en_US");
+  } catch {
+    // Transient backend error (rate-limit / network) — never 404 a real product.
+    return (
+      <div dir={isAr ? "rtl" : "ltr"} className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-center gap-4 px-6 text-center">
+        <p className="text-lg font-bold">{isAr ? "المنتج غير متاح مؤقتاً" : "Temporarily unavailable"}</p>
+        <p className="text-sm text-slate-400">{isAr ? "الخادم مشغول حالياً، حاول بعد لحظات." : "The server is busy right now. Please try again in a moment."}</p>
+        <a href={`/${locale}/p/${id}`} className="inline-flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-2xl px-6 py-3">{isAr ? "إعادة المحاولة" : "Try again"}</a>
+      </div>
+    );
+  }
   if (!product) notFound();
   const { images, video } = await fetchPublicMedia(id);
   const embed = video?.x_url ? ytEmbed(video.x_url) : null;
