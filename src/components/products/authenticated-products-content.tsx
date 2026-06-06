@@ -123,6 +123,7 @@ const ProductCardWithCart = memo(function ProductCardWithCart({
 
   return (
     <Link
+      prefetch={false}
       href={`/${locale}/shop/${product.item_id}`}
       className={cn(
         "group block rounded-xl border bg-card card-hover overflow-hidden",

@@ -150,6 +150,7 @@ const ProductCardWithCart = memo(function ProductCardWithCart({
 
   return (
     <Link
+      prefetch={false}
       href={`/${locale}/shop/${product.item_id}`}
       onClick={handleCardClick}
       className={cn(

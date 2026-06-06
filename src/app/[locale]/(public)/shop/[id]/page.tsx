@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { ProductDetailContent } from "@/components/products/product-detail-content";
-import { getProduct, getProductByIdStrict, getProductImageUrl } from "@/lib/odoo/products";
+import { getProductByIdStrictCached, getProductImageUrl } from "@/lib/odoo/products";
 import { getCustomerPriceList, getItemPriceFromList, PRICE_LIST_IDS } from "@/lib/odoo/pricelists";
 import { getUnifiedStock } from "@/lib/odoo/stock";
 import { getCustomer } from "@/lib/odoo/customers";
@@ -23,7 +23,7 @@ export async function generateMetadata({ params }: ProductPageProps) {
   const { id } = await params;
 
   try {
-    const product = await getProduct(id);
+    const product = await getProductByIdStrictCached(id);
     if (!product) {
       return { title: "Product Not Found" };
     }
@@ -71,7 +71,7 @@ async function fetchProductData(productId: string, priceListId?: string): Promis
     const effectivePriceListId = priceListId || PRICE_LIST_IDS.CONSUMER;
 
     const [product, stockResult, priceList] = await Promise.all([
-      getProductByIdStrict(productId),
+      getProductByIdStrictCached(productId),
       getUnifiedStock(productId, {
         fetchOnMiss: true,
         context: 'product-detail',

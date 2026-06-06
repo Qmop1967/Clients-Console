@@ -9,6 +9,7 @@ import { odooSearchRead, odooRead, odooCount, getOdooImageUrl, getImageVersions 
 import type { OdooProduct, OdooCategory as OdooCategoryType } from './types';
 import type { Product, Category, PaginatedResponse } from '@/types';
 import { unstable_cache } from 'next/cache';
+import { cache } from 'react';
 
 // ============================================
 // Warehouse Product Isolation (Phase C — 2026-04-30)
@@ -274,6 +275,13 @@ export async function getProductByIdStrict(id: number | string, lang?: string): 
   const versionMap = await fetchImageVersions(products);
   return odooProductToProduct(products[0], versionMap);
 }
+
+// Request-scoped memo so generateMetadata + the page component share ONE
+// gateway read per request (React cache dedupes identical calls), halving
+// detail-page Odoo calls and easing the shared client rate-limit budget.
+export const getProductByIdStrictCached = cache(
+  (id: number | string, lang?: string) => getProductByIdStrict(id, lang)
+);
 
 /**
  * Search products by name or SKU
