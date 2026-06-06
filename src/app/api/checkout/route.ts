@@ -102,6 +102,7 @@ export async function POST(request: NextRequest) {
       customer_id: session.user.odooPartnerId,
       line_items: lineItems,
       notes: notes || `Order placed via TSH Web Portal`,
+      idempotencyKey,
     });
 
     if (!result.success || !result.order) {

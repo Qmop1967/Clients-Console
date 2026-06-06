@@ -196,6 +196,7 @@ export async function createSalesOrder(data: {
   notes?: string;
   reference_number?: string;
   autoConfirm?: boolean;
+  idempotencyKey?: string;
 }): Promise<CreateOrderResult> {
   try {
     // Order creation goes through the central gateway, which enforces the
@@ -209,12 +210,14 @@ export async function createSalesOrder(data: {
         'Content-Type': 'application/json',
         'x-api-key': API_KEY,
         'x-partner-id': String(data.customer_id),
+        ...(data.idempotencyKey ? { 'Idempotency-Key': data.idempotencyKey } : {}),
       },
       cache: 'no-store',
       body: JSON.stringify({
         items: data.line_items.map((li) => ({ item_id: li.item_id, quantity: li.quantity })),
         notes: data.notes || false,
         autoConfirm: data.autoConfirm !== false,
+        idempotencyKey: data.idempotencyKey,
       }),
     });
     const gw: any = await resp.json().catch(() => ({}));

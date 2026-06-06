@@ -202,10 +202,24 @@ export default function CartPage() {
 
       const combinedNotes = [orderNote, itemNotesText].filter(Boolean).join('\n\n');
 
+      // Stable idempotency key per cart (survives reload/retry; rate-independent)
+      const __cartKey = validItems.map((i) => `${i.item_id}:${i.quantity}`).sort().join('|');
+      const __idemStoreKey = `tsh_idem:${__cartKey}`;
+      let __idemKey = '';
+      try {
+        __idemKey = sessionStorage.getItem(__idemStoreKey) || '';
+        if (!__idemKey) {
+          __idemKey = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+          sessionStorage.setItem(__idemStoreKey, __idemKey);
+        }
+      } catch {
+        __idemKey = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      }
       const response = await fetch('/api/checkout', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Idempotency-Key': __idemKey,
         },
         body: JSON.stringify({
           items: validItems.map(item => ({
@@ -226,6 +240,7 @@ export default function CartPage() {
       }
 
       // Success!
+      try { sessionStorage.removeItem(__idemStoreKey); } catch {}
       setOrderSuccess({
         orderNumber: data.order.salesorder_number,
         orderId: data.order.salesorder_id,
