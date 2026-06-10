@@ -393,6 +393,13 @@ export function ProductDetailContent({ product, locale }: ProductDetailProps) {
               const LABEL_AR: Record<string, string> = {
                 "Brand": "الماركة",
                 "Model": "الموديل",
+                "Fans": "المراوح",
+                "Fan Size": "حجم المروحة",
+                "Fan Speed": "سرعة المراوح",
+                "Stand": "الستاند",
+                "Noise": "مستوى الضوضاء",
+                "Noise Level": "مستوى الضوضاء",
+                "LED": "الإضاءة",
                 "Includes": "المحتويات",
                 "Keyboard": "الكيبورد",
                 "Mouse": "الماوس",
