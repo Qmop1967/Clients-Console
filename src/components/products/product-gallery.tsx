@@ -249,7 +249,17 @@ export function ProductGallery({
               sizes="(max-width: 1024px) 100vw, 50vw"
               priority={activeIdx === 0}
               onError={(e) => {
-                const target = e.currentTarget;
+                const target = e.currentTarget as HTMLImageElement;
+                // Retry once (cache-busted) before falling back — transient gateway
+                // 404s under cold load recover on the second attempt.
+                if (!target.dataset.retried) {
+                  target.dataset.retried = "1";
+                  const u = currentImage.src;
+                  setTimeout(() => {
+                    target.src = `${u}${u.includes("?") ? "&" : "?"}r=${Date.now()}`;
+                  }, 600);
+                  return;
+                }
                 target.style.display = 'none';
                 // Show fallback in parent container
                 const parent = target.closest('.group');

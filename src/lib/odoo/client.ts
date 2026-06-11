@@ -85,7 +85,11 @@ export function getOdooImageUrl(productId: number, size: '128x128' | '256x256' |
   // version = gateway-computed image_1920 attachment write_date (epoch s). Busts browser/edge
   // cache on set-main/unset-main. Static fallback only when no version supplied.
   const v = version ? String(version) : '6';
-  return `/api/images/${productId}?size=${size}&v=${v}`;
+  // e= is a BROWSER/CF/next-image cache EPOCH. It is NOT forwarded to the gateway
+  // (the /api/images route only forwards ?v=), so gateway Redis stays warm (keyed by v).
+  // Bump it to orphan client-side poisoned entries — e.g. the 2026-05-23→06-05 window
+  // where Odoo placeholders/transient 404s got cached immutable-1yr against a stable v.
+  return `/api/images/${productId}?size=${size}&v=${v}&e=2`;
 }
 
 /**

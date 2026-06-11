@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, memo } from "react";
+import { useState, useEffect, useRef, useCallback, memo } from "react";
 import { Package } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 
@@ -22,6 +22,35 @@ const ImagePlaceholder = memo(function ImagePlaceholder({ className }: { classNa
   );
 });
 
+// Retry-once on error: a transient gateway 404/timeout under a cold-grid burst must
+// NOT pin a placeholder for the whole session (the old onError->fallback did exactly
+// that). First failure schedules ONE cache-busted retry (~600ms — by then the gateway
+// Redis is warm from the burst); only a second failure shows the fallback.
+function useRetryOnceSrc(src: string | null | undefined) {
+  const [effectiveSrc, setEffectiveSrc] = useState<string | null>(src ?? null);
+  const [failed, setFailed] = useState(false);
+  const retriedRef = useRef(false);
+
+  useEffect(() => {
+    setEffectiveSrc(src ?? null);
+    setFailed(false);
+    retriedRef.current = false;
+  }, [src]);
+
+  const onError = useCallback(() => {
+    if (!retriedRef.current && src) {
+      retriedRef.current = true;
+      setTimeout(() => {
+        setEffectiveSrc(`${src}${src.includes("?") ? "&" : "?"}r=${Date.now()}`);
+      }, 600);
+    } else {
+      setFailed(true);
+    }
+  }, [src]);
+
+  return { effectiveSrc, failed, onError };
+}
+
 // IMPORTANT (perf/stability): renders a NATIVE <img> pointing at the Gateway image
 // URL (/api/images/{id}?size=...&v=...), which is ALREADY correctly sized. This
 // deliberately BYPASSES the Next.js /_next/image optimizer, whose per-thumbnail
@@ -33,10 +62,16 @@ export const ProductImage = memo(function ProductImage({
   className,
   priority = false,
 }: ProductImageProps) {
-  const [hasError, setHasError] = useState(false);
+  const { effectiveSrc, failed, onError } = useRetryOnceSrc(src);
   const [isLoading, setIsLoading] = useState(true);
 
-  if (!src || hasError) {
+  // New (or retried) src => show the loading veil again so a broken-image glyph
+  // never flashes during the retry window.
+  useEffect(() => {
+    setIsLoading(true);
+  }, [effectiveSrc]);
+
+  if (!effectiveSrc || failed) {
     return <ImagePlaceholder className={className} />;
   }
 
@@ -44,16 +79,13 @@ export const ProductImage = memo(function ProductImage({
     <div className={cn("relative overflow-hidden bg-muted", className)}>
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
-        src={src}
+        src={effectiveSrc}
         alt={alt}
         loading={priority ? "eager" : "lazy"}
         decoding="async"
         {...(priority ? { fetchpriority: "high" } : {})}
         onLoad={() => setIsLoading(false)}
-        onError={() => {
-          setHasError(true);
-          setIsLoading(false);
-        }}
+        onError={onError}
         className={cn(
           "absolute inset-0 h-full w-full object-contain transition-opacity duration-150",
           isLoading ? "opacity-0" : "opacity-100"
@@ -70,9 +102,9 @@ export const ProductImageSmall = memo(function ProductImageSmall({
   alt,
   className,
 }: Omit<ProductImageProps, "priority" | "sizes">) {
-  const [hasError, setHasError] = useState(false);
+  const { effectiveSrc, failed, onError } = useRetryOnceSrc(src);
 
-  if (!src || hasError) {
+  if (!effectiveSrc || failed) {
     return (
       <div className={cn("flex items-center justify-center bg-muted", className)}>
         <Package className="h-6 w-6 text-muted-foreground/50" />
@@ -84,11 +116,11 @@ export const ProductImageSmall = memo(function ProductImageSmall({
     <div className={cn("relative overflow-hidden bg-muted", className)}>
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
-        src={src}
+        src={effectiveSrc}
         alt={alt}
         loading="lazy"
         decoding="async"
-        onError={() => setHasError(true)}
+        onError={onError}
         className="absolute inset-0 h-full w-full object-contain"
       />
     </div>

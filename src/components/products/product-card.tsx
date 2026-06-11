@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, memo } from "react";
+import { useState, useEffect, useRef, useCallback, memo } from "react";
 import { useTranslations, useLocale } from "next-intl";
 import { getLocalizedName } from "@/lib/product-name";
 import Image from "next/image";
@@ -37,6 +37,26 @@ export const ProductCard = memo(function ProductCard({ product, currencyCode }: 
   const tCatalog = useTranslations("catalogMode");
   const [added, setAdded] = useState(false);
   const [imgError, setImgError] = useState(false);
+  // Retry-once: transient gateway 404s under cold-grid bursts must not pin the
+  // fallback icon for the whole session. One cache-busted retry, then fallback.
+  const [imgSrc, setImgSrc] = useState(product.image_url);
+  const imgRetried = useRef(false);
+  useEffect(() => {
+    setImgSrc(product.image_url);
+    setImgError(false);
+    imgRetried.current = false;
+  }, [product.image_url]);
+  const handleImgError = useCallback(() => {
+    const base = product.image_url;
+    if (!imgRetried.current && base) {
+      imgRetried.current = true;
+      setTimeout(() => {
+        setImgSrc(`${base}${base.includes("?") ? "&" : "?"}r=${Date.now()}`);
+      }, 600);
+    } else {
+      setImgError(true);
+    }
+  }, [product.image_url]);
   const { addItem } = useCart();
   const { isCatalogMode, showCatalogModal } = useCatalogMode();
 
@@ -78,14 +98,14 @@ export const ProductCard = memo(function ProductCard({ product, currencyCode }: 
     >
       {/* Image Container */}
       <div className="relative aspect-square overflow-hidden bg-muted/50">
-        {product.image_url && !imgError ? (
+        {imgSrc && !imgError ? (
           <Image
-            src={product.image_url}
+            src={imgSrc}
             alt={displayName}
             fill
             className="object-cover transition-transform duration-500 group-hover:scale-105"
             sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
-            onError={() => setImgError(true)}
+            onError={handleImgError}
           />
         ) : (
           <div className="flex h-full items-center justify-center bg-gradient-to-br from-muted to-muted/50">
