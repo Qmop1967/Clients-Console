@@ -11,7 +11,11 @@ const withBundleAnalyzer = bundleAnalyzer({
   openAnalyzer: true,
 });
 
+const BUILD_ID = process.env.BUILD_ID || String(Date.now());
+
 const nextConfig: NextConfig = {
+  generateBuildId: async () => BUILD_ID,
+  env: { NEXT_PUBLIC_BUILD_ID: BUILD_ID },
   // Enable React Compiler for improved performance (Next.js 15)
   reactStrictMode: true,
 

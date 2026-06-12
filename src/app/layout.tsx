@@ -1,3 +1,5 @@
+import ChunkReloader from "../components/ChunkReloader";
+import VersionWatcher from "../components/VersionWatcher";
 import type { Metadata } from "next";
 import "./globals.css";
 import { ErrorReporter } from "@/components/error-reporter";
@@ -20,7 +22,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className="antialiased">
+      <body className="antialiased"><ChunkReloader /><VersionWatcher />
         <ErrorReporter />
         <ServiceWorkerRegister />
         <OfflineIndicator />
