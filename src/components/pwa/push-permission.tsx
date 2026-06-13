@@ -76,6 +76,35 @@ export function PushPermission() {
     return () => { unsub?.(); };
   }, [status]);
 
+  // Effect 3: token resilience — re-register the current FCM token when the app
+  // returns to the foreground and every 6h while open. FCM tokens rotate; without
+  // this a customer who granted permission silently loses push once it rotates
+  // (registerSilently re-fetches the token and upserts on the backend).
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (status !== 'authenticated') return;
+    if (!('Notification' in window) || Notification.permission !== 'granted') return;
+
+    let last = 0;
+    const REVALIDATE_MS = 6 * 60 * 60 * 1000; // 6h
+    const revalidate = () => {
+      const now = Date.now();
+      if (now - last < REVALIDATE_MS) return;
+      last = now;
+      registerSilently();
+    };
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') revalidate();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    const iv = setInterval(revalidate, REVALIDATE_MS);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible);
+      clearInterval(iv);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status, session?.user?.id]);
+
   async function registerSilently() {
     try {
       const token = await requestFcmToken();
