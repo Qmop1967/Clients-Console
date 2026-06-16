@@ -440,6 +440,20 @@ export function ProductDetailContent({ product, locale }: ProductDetailProps) {
                 "Chipset": "المعالج",
                 "Protocol": "البروتوكول",
                 "Warranty": "الضمان",
+                "Form Factor": "نوع الكابينة",
+                "Rack Units": "عدد الوحدات (U)",
+                "Front Door": "الباب الأمامي",
+                "Mounting": "معيار التركيب",
+                "Cooling": "التبريد",
+                "PDU": "وحدة توزيع الطاقة",
+                "Shelf": "الرفّ",
+                "Load Capacity": "سعة التحميل",
+                "Packaging": "التغليف",
+                "Depth": "العمق",
+                "Height": "الارتفاع",
+                "Width": "العرض",
+                "Lock": "القفل",
+                "Side Panels": "الألواح الجانبية",
               };
               const specs = product.more_detail.split("\n").filter(Boolean).map(line => {
                 const idx = line.indexOf(":");
