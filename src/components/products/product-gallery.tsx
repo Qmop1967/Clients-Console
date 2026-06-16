@@ -18,6 +18,8 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import Image from "next/image";
 import { X, ChevronLeft, ChevronRight, FileText, Share2, ZoomIn, Download, Play } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useLocale } from "next-intl";
+import { normalizeDocLang } from "@/lib/doc-i18n";
 
 interface MediaItem {
   id: number;
@@ -34,6 +36,7 @@ interface MediaItem {
   visibility?: string;
   asset_type?: string;
   is_main?: boolean;
+  language?: string;
 }
 
 interface ProductGalleryProps {
@@ -54,6 +57,7 @@ export function ProductGallery({
   const [activeIdx, setActiveIdx] = useState(0);
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const touchStart = useRef<number | null>(null);
+  const locale = useLocale();
 
   // Fetch media (reusable so we can re-run on focus/visibility for fresh image state).
   const fetchMedia = useCallback(async () => {
@@ -122,11 +126,26 @@ export function ProductGallery({
     const usage = m.usage || (m.media_type === "datasheet" ? "datasheet" : "gallery");
     return usage !== "datasheet" && usage !== "manual" && !mimeIncludes(m, "pdf");
   });
-  const datasheets = media.filter((m) => {
+  const allDatasheets = media.filter((m) => {
     if (isVideo(m)) return false;
     const usage = m.usage || (m.media_type === "datasheet" ? "datasheet" : "gallery");
     return usage === "datasheet" || usage === "manual" || mimeIncludes(m, "pdf");
   });
+  // Show only the datasheet(s) matching the customer's selected language,
+  // with graceful fallback: exact locale -> English -> Arabic -> all.
+  const wantDocLang = normalizeDocLang(locale);
+  const datasheets = (() => {
+    if (allDatasheets.length <= 1) return allDatasheets;
+    const byLang = (l: string) =>
+      allDatasheets.filter((d) => normalizeDocLang(d.language) === l);
+    const exact = byLang(wantDocLang);
+    if (exact.length) return exact;
+    const en = byLang("en");
+    if (en.length) return en;
+    const ar = byLang("ar");
+    if (ar.length) return ar;
+    return allDatasheets;
+  })();
   const videos = media.filter(isVideo);
   // Gallery = non-social images; Social = social_media (separate section)
   const galleryImages = allImages

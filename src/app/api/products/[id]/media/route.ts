@@ -71,6 +71,7 @@ export async function GET(
         url: m.x_url,
         thumbnail_url: m.x_thumbnail_url,
         media_type: m.x_media_type,
+        language: m.x_language,
         category: m.x_media_category,
         name: m.x_name,
         sequence: m.x_sequence ?? 99,
