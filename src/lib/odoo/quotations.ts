@@ -101,10 +101,10 @@ export async function getCustomerQuotations(customerId: string): Promise<(SalesO
  */
 export async function rejectQuotation(orderId: number, partnerId: number): Promise<{ success: boolean; error?: string }> {
   try {
-    const orders = await odooSearchRead<OdooSaleOrder>(
+    const orders = await odooSearchRead<OdooSaleOrder & { x_revision_number?: number }>(
       'sale.order',
       [['id', '=', orderId]],
-      ['id', 'state', 'partner_id']
+      ['id', 'state', 'partner_id', 'x_revision_number']
     );
 
     if (!orders.length) return { success: false, error: 'Order not found' };
@@ -115,13 +115,24 @@ export async function rejectQuotation(orderId: number, partnerId: number): Promi
     if (order.state !== 'draft' && order.state !== 'sent') return { success: false, error: 'Not a quotation' };
 
     const GATEWAY_URL = process.env.API_GATEWAY_URL || "http://localhost:3010";
-    const API_KEY = process.env.API_KEY || "tsh-client-2026-key";
-    await fetch(`${GATEWAY_URL}/api/odoo/call`, {
+    const API_KEY = process.env.API_KEY || "";
+    const revision = Number((order as any).x_revision_number || 0);
+    const resp = await fetch(`${GATEWAY_URL}/api/orders/${orderId}/nego/cancel`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", "x-api-key": API_KEY },
-      body: JSON.stringify({ model: "sale.order", method: "action_cancel", args: [[orderId]] }),
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": API_KEY,
+        "x-partner-id": String(partnerId),
+      },
+      body: JSON.stringify({
+        reason: "customer_rejected",
+        idempotency_key: `reject-${orderId}-${revision}`,
+      }),
     });
-
+    const data = await resp.json().catch(() => ({} as any));
+    if (!resp.ok || !data?.success) {
+      return { success: false, error: data?.message || data?.code || `reject failed (${resp.status})` };
+    }
     return { success: true };
   } catch (error) {
     console.error('[Quotations] Reject error:', error);

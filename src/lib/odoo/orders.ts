@@ -431,10 +431,12 @@ export async function approveQuotation(orderId: number, partnerId: number): Prom
     const orders = await odooRead<OdooSaleOrder & {
       x_client_approved?: boolean;
       x_needs_admin_approval?: boolean;
+      x_revision_number?: number;
     }>('sale.order', [orderId], [
       ...ORDER_FIELDS,
       'x_client_approved',
       'x_needs_admin_approval',
+      'x_revision_number',
     ]);
 
     if (!orders.length) {
@@ -454,48 +456,32 @@ export async function approveQuotation(orderId: number, partnerId: number): Prom
       return { success: false, needsAdminApproval: false, error: 'Order is not a quotation' };
     }
 
-    // Set x_client_approved = true
-    await odooWrite('sale.order', [orderId], { x_client_approved: true });
-
-    // Check if admin approval is needed
-    const needsAdmin = Boolean(order.x_needs_admin_approval);
-
-    if (!needsAdmin) {
-      // Auto-confirm via Gateway
-      const GATEWAY_URL = process.env.API_GATEWAY_URL || "http://localhost:3010";
-      const API_KEY = process.env.API_KEY || "tsh-client-2026-key";
-      await fetch(`${GATEWAY_URL}/api/odoo/call`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "x-api-key": API_KEY },
-        body: JSON.stringify({ model: "sale.order", method: "action_confirm", args: [[orderId]] }),
-      });
+    // Route the customer confirmation through the gateway negotiation endpoint.
+    // Guards, revalidation, stock check, price-gate, audit, and admin-routing all live there.
+    const GATEWAY_URL = process.env.API_GATEWAY_URL || "http://localhost:3010";
+    const API_KEY = process.env.API_KEY || "";
+    const revision = Number((order as any).x_revision_number || 0);
+    const resp = await fetch(`${GATEWAY_URL}/api/orders/${orderId}/nego/customer-confirm`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": API_KEY,
+        "x-partner-id": String(partnerId),
+      },
+      body: JSON.stringify({
+        expected_revision_number: revision,
+        idempotency_key: `confirm-${orderId}-${revision}`,
+      }),
+    });
+    const data = await resp.json().catch(() => ({} as any));
+    if (!resp.ok || !data?.success) {
+      return {
+        success: false,
+        needsAdminApproval: false,
+        error: data?.message || data?.code || `confirm failed (${resp.status})`,
+      };
     }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    return { success: true, needsAdminApproval: needsAdmin };
+    return { success: true, needsAdminApproval: Boolean(data.needs_admin) };
   } catch (error) {
     console.error(`[Odoo Orders] approveQuotation error:`, error);
     return {
