@@ -122,16 +122,15 @@ const ProductCardWithCart = memo(function ProductCardWithCart({
   }, []);
 
   return (
-    <Link
-      prefetch={false}
-      href={`/${locale}/shop/${product.item_id}`}
+    <div
       className={cn(
-        "group block rounded-xl border bg-card card-hover overflow-hidden",
+        "group rounded-xl border bg-card card-hover overflow-hidden",
         // LCP OPTIMIZATION: Skip rendering below-fold cards until scrolled into view
         !priority && "content-auto"
       )}
     >
-      {/* Product Image with overlay */}
+      {/* Image navigates to detail */}
+      <Link prefetch={false} href={`/${locale}/shop/${product.item_id}`} className="block">
       <div className="relative img-hover-zoom">
         <ProductImage
           src={product.image_url}
@@ -152,14 +151,17 @@ const ProductCardWithCart = memo(function ProductCardWithCart({
           </div>
         )}
       </div>
+      </Link>
 
       <div className="p-4">
         {/* Product Info */}
         <div className="space-y-2">
-          {/* Product Name */}
-          <h2 className="font-semibold text-sm line-clamp-2 min-h-[2.5rem] group-hover:text-primary transition-colors duration-200">
-            {displayName}
-          </h2>
+          {/* Product Name navigates to detail */}
+          <Link prefetch={false} href={`/${locale}/shop/${product.item_id}`} className="block">
+            <h2 className="font-semibold text-sm line-clamp-2 min-h-[2.5rem] group-hover:text-primary transition-colors duration-200">
+              {displayName}
+            </h2>
+          </Link>
 
           {/* SKU & Brand */}
           <div className="flex items-center justify-between text-xs text-muted-foreground">
@@ -252,6 +254,7 @@ const ProductCardWithCart = memo(function ProductCardWithCart({
         {/* View Details for non-purchasable items */}
         {(!hasPrice || !isInStock) && (
           <div className="mt-4 pt-3 border-t border-border/50">
+            <Link prefetch={false} href={`/${locale}/shop/${product.item_id}`} className="block">
             <Button
               variant="outline"
               className="w-full btn-press group/btn"
@@ -260,10 +263,11 @@ const ProductCardWithCart = memo(function ProductCardWithCart({
               <Eye className="h-4 w-4 me-2 group-hover/btn:scale-110 transition-transform" />
               {t("viewDetails")}
             </Button>
+            </Link>
           </div>
         )}
       </div>
-    </Link>
+    </div>
   );
 });
 

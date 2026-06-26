@@ -149,17 +149,15 @@ const ProductCardWithCart = memo(function ProductCardWithCart({
   }, []);
 
   return (
-    <Link
-      prefetch={false}
-      href={`/${locale}/shop/${product.item_id}`}
-      onClick={handleCardClick}
+    <div
       className={cn(
-        "group block rounded-2xl border bg-card overflow-hidden native-press transition-all duration-200 active:scale-[0.98] hover:shadow-lg hover:-translate-y-0.5",
+        "group rounded-2xl border bg-card overflow-hidden native-press transition-all duration-200 active:scale-[0.98] hover:shadow-lg hover:-translate-y-0.5",
         // LCP OPTIMIZATION: Skip rendering below-fold cards until scrolled into view
         !priority && "content-auto"
       )}
     >
-      {/* Product Image with overlay */}
+      {/* Image navigates to detail */}
+      <Link prefetch={false} href={`/${locale}/shop/${product.item_id}`} onClick={handleCardClick} className="block">
       <div className="relative overflow-hidden">
         {/* LCP OPTIMIZATION: sizes must match grid layout (grid-cols-2 on mobile = 50vw) */}
         <ProductImage
@@ -182,14 +180,17 @@ const ProductCardWithCart = memo(function ProductCardWithCart({
           </div>
         )}
       </div>
+      </Link>
 
       <div className="px-3 py-3.5 sm:p-4">
         {/* Product Info */}
         <div className="space-y-1.5 sm:space-y-2">
-          {/* Product Name */}
-          <h2 className="font-semibold text-xs sm:text-sm line-clamp-3 min-h-[2.75rem] sm:min-h-[3.75rem] group-hover:text-primary transition-colors duration-200">
-            {displayName}
-          </h2>
+          {/* Product Name navigates to detail */}
+          <Link prefetch={false} href={`/${locale}/shop/${product.item_id}`} onClick={handleCardClick} className="block">
+            <h2 className="font-semibold text-xs sm:text-sm line-clamp-3 min-h-[2.75rem] sm:min-h-[3.75rem] group-hover:text-primary transition-colors duration-200">
+              {displayName}
+            </h2>
+          </Link>
 
           {/* SKU & Brand */}
           <div className="flex items-center justify-between text-[11px] sm:text-xs text-muted-foreground">
@@ -310,6 +311,7 @@ const ProductCardWithCart = memo(function ProductCardWithCart({
         {/* View Details for non-purchasable items (hidden in catalog mode) */}
         {!isCatalogMode && (!hasPrice || !isInStock) && (
           <div className="mt-3 sm:mt-4 pt-2 sm:pt-3 border-t border-border/50">
+            <Link prefetch={false} href={`/${locale}/shop/${product.item_id}`} onClick={handleCardClick} className="block">
             <Button
               variant="outline"
               className="w-full btn-press group/btn border-primary/30 hover:bg-primary/5"
@@ -318,10 +320,11 @@ const ProductCardWithCart = memo(function ProductCardWithCart({
               <Eye className="h-3.5 w-3.5 me-1.5 group-hover/btn:scale-110 transition-transform" />
               {t("viewDetails")}
             </Button>
+            </Link>
           </div>
         )}
       </div>
-    </Link>
+    </div>
   );
 });
 
