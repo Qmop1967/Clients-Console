@@ -98,6 +98,7 @@ const ProductCardWithCart = memo(function ProductCardWithCart({
   const { isCatalogMode, showCatalogModal } = useCatalogMode();
   const [quantity, setQuantity] = useState(1);
   const [added, setAdded] = useState(false);
+  const addedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const isInStock = product.available_stock > 0;
   const isLowStock = product.available_stock > 0 && product.available_stock <= 5;
@@ -126,10 +127,8 @@ const ProductCardWithCart = memo(function ProductCardWithCart({
     );
 
     setAdded(true);
-    setTimeout(() => {
-      setAdded(false);
-      setQuantity(1);
-    }, 1500);
+    if (addedTimerRef.current) clearTimeout(addedTimerRef.current);
+    addedTimerRef.current = setTimeout(() => setAdded(false), 1200);
   }, [hasPrice, isInStock, maxQuantity, addItem, product, quantity]);
 
   // Handler to prevent navigation when interacting with quantity input
@@ -284,7 +283,7 @@ const ProductCardWithCart = memo(function ProductCardWithCart({
             {/* Add to Cart Button - Enhanced */}
             <Button
               onClick={handleAddToCart}
-              disabled={added || maxQuantity <= 0}
+              disabled={maxQuantity <= 0}
               className={cn(
                 "w-full btn-press font-medium transition-all duration-300",
                 added

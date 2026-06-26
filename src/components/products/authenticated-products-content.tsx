@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect, useCallback, memo } from "react";
+import { useState, useMemo, useEffect, useCallback, memo, useRef } from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { useTranslations, useLocale } from "next-intl";
 import { getLocalizedName } from "@/lib/product-name";
@@ -75,6 +75,7 @@ const ProductCardWithCart = memo(function ProductCardWithCart({
   const { addItem, getItemQuantity } = useCart();
   const [quantity, setQuantity] = useState(1);
   const [added, setAdded] = useState(false);
+  const addedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const displayName = getLocalizedName(product, locale);
   const isInStock = product.available_stock > 0;
@@ -104,10 +105,8 @@ const ProductCardWithCart = memo(function ProductCardWithCart({
     );
 
     setAdded(true);
-    setTimeout(() => {
-      setAdded(false);
-      setQuantity(1);
-    }, 1500);
+    if (addedTimerRef.current) clearTimeout(addedTimerRef.current);
+    addedTimerRef.current = setTimeout(() => setAdded(false), 1200);
   }, [hasPrice, isInStock, maxQuantity, addItem, product, quantity]);
 
   // Handler to prevent navigation when interacting with quantity input
@@ -227,7 +226,7 @@ const ProductCardWithCart = memo(function ProductCardWithCart({
             {/* Add to Cart Button - Enhanced */}
             <Button
               onClick={handleAddToCart}
-              disabled={added || maxQuantity <= 0}
+              disabled={maxQuantity <= 0}
               className={cn(
                 "w-full btn-press font-medium transition-all duration-300",
                 added
