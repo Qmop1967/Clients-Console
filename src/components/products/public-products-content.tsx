@@ -307,6 +307,16 @@ const ProductCardWithCart = memo(function ProductCardWithCart({
           </div>
         )}
 
+        {/* All available stock already in cart — never a silent dead card */}
+        {!isCatalogMode && hasPrice && isInStock && maxQuantity <= 0 && (
+          <div className="mt-3 sm:mt-4 pt-2 sm:pt-3 border-t border-border/50">
+            <Button disabled variant="outline" className="w-full" size="sm">
+              <Check className="h-4 w-4 me-2 text-emerald-600" />
+              {t("maxInCart")}
+            </Button>
+          </div>
+        )}
+
         {/* View Details for non-purchasable items (hidden in catalog mode) */}
         {!isCatalogMode && (!hasPrice || !isInStock) && (
           <div className="mt-3 sm:mt-4 pt-2 sm:pt-3 border-t border-border/50">

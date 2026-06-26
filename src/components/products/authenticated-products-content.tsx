@@ -250,6 +250,16 @@ const ProductCardWithCart = memo(function ProductCardWithCart({
           </div>
         )}
 
+        {/* All available stock already in cart — never a silent dead card */}
+        {hasPrice && isInStock && maxQuantity <= 0 && (
+          <div className="mt-4 pt-3 border-t border-border/50">
+            <Button disabled variant="outline" className="w-full" size="sm">
+              <Check className="h-4 w-4 me-2 text-emerald-600" />
+              {t("maxInCart")}
+            </Button>
+          </div>
+        )}
+
         {/* View Details for non-purchasable items */}
         {(!hasPrice || !isInStock) && (
           <div className="mt-4 pt-3 border-t border-border/50">
