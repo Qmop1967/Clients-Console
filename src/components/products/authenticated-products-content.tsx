@@ -208,7 +208,7 @@ const ProductCardWithCart = memo(function ProductCardWithCart({
 
         {/* Add to Cart Section - Wholesale Enhanced */}
         {hasPrice && isInStock && maxQuantity > 0 && (
-          <div className="mt-4 pt-3 border-t border-border/50 space-y-3">
+          <div className="mt-4 pt-3 border-t border-border/50 space-y-3" onClick={preventNavigation}>
             {/* Wholesale Quantity Input */}
             <WholesaleQuantityInput
               value={quantity}

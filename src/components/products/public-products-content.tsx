@@ -266,7 +266,7 @@ const ProductCardWithCart = memo(function ProductCardWithCart({
 
         {/* Add to Cart Section - Wholesale Enhanced (hidden in catalog mode) */}
         {!isCatalogMode && hasPrice && isInStock && maxQuantity > 0 && (
-          <div className="mt-3 sm:mt-4 pt-2 sm:pt-3 border-t border-border/50 space-y-2 sm:space-y-3">
+          <div className="mt-3 sm:mt-4 pt-2 sm:pt-3 border-t border-border/50 space-y-2 sm:space-y-3" onClick={preventNavigation}>
             {/* Wholesale Quantity Input */}
             <WholesaleQuantityInput
               value={quantity}
