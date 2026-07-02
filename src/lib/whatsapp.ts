@@ -114,6 +114,38 @@ let probeInFlight = false;
 let lastProbeAt = 0;
 let lastProbeStatus: string | null = null;
 
+// === Restriction awareness (2026-07-02) ===
+// WASender ACKs sends during a WhatsApp platform restriction while nothing is
+// delivered, and /api/status still says "connected". Only the ACCOUNT-level
+// endpoint (PAT) exposes is_restricted. Cached 60s.
+let _restrCache: { at: number; restricted: boolean; liftsAt: string | null } | null = null;
+async function checkWasenderRestriction(): Promise<{ restricted: boolean; liftsAt: string | null }> {
+  const pat = process.env.WASENDER_PAT;
+  const sid = process.env.WASENDER_OTP_SESSION_ID || process.env.WASENDER_SESSION_ID;
+  if (!pat || !sid) return { restricted: false, liftsAt: null };
+  if (_restrCache && Date.now() - _restrCache.at < 60_000) {
+    return { restricted: _restrCache.restricted, liftsAt: _restrCache.liftsAt };
+  }
+  try {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 5000);
+    const r = await fetch(`https://www.wasenderapi.com/api/whatsapp-sessions/${sid}`, {
+      headers: { Authorization: `Bearer ${pat}`, Accept: 'application/json' },
+      signal: ctrl.signal,
+    });
+    clearTimeout(t);
+    const d: any = await r.json().catch(() => null);
+    const acc = d?.data ?? d;
+    let restricted = !!acc?.is_restricted;
+    const liftsAt: string | null = acc?.session_data?.status_info?.restriction_lifts_at ?? null;
+    if (restricted && liftsAt && new Date(liftsAt).getTime() < Date.now()) restricted = false;
+    _restrCache = { at: Date.now(), restricted, liftsAt };
+    return { restricted, liftsAt };
+  } catch {
+    return { restricted: false, liftsAt: null }; // fail-open: transient PAT errors must not block OTP
+  }
+}
+
 async function probeWasenderSession(): Promise<void> {
   if (probeInFlight) return; // Avoid overlap
   const apiKey = process.env.WASENDER_API_KEY;
@@ -150,6 +182,13 @@ async function probeWasenderSession(): Promise<void> {
     lastProbeStatus = status;
 
     if (status === 'connected') {
+      const restr = await checkWasenderRestriction();
+      if (restr.restricted) {
+        lastProbeStatus = 'restricted';
+        console.warn(`[Probe] wasender RESTRICTED by WhatsApp until ${restr.liftsAt} — treating as unavailable`);
+        recordFailure('wasender', `restricted until ${restr.liftsAt}`);
+        return;
+      }
       // Healthy — reset circuit if it was open
       const cb = breakers['wasender'];
       if (cb && cb.state !== 'CLOSED') {
@@ -244,7 +283,8 @@ TSH | tsh.sale
 // WASenderApi Provider ($6/mo, unlimited)
 // ============================================
 async function sendWasender(phone: string, message: string): Promise<SendResult> {
-  const apiKey = process.env.WASENDER_API_KEY;
+  // Dedicated OTP session (post-2026-07 plan upgrade) — falls back to the main session.
+  const apiKey = process.env.WASENDER_OTP_API_KEY || process.env.WASENDER_API_KEY;
   if (!apiKey) return { success: false, error: 'Provider not configured', provider: 'wasender' };
 
   // Circuit breaker check
@@ -252,6 +292,13 @@ async function sendWasender(phone: string, message: string): Promise<SendResult>
   if (skip.skip) {
     console.warn(`[WhatsApp] wasender SKIPPED — ${skip.reason}`);
     return { success: false, error: `circuit_open: ${skip.reason}`, provider: 'wasender' };
+  }
+
+  const restr = await checkWasenderRestriction();
+  if (restr.restricted) {
+    console.warn(`[WhatsApp] wasender RESTRICTED until ${restr.liftsAt} — failing fast (no ghost sends)`);
+    recordFailure('wasender', 'wa_restricted');
+    return { success: false, error: `wa_restricted until ${restr.liftsAt}`, provider: 'wasender' };
   }
 
   const e164 = phone.startsWith('+') ? phone.substring(1) : phone;
