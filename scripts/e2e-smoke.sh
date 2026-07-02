@@ -8,14 +8,19 @@
 set -u
 BASE="${1:-http://localhost:3002}"; INV_ID="${2:-21404}"
 CJ=$(mktemp); PASS=0; FAIL=0
+DIR="$(cd "$(dirname "$0")" && pwd)"
+# SECURITY 2026-07-02: login now requires a server-vouched ticket. Mint one for
+# the fixture phone (same HMAC as the app; needs the server secret).
+SECRET="$(grep -hE '^NEXTAUTH_SECRET=' "$DIR/../.env.local" "$DIR/../.env" 2>/dev/null | head -1 | cut -d= -f2-)"
+TICKET="$(TICKET_SECRET="$SECRET" node "$DIR/_ticket-mint.cjs" ticket phone 07700009911)"
 ck(){ if echo "$2" | grep -qF "$3"; then echo "  ✅ $1"; PASS=$((PASS+1)); else echo "  ❌ $1"; FAIL=$((FAIL+1)); fi; }
 ckNOT(){ if echo "$2" | grep -qF "$3"; then echo "  ❌ $1 (forbidden text present)"; FAIL=$((FAIL+1)); else echo "  ✅ $1"; PASS=$((PASS+1)); fi; }
 echo "── [1] LOGIN ──"
 CSRF=$(curl -s -c "$CJ" "$BASE/api/auth/csrf" | python3 -c "import sys,json;print(json.load(sys.stdin)['csrfToken'])")
 curl -s -b "$CJ" -c "$CJ" -o /dev/null -X POST "$BASE/api/auth/callback/phone" \
   -H "Content-Type: application/x-www-form-urlencoded" \
-  --data-urlencode "phone=07700009911" --data-urlencode "csrfToken=$CSRF" \
-  --data-urlencode "callbackUrl=$BASE/ar/dashboard"
+  --data-urlencode "phone=07700009911" --data-urlencode "ticket=$TICKET" \
+  --data-urlencode "csrfToken=$CSRF" --data-urlencode "callbackUrl=$BASE/ar/dashboard"
 grep -q "session-token" "$CJ" && { echo "  ✅ session created"; PASS=$((PASS+1)); } || { echo "  ❌ no session"; FAIL=$((FAIL+1)); }
 echo "── [2] DASHBOARD ──"
 DASH=$(curl -s -b "$CJ" "$BASE/ar/dashboard")

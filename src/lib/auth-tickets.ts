@@ -22,12 +22,15 @@
 //    Replaces the RAW PHONE that used to sit in localStorage (which was itself
 //    the credential). Used only for silent iOS-PWA session recovery.
 //
-// Trade-off vs a store: a signed ticket is replayable within its TTL and cannot
-// be individually revoked. Mitigated by a very short auth-ticket TTL (180s) —
-// capturing one requires already compromising the victim's TLS/device, at which
-// point the session cookie itself is exposed. If a real Redis is ever wired,
-// swap the sign/verify internals for GETDEL-based single-use; the exported
-// signatures below stay the same so nothing else changes.
+// Single-use: auth tickets carry a random jti; consumeAuthTicket records spent
+// jtis in an in-memory guard so a given ticket mints at most ONE session. This
+// app runs single-process (pm2 fork), so the guard is authoritative — same
+// assumption the OTP store already relies on. Caveat: the guard resets on
+// restart, and the very short 180s TTL bounds any replay to that window (and to
+// an attacker who already compromised the victim's TLS/device, where the
+// session cookie is exposed anyway). Recovery tokens are long-lived and instead
+// mitigate replay by rotating on every use. If a real Redis is ever wired, swap
+// the guard for GETDEL-based single-use; exported signatures stay identical.
 // ============================================
 
 import { createHmac, timingSafeEqual, randomBytes } from 'crypto';
@@ -38,6 +41,14 @@ const TICKET_TTL_S = 180;                 // 3 minutes to complete signIn
 const RECOVERY_TTL_S = 30 * 24 * 60 * 60; // 30 days
 const TICKET_PURPOSE = 'ticket';
 const RECOVERY_PURPOSE = 'recovery';
+
+// In-memory single-use guard for auth tickets (jti -> expiry seconds).
+// Authoritative under single-process (pm2 fork); see header note.
+const consumedJti = new Map<string, number>();
+function sweepConsumed(now: number): void {
+  if (consumedJti.size < 1024) return;
+  for (const [j, exp] of consumedJti) if (exp < now) consumedJti.delete(j);
+}
 
 export type AuthMethod = 'phone' | 'email';
 
@@ -79,7 +90,7 @@ function encode(subject: AuthSubject, purpose: string, ttl: number): string {
   return `${payloadB64}.${sign(payloadB64)}`;
 }
 
-function decode(token: string | undefined | null, purpose: string): AuthSubject | null {
+function decodePayload(token: string | undefined | null, purpose: string): Payload | null {
   if (!SECRET) return null;
   if (!token || typeof token !== 'string' || token.length < 20) return null;
   const dot = token.indexOf('.');
@@ -108,12 +119,11 @@ function decode(token: string | undefined | null, purpose: string): AuthSubject 
   const now = Math.floor(Date.now() / 1000);
   if (!payload.exp || payload.exp < now) return null;
 
-  return {
-    method: payload.method,
-    phone: payload.phone,
-    partnerId: payload.partnerId,
-    email: payload.email,
-  };
+  return payload;
+}
+
+function subjectOf(p: Payload): AuthSubject {
+  return { method: p.method, phone: p.phone, partnerId: p.partnerId, email: p.email };
 }
 
 // ---- Auth tickets (short-lived, signed) ----
@@ -126,7 +136,17 @@ export async function issueAuthTicket(subject: AuthSubject): Promise<string> {
 export async function consumeAuthTicket(
   token: string | undefined | null
 ): Promise<AuthSubject | null> {
-  return decode(token, TICKET_PURPOSE);
+  const payload = decodePayload(token, TICKET_PURPOSE);
+  if (!payload) return null;
+  const now = Math.floor(Date.now() / 1000);
+  sweepConsumed(now);
+  // Single-use: a jti may be redeemed at most once.
+  if (consumedJti.has(payload.jti)) {
+    console.warn('[Auth] ticket rejected: already consumed');
+    return null;
+  }
+  consumedJti.set(payload.jti, payload.exp);
+  return subjectOf(payload);
 }
 
 // ---- Recovery tokens (longer-lived, signed) ----
@@ -143,8 +163,9 @@ export async function issueRecoveryToken(subject: AuthSubject): Promise<string> 
 export async function rotateRecoveryToken(
   token: string | undefined | null
 ): Promise<{ subject: AuthSubject; newToken: string } | null> {
-  const subject = decode(token, RECOVERY_PURPOSE);
-  if (!subject) return null;
+  const payload = decodePayload(token, RECOVERY_PURPOSE);
+  if (!payload) return null;
+  const subject = subjectOf(payload);
   const newToken = await issueRecoveryToken(subject);
   return { subject, newToken };
 }
