@@ -144,6 +144,8 @@ export default function VerifyOTPPage() {
         body: JSON.stringify({
           phone: phone || sessionStorage.getItem("otp_email"),
           code: verifyCode,
+          method: otpMethod,
+          partnerId: sessionStorage.getItem("otp_partner_id") || undefined,
         }),
       });
 
@@ -164,14 +166,18 @@ export default function VerifyOTPPage() {
       // squeezed through the phone lookup.
       const storedEmail = sessionStorage.getItem("otp_email") || "";
       const storedPartnerId = sessionStorage.getItem("otp_partner_id") || "";
+      // SECURITY 2026-07-02: signIn now carries the server-issued single-use ticket.
+      const ticket = data.ticket as string | undefined;
       const signInResult = otpMethod === "email"
         ? await signIn("email", {
             email: storedEmail,
             partnerId: storedPartnerId,
+            ticket,
             redirect: false,
           })
         : await signIn("phone", {
             phone,
+            ticket,
             redirect: false,
           });
 
@@ -185,11 +191,11 @@ export default function VerifyOTPPage() {
       // Store recovery data in localStorage so the session can be
       // silently restored if iOS clears the session cookie on PWA close.
       try {
+        // SECURITY 2026-07-02: store a rotating recovery TOKEN, never the raw
+        // phone. The token is single-use + expires; a leaked blob is far less
+        // dangerous than a plaintext phone (which was itself the credential).
         localStorage.setItem("tsh_session_recovery", JSON.stringify({
-          method: otpMethod,
-          ...(phone && { phone }),
-          ...(storedEmail && { email: storedEmail }),
-          ...(storedPartnerId && { partnerId: storedPartnerId }),
+          recoveryToken: data.recoveryToken || "",
           ts: Date.now(),
         }));
       } catch { /* localStorage full — non-critical */ }

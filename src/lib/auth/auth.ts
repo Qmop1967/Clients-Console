@@ -2,6 +2,8 @@ import NextAuth from 'next-auth';
 import { authConfig } from './auth.config';
 import Credentials from 'next-auth/providers/credentials';
 import { getCustomerByPhone, getCustomerById } from '@/lib/odoo/customers';
+import { consumeAuthTicket } from '@/lib/auth-tickets';
+import { normalizePhone } from '@/lib/otp-store';
 
 // M2-clients (S-exec-3B): mint a gateway-signed Actor Token for this OTP-authenticated
 // client session. Server-side only; non-fatal — absent token keeps legacy_bridge.
@@ -34,12 +36,26 @@ export const {
       name: 'Phone',
       credentials: {
         phone: { label: 'Phone', type: 'tel' },
+        ticket: { label: 'Ticket', type: 'text' },
       },
       async authorize(credentials) {
         if (!credentials?.phone) return null;
 
         const phone = String(credentials.phone).trim();
         if (!phone) return null;
+
+        // SECURITY 2026-07-02: require a server-vouched single-use ticket.
+        // The ticket carries the authoritative identity; we trust IT, not the
+        // client-supplied phone. No valid ticket => no session.
+        const subject = await consumeAuthTicket(String(credentials.ticket || ''));
+        if (!subject || subject.method !== 'phone' || !subject.phone) {
+          console.warn('[Auth] phone login rejected: missing/invalid ticket');
+          return null;
+        }
+        if (normalizePhone(subject.phone) !== normalizePhone(phone)) {
+          console.warn('[Auth] phone login rejected: ticket/phone mismatch');
+          return null;
+        }
 
         try {
           const customer = await getCustomerByPhone(phone);
@@ -82,6 +98,7 @@ export const {
       credentials: {
         email: { label: 'Email', type: 'email' },
         partnerId: { label: 'PartnerId', type: 'text' },
+        ticket: { label: 'Ticket', type: 'text' },
       },
       async authorize(credentials) {
         try {
@@ -90,6 +107,14 @@ export const {
           const partnerId = Number(partnerIdStr);
           if (!emailRaw || !emailRaw.includes('@')) return null;
           if (!Number.isInteger(partnerId) || partnerId <= 0) return null;
+
+          // SECURITY 2026-07-02: require a server-vouched single-use ticket
+          // bound to this partner. No valid ticket => no session.
+          const subject = await consumeAuthTicket(String(credentials?.ticket || ''));
+          if (!subject || subject.method !== 'email' || subject.partnerId !== partnerId) {
+            console.warn('[Auth] email login rejected: missing/invalid ticket');
+            return null;
+          }
 
           const customer = await getCustomerById(partnerId);
           if (!customer) {

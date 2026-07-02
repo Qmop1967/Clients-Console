@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { storeOTP } from '@/lib/otp-store';
+import { normalizePhone } from '@/lib/otp-store';
+import { issueAuthTicket, issueRecoveryToken } from '@/lib/auth-tickets';
 
 // Search customer in Odoo by phone via Gateway
 async function findCustomerByPhone(phone: string): Promise<{ found: boolean; ambiguous?: boolean; partnerId?: number; name?: string; matchedIds?: number[] }> {
@@ -88,19 +89,22 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Generate a session OTP — the existing verify endpoint will handle NextAuth session creation
-    // We store a verified OTP so the client can call /api/auth/otp/verify with it
-    const verifiedOtp = '000000'; // Special marker for Firebase-verified sessions
+    // Firebase already proved SMS ownership. Mint a single-use auth ticket
+    // (no more '000000' marker-OTP backdoor) + a rotating recovery token.
     const digits = phone.replace(/\D/g, '');
     const local = '0' + digits.replace(/^964/, '');
-    storeOTP(local, verifiedOtp);
+    const normalized = normalizePhone(local);
+    const subject = { method: 'phone' as const, phone: normalized };
+    const ticket = await issueAuthTicket(subject);
+    const recoveryToken = await issueRecoveryToken(subject);
 
     return NextResponse.json({
       success: true,
       phone: local,
-      otp: verifiedOtp,
       partnerId: customer.partnerId,
       name: customer.name,
+      ticket,
+      recoveryToken,
     });
   } catch (error) {
     console.error('[Firebase Verify] Error:', error);

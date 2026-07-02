@@ -1,13 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyOTP, normalizePhone } from '@/lib/otp-store';
+import { issueAuthTicket, issueRecoveryToken, type AuthSubject } from '@/lib/auth-tickets';
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const phone = body.phone;
+    const identifier = body.phone; // phone number OR email (email logins send the email here)
     const code = body.code || body.otp;
+    const method = body.method === 'email' ? 'email' : 'phone';
+    const partnerId = Number(body.partnerId || 0);
 
-    if (!phone || !code) {
+    if (!identifier || !code) {
       return NextResponse.json(
         { error: 'رقم الهاتف والرمز مطلوبين', errorCode: 'missing_fields' },
         { status: 400 }
@@ -23,7 +26,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const result = verifyOTP(phone, cleanCode);
+    const result = verifyOTP(identifier, cleanCode);
 
     if (!result.valid) {
       const messages: Record<string, string> = {
@@ -31,9 +34,8 @@ export async function POST(request: NextRequest) {
         max_attempts: 'تجاوزت عدد المحاولات. اطلب رمز جديد',
         invalid: 'الرمز غير صحيح',
       };
-
       return NextResponse.json(
-        { 
+        {
           error: messages[result.error || 'invalid'] || 'الرمز غير صحيح',
           errorCode: result.error || 'invalid',
         },
@@ -41,13 +43,37 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // OTP verified! Return success — the frontend will call signIn("phone")
-    console.log('[OTP Verify] ✅ Verified:', normalizePhone(phone));
+    // OTP verified server-side. Mint a single-use auth ticket (proof) + a
+    // rotating recovery token, bound to the correct identity for the method
+    // used. signIn() must present the ticket; authorize() consumes it. Phone
+    // (or email) alone can no longer forge a session.
+    const isEmail = method === 'email' || String(identifier).includes('@');
+    let subject: AuthSubject;
+    if (isEmail) {
+      if (!Number.isInteger(partnerId) || partnerId <= 0) {
+        // Email OTP must resolve a partner (sent from send-email). Without it
+        // we cannot bind the ticket safely — refuse rather than over-trust.
+        return NextResponse.json(
+          { error: 'تعذر التحقق من الحساب', errorCode: 'no_partner' },
+          { status: 400 }
+        );
+      }
+      subject = { method: 'email', email: String(identifier).trim().toLowerCase(), partnerId };
+      console.log('[OTP Verify] ✅ Verified (email):', subject.email);
+    } else {
+      subject = { method: 'phone', phone: normalizePhone(identifier) };
+      console.log('[OTP Verify] ✅ Verified (phone):', subject.phone);
+    }
+
+    const ticket = await issueAuthTicket(subject);
+    const recoveryToken = await issueRecoveryToken(subject);
 
     return NextResponse.json({
       success: true,
       message: 'تم التحقق بنجاح',
       verified: true,
+      ticket,
+      recoveryToken,
     });
   } catch (error) {
     console.error('[OTP Verify] Error:', error);

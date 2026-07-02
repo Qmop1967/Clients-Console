@@ -33,7 +33,7 @@ export function SessionRecovery() {
     const raw = localStorage.getItem(RECOVERY_KEY);
     if (!raw) return;
 
-    let data: { method?: string; phone?: string; email?: string; partnerId?: string; ts?: number };
+    let data: { recoveryToken?: string; method?: string; phone?: string; email?: string; partnerId?: string; ts?: number };
     try {
       data = JSON.parse(raw);
     } catch {
@@ -47,8 +47,10 @@ export function SessionRecovery() {
       return;
     }
 
-    // Must have phone or email+partnerId
-    if (!data.phone && !data.email) {
+    // SECURITY 2026-07-02: legacy blobs stored the raw phone/email (no token).
+    // Those can no longer silently re-login (the whole point of the fix). Clear
+    // them so the user logs in once; from then on they hold a rotating token.
+    if (!data.recoveryToken) {
       localStorage.removeItem(RECOVERY_KEY);
       return;
     }
@@ -59,16 +61,40 @@ export function SessionRecovery() {
       try {
         console.log("[SessionRecovery] Attempting silent re-login...");
 
+        // SECURITY 2026-07-02: exchange the rotating recovery token for a
+        // fresh single-use auth ticket. The server rotates the token each time.
+        const rec = await fetch("/api/auth/recover", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ recoveryToken: data.recoveryToken }),
+        });
+        if (!rec.ok) {
+          console.warn("[SessionRecovery] Token rejected, clearing");
+          localStorage.removeItem(RECOVERY_KEY);
+          return;
+        }
+        const rj = await rec.json();
+
+        // Persist the rotated token before signIn so a reload can't replay the old one.
+        try {
+          localStorage.setItem(RECOVERY_KEY, JSON.stringify({
+            recoveryToken: rj.recoveryToken || "",
+            ts: Date.now(),
+          }));
+        } catch { /* non-critical */ }
+
         const result =
-          data.method === "email" && data.email && data.partnerId
+          rj.method === "email" && rj.partnerId
             ? await signIn("email", {
-                email: data.email,
-                partnerId: data.partnerId,
+                email: rj.email || "",
+                partnerId: String(rj.partnerId),
+                ticket: rj.ticket,
                 redirect: false,
               })
-            : data.phone
+            : rj.phone
               ? await signIn("phone", {
-                  phone: data.phone,
+                  phone: rj.phone,
+                  ticket: rj.ticket,
                   redirect: false,
                 })
               : null;
@@ -80,7 +106,6 @@ export function SessionRecovery() {
         }
 
         console.log("[SessionRecovery] Session restored successfully");
-        // Refresh the page to pick up the new session cookie
         window.location.reload();
       } catch (err) {
         console.error("[SessionRecovery] Error:", err);

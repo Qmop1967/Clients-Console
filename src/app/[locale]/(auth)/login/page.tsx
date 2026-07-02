@@ -206,11 +206,18 @@ export default function LoginPage() {
         return;
       }
 
-      // Create NextAuth session
+      // Create NextAuth session with the server-issued single-use ticket.
       const signInResult = await signIn("phone", {
         phone: data.phone,
+        ticket: data.ticket,
         redirect: false,
       });
+      try {
+        localStorage.setItem("tsh_session_recovery", JSON.stringify({
+          recoveryToken: data.recoveryToken || "",
+          ts: Date.now(),
+        }));
+      } catch { /* non-critical */ }
 
       if (signInResult?.error) {
         setError(isAr ? "خطأ بتسجيل الدخول" : "Login error");
