@@ -97,12 +97,21 @@ function formatInvoice(inv: OdooInvoice, lines: OdooInvoiceLine[] = []): Invoice
 }
 
 function formatInvoiceLine(l: OdooInvoiceLine): LineItem {
+  // FIX 2026-07-02: account.move.line.name = "[SKU] Product\n<long sale description>".
+  // Documents must show ONLY the first line (clean label). The long description
+  // bloated printed invoices; blank names rendered as empty rows.
+  const raw = typeof l.name === 'string' ? l.name : '';
+  const firstLine = raw.split('\n')[0].trim();
+  const productName = Array.isArray(l.product_id) ? l.product_id[1] : '';
+  const label = firstLine || productName;
+  const nlIdx = raw.indexOf('\n');
+  const longDesc = nlIdx >= 0 ? raw.slice(nlIdx + 1).trim() : '';
   return {
     line_item_id: String(l.id),
     item_id: Array.isArray(l.product_id) ? String(l.product_id[0]) : '',
-    item_name: Array.isArray(l.product_id) ? l.product_id[1] : '',
-    name: l.name,
-    description: l.name,
+    item_name: productName,
+    name: label,
+    description: longDesc,
     rate: l.price_unit,
     quantity: l.quantity,
     unit: Array.isArray(l.product_uom_id) ? l.product_uom_id[1] : 'Unit',

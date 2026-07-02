@@ -52,12 +52,19 @@ export default function InvoicePrintView({ invoice, docLang }: InvoicePrintViewP
       const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
       const pdfW = pdf.internal.pageSize.getWidth();
       const pdfH = pdf.internal.pageSize.getHeight();
-      const imgW = canvas.width;
-      const imgH = canvas.height;
-      const ratio = Math.min(pdfW / imgW, pdfH / imgH);
-      const w = imgW * ratio;
-      const h = imgH * ratio;
-      pdf.addImage(imgData, "JPEG", (pdfW - w) / 2, 0, w, h);
+      // FIX 2026-07-02: fit to WIDTH and paginate vertically. Previously the whole
+      // invoice was shrunk onto a single page, making long invoices unreadable.
+      const imgH = (canvas.height * pdfW) / canvas.width;
+      let heightLeft = imgH;
+      let position = 0;
+      pdf.addImage(imgData, "JPEG", 0, position, pdfW, imgH);
+      heightLeft -= pdfH;
+      while (heightLeft > 0) {
+        position -= pdfH;
+        pdf.addPage();
+        pdf.addImage(imgData, "JPEG", 0, position, pdfW, imgH);
+        heightLeft -= pdfH;
+      }
       return pdf.output("blob");
     } catch (e: any) {
       console.error("PDF generation failed:", e);
@@ -107,6 +114,7 @@ export default function InvoicePrintView({ invoice, docLang }: InvoicePrintViewP
   };
 
   const lines = invoice.line_items || [];
+  const hasDiscount = lines.some((l) => (l.discount || 0) > 0);
 
   return (
     <>
@@ -130,7 +138,12 @@ export default function InvoicePrintView({ invoice, docLang }: InvoicePrintViewP
         @media print {
           body { background: white; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
           .no-print { display: none !important; }
-          .invoice-page { box-shadow: none !important; margin: 0 !important; }
+          /* FIX 2026-07-02: flex + overflow clipped everything after page 1 (blank rows) */
+          .invoice-page { box-shadow: none !important; margin: 0 !important; display: block !important; overflow: visible !important; width: auto !important; min-height: 0 !important; }
+          .invoice-page > div { display: block !important; }
+          thead { display: table-header-group; }
+          tr { break-inside: avoid; page-break-inside: avoid; }
+          .avoid-break { break-inside: avoid; page-break-inside: avoid; }
           @page { size: A4 portrait; margin: 10mm; }
         }
 
@@ -145,7 +158,6 @@ export default function InvoicePrintView({ invoice, docLang }: InvoicePrintViewP
           position: relative;
           display: flex;
           flex-direction: column;
-          overflow: hidden;
         }
 
         .en { font-family: 'Inter', sans-serif; }
@@ -274,14 +286,18 @@ export default function InvoicePrintView({ invoice, docLang }: InvoicePrintViewP
             <table dir="ltr" style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed", marginBottom: "18px", border: "1px solid #e2e8f0" }}>
               <colgroup>
                 <col style={{ width: "5%" }} />
-                <col style={{ width: "55%" }} />
+                <col style={{ width: hasDiscount ? "47%" : "55%" }} />
                 <col style={{ width: "8%" }} />
-                <col style={{ width: "16%" }} />
-                <col style={{ width: "16%" }} />
+                <col style={{ width: hasDiscount ? "14%" : "16%" }} />
+                {hasDiscount && <col style={{ width: "8%" }} />}
+                <col style={{ width: hasDiscount ? "18%" : "16%" }} />
               </colgroup>
               <thead>
                 <tr>
-                  {["#", dl === "en" ? "Description" : "Description / " + t.description, "Qty", "Price", "Total"].map((h, i) => (
+                  {(hasDiscount
+                    ? ["#", dl === "en" ? "Description" : "Description / " + t.description, "Qty", "Price", "Disc %", "Total"]
+                    : ["#", dl === "en" ? "Description" : "Description / " + t.description, "Qty", "Price", "Total"]
+                  ).map((h, i) => (
                     <th key={h} style={{
                       background: "#f0f4f8", padding: "8px 6px", fontSize: "8pt", fontWeight: 600,
                       color: "#64748b", borderBottom: "2px solid #94a3b8",
@@ -296,10 +312,13 @@ export default function InvoicePrintView({ invoice, docLang }: InvoicePrintViewP
                   <tr key={line.line_item_id || i} style={{ background: i % 2 === 1 ? "#fafbfc" : "#fff" }}>
                     <td style={{ padding: "7px 6px", fontSize: "8.5pt", color: "#94a3b8", borderBottom: "1px solid #e2e8f0", textAlign: "center", verticalAlign: "middle" }}>{i + 1}</td>
                     <td style={{ padding: "7px 6px", fontSize: "8.5pt", color: "#1e293b", fontWeight: 500, borderBottom: "1px solid #e2e8f0", textAlign: "left", verticalAlign: "middle", lineHeight: 1.3, wordBreak: "break-word" }}>
-                      {line.name || line.item_name || line.description || `Item #${i + 1}`}
+                      {line.name || line.item_name || `Item #${i + 1}`}
                     </td>
                     <td style={{ padding: "7px 6px", fontSize: "9pt", color: "#1e293b", borderBottom: "1px solid #e2e8f0", textAlign: "center", verticalAlign: "middle", fontFamily: "Inter, monospace" }}>{line.quantity.toLocaleString("en-US")}</td>
                     <td style={{ padding: "7px 6px", fontSize: "9pt", color: "#1e293b", borderBottom: "1px solid #e2e8f0", textAlign: "right", verticalAlign: "middle", fontFamily: "Inter, monospace" }}>{formatMoney(line.rate, cur)}</td>
+                    {hasDiscount && (
+                      <td style={{ padding: "7px 6px", fontSize: "9pt", color: "#dc2626", borderBottom: "1px solid #e2e8f0", textAlign: "right", verticalAlign: "middle", fontFamily: "Inter, monospace" }}>{(line.discount || 0) > 0 ? `${line.discount}%` : "—"}</td>
+                    )}
                     <td style={{ padding: "7px 6px", fontSize: "9pt", color: "#1e293b", fontWeight: 600, borderBottom: "1px solid #e2e8f0", textAlign: "right", verticalAlign: "middle", fontFamily: "Inter, monospace" }}>{formatMoney(line.item_total, cur)}</td>
                   </tr>
                 ))}
@@ -309,7 +328,7 @@ export default function InvoicePrintView({ invoice, docLang }: InvoicePrintViewP
         )}
 
         {/* ═══ TOTALS ═══ */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px", marginBottom: "20px" }}>
+        <div className="avoid-break" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px", marginBottom: "20px" }}>
           
           {/* Notes */}
           <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
@@ -363,7 +382,7 @@ export default function InvoicePrintView({ invoice, docLang }: InvoicePrintViewP
         </div>
 
         {/* ═══ STAMPS ═══ */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px", marginBottom: "16px" }}>
+        <div className="avoid-break" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px", marginBottom: "16px" }}>
           <div style={{ borderTop: "2px dashed #cbd5e1", paddingTop: "10px", textAlign: "center" }}>
             <div style={{ fontSize: "8pt", color: "#94a3b8", marginBottom: "40px" }}>{t.sellerStamp}</div>
           </div>
@@ -373,7 +392,7 @@ export default function InvoicePrintView({ invoice, docLang }: InvoicePrintViewP
         </div>
 
         {/* ═══ FOOTER ═══ */}
-        <div style={{ marginTop: "auto", paddingTop: "10px", borderTop: "2px solid #1e40af" }}>
+        <div className="avoid-break" style={{ marginTop: "auto", paddingTop: "10px", borderTop: "2px solid #1e40af" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
             <div>
               <div style={{ fontSize: "9pt", color: "#1e293b", fontWeight: 700, marginBottom: "2px" }}>{t.thanks}</div>
