@@ -1,12 +1,18 @@
 // ============================================
 // Odoo Account Statements API - Server Only
 // ============================================
-// Replaces Odoo statements with Odoo account.move.line
-// Builds statement from invoices + payments + credit notes
+// FIX 2026-07-02 (customer complaint: statement balance != dashboard balance)
+// OLD approach rebuilt the balance from documents only (invoices + payments
+// + credit notes) starting from ZERO. Opening balances migrated from Zoho
+// and manual journal entries were invisible, so the statement diverged from
+// the dashboard (which reads the real receivable ledger).
+// NEW approach: the statement IS the receivable ledger. Every posted
+// account.move.line on the customer receivable account (161 IQD / 194 USD)
+// becomes one statement row. closing_balance therefore equals the dashboard
+// balance by construction - they read the same rows.
 // ============================================
 
-import { odooSearchRead } from './client';
-import type { OdooInvoice, OdooPayment } from './types';
+import { odooSearchRead, odooRead } from './client';
 
 // ============================================
 // Types (matching statement types)
@@ -38,54 +44,126 @@ export interface AccountStatementData {
 }
 
 // ============================================
-// Helpers — fetch all pages
+// Ledger constants + helpers
 // ============================================
 
-async function fetchAllInvoices(partnerId: number, currencyId?: number): Promise<OdooInvoice[]> {
-  const domain: unknown[] = [
-    ['partner_id', '=', partnerId],
-    ['move_type', '=', 'out_invoice'],
-    ['state', '=', 'posted'],
-  ];
-  if (currencyId) domain.push(['currency_id', '=', currencyId]);
-  return odooSearchRead<OdooInvoice>(
-    'account.move',
-    domain,
-    ['id', 'name', 'invoice_date', 'invoice_date_due', 'amount_total', 'amount_residual',
-     'currency_id', 'payment_state', 'ref', 'state'],
-    { limit: 2000, order: 'invoice_date asc, id asc' }
-  );
+const RECEIVABLE_IQD = 161;
+const RECEIVABLE_USD = 194;
+
+interface LedgerLine {
+  id: number;
+  date: string | false;
+  move_id: [number, string] | false;
+  journal_id: [number, string] | false;
+  name: string | false;
+  ref: string | false;
+  amount_currency: number;
+  move_type: string;
 }
 
-async function fetchAllCreditNotes(partnerId: number, currencyId?: number): Promise<OdooInvoice[]> {
-  const domain: unknown[] = [
-    ['partner_id', '=', partnerId],
-    ['move_type', '=', 'out_refund'],
-    ['state', '=', 'posted'],
-  ];
-  if (currencyId) domain.push(['currency_id', '=', currencyId]);
-  return odooSearchRead<OdooInvoice>(
-    'account.move',
-    domain,
-    ['id', 'name', 'invoice_date', 'amount_total', 'currency_id', 'payment_state', 'ref', 'state'],
-    { limit: 500, order: 'invoice_date asc, id asc' }
-  );
+async function resolvePartnerCurrency(partnerId: number): Promise<'USD' | 'IQD'> {
+  try {
+    const rows = await odooRead<{ x_currency?: string | false }>(
+      'res.partner', [partnerId], ['x_currency']
+    );
+    if (rows?.[0]?.x_currency === 'USD') return 'USD';
+  } catch { /* default IQD */ }
+  return 'IQD';
 }
 
-async function fetchAllPayments(partnerId: number, currencyId?: number): Promise<OdooPayment[]> {
-  const domain: unknown[] = [
-    ['partner_id', '=', partnerId],
-    ['payment_type', '=', 'inbound'],
-    ['partner_type', '=', 'customer'],
-    ['state', '=', 'posted'],
-  ];
-  if (currencyId) domain.push(['currency_id', '=', currencyId]);
-  return odooSearchRead<OdooPayment>(
-    'account.payment',
-    domain,
-    ['id', 'name', 'date', 'amount', 'currency_id', 'ref', 'journal_id'],
-    { limit: 2000, order: 'date asc, id asc' }
-  );
+/** All posted receivable-ledger lines for the partner, oldest first, paginated. */
+async function fetchLedgerLines(partnerId: number, accountId: number): Promise<LedgerLine[]> {
+  const all: LedgerLine[] = [];
+  const page = 1000;
+  let offset = 0;
+  for (;;) {
+    const batch = await odooSearchRead<LedgerLine>(
+      'account.move.line',
+      [
+        ['partner_id', '=', partnerId],
+        ['account_id', '=', accountId],
+        ['parent_state', '=', 'posted'],
+      ],
+      ['id', 'date', 'move_id', 'journal_id', 'name', 'ref', 'amount_currency', 'move_type'],
+      { limit: page, offset, order: 'date asc, id asc' }
+    );
+    all.push(...batch);
+    if (batch.length < page) break;
+    offset += page;
+    if (offset > 20000) break; // hard safety valve
+  }
+  return all;
+}
+
+async function fetchJournalTypes(): Promise<Record<number, string>> {
+  const map: Record<number, string> = {};
+  try {
+    const journals = await odooSearchRead<{ id: number; type: string }>(
+      'account.journal', [], ['id', 'type'], { limit: 200 }
+    );
+    for (const j of journals) map[j.id] = j.type;
+  } catch { /* fallback: entries without bank/cash detection */ }
+  return map;
+}
+
+/** move_id -> account.payment id, so payment rows keep linking to /payments/{id}. */
+async function fetchPaymentMoveMap(partnerId: number): Promise<Record<number, number>> {
+  const map: Record<number, number> = {};
+  try {
+    const pays = await odooSearchRead<{ id: number; move_id: [number, string] | false }>(
+      'account.payment', [['partner_id', '=', partnerId]], ['id', 'move_id'], { limit: 4000 }
+    );
+    for (const p of pays) {
+      if (Array.isArray(p.move_id)) map[p.move_id[0]] = p.id;
+    }
+  } catch { /* links fall back to move id */ }
+  return map;
+}
+
+function classify(
+  line: LedgerLine,
+  journalTypes: Record<number, string>
+): StatementTransaction['transaction_type'] {
+  if (line.move_type === 'out_invoice') return 'invoice';
+  if (line.move_type === 'out_refund') return 'credit_note';
+  const jid = Array.isArray(line.journal_id) ? line.journal_id[0] : 0;
+  const jt = journalTypes[jid] || '';
+  if (jt === 'bank' || jt === 'cash') return 'payment';
+  // Zoho opening balances + manual journal adjustments
+  return 'opening_balance';
+}
+
+function toTransaction(
+  line: LedgerLine,
+  journalTypes: Record<number, string>,
+  paymentMoves: Record<number, number>,
+  runningBalance: number
+): StatementTransaction {
+  const amt = line.amount_currency || 0;
+  const type = classify(line, journalTypes);
+  const moveId = Array.isArray(line.move_id) ? line.move_id[0] : line.id;
+  const moveName = Array.isArray(line.move_id) ? line.move_id[1] : '';
+  const txId = type === 'payment' && paymentMoves[moveId]
+    ? String(paymentMoves[moveId])
+    : String(moveId);
+  const rawName = typeof line.name === 'string' ? line.name.split('\n')[0].trim() : '';
+  const journalName = Array.isArray(line.journal_id) ? line.journal_id[1] : '';
+  let description = '';
+  if (type === 'payment') description = journalName;
+  else if (rawName && rawName !== moveName) description = rawName;
+  else description = (line.ref as string) || journalName || '';
+
+  return {
+    transaction_id: txId,
+    transaction_type: type,
+    transaction_number: moveName || rawName || String(line.id),
+    date: (line.date || '') as string,
+    debit: amt > 0 ? amt : 0,
+    credit: amt < 0 ? -amt : 0,
+    balance: runningBalance,
+    description,
+    reference_number: (line.ref || undefined) as string | undefined,
+  };
 }
 
 // ============================================
@@ -93,7 +171,8 @@ async function fetchAllPayments(partnerId: number, currencyId?: number): Promise
 // ============================================
 
 /**
- * Build account statement from invoices, payments, and credit notes
+ * Account statement straight from the receivable ledger.
+ * closing_balance is mathematically identical to the dashboard balance.
  */
 export async function getAccountStatement(
   customerId: string,
@@ -102,142 +181,69 @@ export async function getAccountStatement(
 ): Promise<AccountStatementData> {
   try {
     const partnerId = parseInt(customerId, 10);
+    const currency = await resolvePartnerCurrency(partnerId);
+    const accountId = currency === 'USD' ? RECEIVABLE_USD : RECEIVABLE_IQD;
 
-    // Determine customer currency for filtering
-    let customerCurrencyId: number | undefined;
-    try {
-      const gwUrl = process.env.API_GATEWAY_URL || process.env.GATEWAY_URL || 'http://127.0.0.1:3010';
-      const gwKey = process.env.GATEWAY_API_KEY || process.env.API_KEY || '';
-      const custRes = await fetch(`${gwUrl}/api/odoo/call`, {
-        method: 'POST',
-        headers: { 'x-api-key': gwKey, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: 'res.partner', method: 'read',
-          args: [[partnerId], ['x_currency']],
-        }),
-      });
-      const custData = await custRes.json();
-      if (custData.success && custData.data?.[0]) {
-        const xCurr = custData.data[0].x_currency;
-        // USD = currency_id 2, IQD = currency_id 22 (typical Odoo)
-        if (xCurr === "USD") customerCurrencyId = 1;
-        else if (xCurr === "IQD") customerCurrencyId = 87;
-      }
-    } catch { /* ignore — will show all currencies */ }
-
-    // Fetch all in parallel — filtered by customer currency
-    const [invoices, payments, creditNotes] = await Promise.all([
-      fetchAllInvoices(partnerId, customerCurrencyId),
-      fetchAllPayments(partnerId, customerCurrencyId),
-      fetchAllCreditNotes(partnerId, customerCurrencyId),
+    const [lines, journalTypes, paymentMoves] = await Promise.all([
+      fetchLedgerLines(partnerId, accountId),
+      fetchJournalTypes(),
+      fetchPaymentMoveMap(partnerId),
     ]);
 
-    const transactions: StatementTransaction[] = [];
-
-    // Invoices → debit
-    for (const inv of invoices) {
-      transactions.push({
-        transaction_id: String(inv.id),
-        transaction_type: 'invoice',
-        transaction_number: inv.name || '',
-        date: (inv.invoice_date || '') as string,
-        due_date: (inv.invoice_date_due || undefined) as string | undefined,
-        debit: inv.amount_total,
-        credit: 0,
-        balance: 0,
-        description: `Invoice - ${inv.payment_state || inv.state}`,
-        status: inv.state,
-        reference_number: (inv.ref || undefined) as string | undefined,
-      });
+    // Opening balance = ledger truth BEFORE the range (never a hardcoded zero)
+    let opening = 0;
+    const inRange: LedgerLine[] = [];
+    for (const l of lines) {
+      const d = (l.date || '') as string;
+      if (fromDate && d < fromDate) { opening += l.amount_currency || 0; continue; }
+      if (toDate && d > toDate) continue;
+      inRange.push(l);
     }
 
-    // Payments → credit
-    for (const p of payments) {
-      transactions.push({
-        transaction_id: String(p.id),
-        transaction_type: 'payment',
-        transaction_number: p.name || '',
-        date: p.date || '',
-        debit: 0,
-        credit: p.amount,
-        balance: 0,
-        description: `Payment - ${Array.isArray(p.journal_id) ? p.journal_id[1] : ''}`,
-        reference_number: (p.ref || undefined) as string | undefined,
-      });
-    }
-
-    // Credit notes → credit
-    for (const cn of creditNotes) {
-      transactions.push({
-        transaction_id: String(cn.id),
-        transaction_type: 'credit_note',
-        transaction_number: cn.name || '',
-        date: (cn.invoice_date || '') as string,
-        debit: 0,
-        credit: cn.amount_total,
-        balance: 0,
-        description: `Credit Note - ${cn.payment_state || cn.state}`,
-        status: cn.state,
-        reference_number: (cn.ref || undefined) as string | undefined,
-      });
-    }
-
-    // Sort by date
-    transactions.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-
-    // Filter by date range
-    let filtered = transactions;
-    if (fromDate) filtered = filtered.filter(t => t.date >= fromDate);
-    if (toDate) filtered = filtered.filter(t => t.date <= toDate);
-
-    // Calculate running balance
-    let balance = 0;
+    let balance = opening;
     let totalDebits = 0;
     let totalCredits = 0;
-
-    for (const tx of filtered) {
-      totalDebits += tx.debit;
-      totalCredits += tx.credit;
-      balance = balance + tx.debit - tx.credit;
-      tx.balance = balance;
+    const transactions: StatementTransaction[] = [];
+    for (const l of inRange) {
+      const amt = l.amount_currency || 0;
+      if (amt > 0) totalDebits += amt; else totalCredits += -amt;
+      balance += amt;
+      transactions.push(toTransaction(l, journalTypes, paymentMoves, balance));
     }
 
-    // Date range
-    const dates = filtered.map(t => t.date).filter(Boolean).sort();
-    const firstDate = fromDate || dates[0] || new Date().toISOString().split('T')[0];
-    const lastDate = toDate || dates[dates.length - 1] || new Date().toISOString().split('T')[0];
-
-    // Currency from first invoice
-    const currencyCode = invoices[0] && Array.isArray(invoices[0].currency_id)
-      ? invoices[0].currency_id[1] : 'IQD';
+    const dates = inRange.map((l) => (l.date || '') as string).filter(Boolean);
+    const today = new Date().toISOString().split('T')[0];
+    const firstDate = fromDate || dates[0] || today;
+    const lastDate = toDate || dates[dates.length - 1] || today;
 
     return {
-      opening_balance: 0,
+      opening_balance: opening,
       closing_balance: balance,
       total_debits: totalDebits,
       total_credits: totalCredits,
-      currency_code: currencyCode,
+      currency_code: currency,
       from_date: firstDate,
       to_date: lastDate,
-      transactions: filtered,
+      transactions,
     };
   } catch (error) {
     console.error('[Odoo Statement] Error:', error);
+    const today = new Date().toISOString().split('T')[0];
     return {
       opening_balance: 0,
       closing_balance: 0,
       total_debits: 0,
       total_credits: 0,
       currency_code: 'IQD',
-      from_date: new Date().toISOString().split('T')[0],
-      to_date: new Date().toISOString().split('T')[0],
+      from_date: today,
+      to_date: today,
       transactions: [],
     };
   }
 }
 
 /**
- * Quick statement summary (no transaction details)
+ * Quick statement summary (ledger-based, same source as dashboard).
  */
 export async function getStatementSummary(
   customerId: string
@@ -250,26 +256,27 @@ export async function getStatementSummary(
 }> {
   try {
     const partnerId = parseInt(customerId, 10);
-
-    const [invoices, payments, creditNotes] = await Promise.all([
-      fetchAllInvoices(partnerId),
-      fetchAllPayments(partnerId),
-      fetchAllCreditNotes(partnerId),
+    const currency = await resolvePartnerCurrency(partnerId);
+    const accountId = currency === 'USD' ? RECEIVABLE_USD : RECEIVABLE_IQD;
+    const [lines, journalTypes] = await Promise.all([
+      fetchLedgerLines(partnerId, accountId),
+      fetchJournalTypes(),
     ]);
 
-    const totalInvoiced = invoices.reduce((s, i) => s + i.amount_total, 0);
-    const totalPaid = payments.reduce((s, p) => s + p.amount, 0);
-    const totalCredits = creditNotes.reduce((s, c) => s + c.amount_total, 0);
-    const currencyCode = invoices[0] && Array.isArray(invoices[0].currency_id)
-      ? invoices[0].currency_id[1] : 'IQD';
+    let totalInvoiced = 0;
+    let totalPaid = 0;
+    let totalCredits = 0;
+    let balance = 0;
+    for (const l of lines) {
+      const amt = l.amount_currency || 0;
+      balance += amt;
+      const type = classify(l, journalTypes);
+      if (type === 'invoice') totalInvoiced += Math.max(0, amt);
+      else if (type === 'payment') totalPaid += Math.max(0, -amt);
+      else if (type === 'credit_note') totalCredits += Math.max(0, -amt);
+    }
 
-    return {
-      totalInvoiced,
-      totalPaid,
-      totalCredits,
-      balance: totalInvoiced - totalPaid - totalCredits,
-      currency_code: currencyCode,
-    };
+    return { totalInvoiced, totalPaid, totalCredits, balance, currency_code: currency };
   } catch (error) {
     console.error('[Odoo Statement] Error getting summary:', error);
     return { totalInvoiced: 0, totalPaid: 0, totalCredits: 0, balance: 0, currency_code: 'IQD' };

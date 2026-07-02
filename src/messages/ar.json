@@ -366,7 +366,8 @@
     "tax": "الضريبة",
     "discount": "الخصم",
     "notes": "ملاحظات",
-    "continueShopping": "متابعة التسوق"
+    "continueShopping": "متابعة التسوق",
+    "paymentsHistory": "سجل الدفعات"
   },
   "payments": {
     "title": "المدفوعات",
@@ -453,7 +454,8 @@
     "of": "من",
     "transactions": "حركة",
     "dueDate": "تاريخ الاستحقاق",
-    "reference": "المرجع"
+    "reference": "المرجع",
+    "journalEntry": "قيد / رصيد افتتاحي"
   },
   "support": {
     "title": "الدعم",

@@ -61,7 +61,7 @@ interface OdooInvoiceLine {
   display_type: string | false;
 }
 
-function formatInvoice(inv: OdooInvoice, lines: OdooInvoiceLine[] = []): Invoice {
+function formatInvoice(inv: OdooInvoice, lines: OdooInvoiceLine[] = [], payments: PaymentInfo[] = []): Invoice {
   const currencyCode = Array.isArray(inv.currency_id) ? inv.currency_id[1] : 'IQD';
   const paid = inv.amount_total - inv.amount_residual;
 
@@ -90,7 +90,7 @@ function formatInvoice(inv: OdooInvoice, lines: OdooInvoiceLine[] = []): Invoice
     write_off_amount: 0,
     notes: (inv.narration || undefined) as string | undefined,
     line_items: productLines.map(formatInvoiceLine),
-    payments: [], // Would need account.payment lookup for full detail
+    payments,
     created_time: inv.create_date,
     last_modified_time: inv.write_date,
   };
@@ -195,7 +195,29 @@ export async function getInvoice(
       lines = await odooRead<OdooInvoiceLine>('account.move.line', inv.invoice_line_ids, INVOICE_LINE_FIELDS);
     }
 
-    return formatInvoice(inv, lines);
+    // FEATURE 2026-07-02: payments history on invoice detail.
+    // invoice_payments_widget = Odoo-computed JSON of reconciled payments.
+    let payments: PaymentInfo[] = [];
+    try {
+      const w = await odooRead<{ invoice_payments_widget?: unknown }>(
+        'account.move', [numId], ['invoice_payments_widget']
+      );
+      let widget: unknown = w?.[0]?.invoice_payments_widget;
+      if (typeof widget === 'string') {
+        try { widget = JSON.parse(widget); } catch { widget = null; }
+      }
+      const content = (widget && typeof widget === 'object' && Array.isArray((widget as { content?: unknown[] }).content))
+        ? (widget as { content: Record<string, unknown>[] }).content
+        : [];
+      payments = content.map((c) => ({
+        payment_id: String(c.account_payment_id || c.payment_id || c.move_id || ''),
+        amount: Number(c.amount) || 0,
+        date: String(c.date || ''),
+        payment_mode: String(c.journal_name || c.ref || c.name || ''),
+      }));
+    } catch { /* payments stay empty — card simply not rendered */ }
+
+    return formatInvoice(inv, lines, payments);
   } catch (error) {
     console.error(`[Odoo Invoices] Error fetching invoice ${invoiceId}:`, error);
     return null;

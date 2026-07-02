@@ -269,6 +269,34 @@ export default async function InvoiceDetailPage({
                 ))}
               </div>
 
+              {/* Payments history — FEATURE 2026-07-02 */}
+              {invoice.payments && invoice.payments.length > 0 && (
+                <div className="mt-6 pt-4 border-t">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Receipt className="h-4 w-4 text-green-600" />
+                    <span className="font-semibold text-sm">{t("paymentsHistory")}</span>
+                  </div>
+                  <div className="space-y-2">
+                    {invoice.payments.map((p, idx) => (
+                      <div
+                        key={p.payment_id || idx}
+                        className="flex items-center justify-between gap-3 text-sm bg-green-500/5 border border-green-500/15 rounded-lg px-3 py-2"
+                      >
+                        <div className="min-w-0">
+                          <span className="text-muted-foreground" dir="ltr">{p.date}</span>
+                          {p.payment_mode && (
+                            <span className="text-xs text-muted-foreground block truncate">{p.payment_mode}</span>
+                          )}
+                        </div>
+                        <span className="font-semibold text-green-600 shrink-0">
+                          {formatCurrency(p.amount, currency)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Totals */}
               <div className="mt-6 pt-4 border-t space-y-3">
                 <div className="flex justify-between text-sm">

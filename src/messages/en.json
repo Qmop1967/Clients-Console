@@ -366,7 +366,8 @@
     "tax": "Tax",
     "discount": "Discount",
     "notes": "Notes",
-    "continueShopping": "Continue Shopping"
+    "continueShopping": "Continue Shopping",
+    "paymentsHistory": "Payment History"
   },
   "payments": {
     "title": "Payments",
@@ -453,7 +454,8 @@
     "of": "of",
     "transactions": "transactions",
     "dueDate": "Due Date",
-    "reference": "Reference"
+    "reference": "Reference",
+    "journalEntry": "Journal / Opening entry"
   },
   "support": {
     "title": "Support",

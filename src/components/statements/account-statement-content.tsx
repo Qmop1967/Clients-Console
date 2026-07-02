@@ -127,6 +127,13 @@ export function AccountStatementContent({
           badge: "bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/20",
           bar: "bg-green-500",
         };
+      case "opening_balance":
+        return {
+          bg: "bg-amber-500/10",
+          text: "text-amber-600 dark:text-amber-400",
+          badge: "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20",
+          bar: "bg-amber-500",
+        };
       case "credit_note":
         return {
           bg: "bg-blue-500/10",
@@ -404,6 +411,7 @@ export function AccountStatementContent({
                             {tx.transaction_type === "invoice" && t("invoice")}
                             {tx.transaction_type === "payment" && t("payment")}
                             {tx.transaction_type === "credit_note" && t("creditNote")}
+                            {tx.transaction_type === "opening_balance" && t("journalEntry")}
                           </Badge>
                         </div>
                         <p className="text-xs text-muted-foreground truncate">{tx.description}</p>
@@ -477,6 +485,7 @@ export function AccountStatementContent({
                                   {tx.transaction_type === "invoice" && t("invoice")}
                                   {tx.transaction_type === "payment" && t("payment")}
                                   {tx.transaction_type === "credit_note" && t("creditNote")}
+                                  {tx.transaction_type === "opening_balance" && t("journalEntry")}
                                 </Badge>
                               </div>
                               <ArrowUpRight className="h-4 w-4 text-muted-foreground shrink-0" />
@@ -526,6 +535,7 @@ export function AccountStatementContent({
                                   {tx.transaction_type === "invoice" && t("invoice")}
                                   {tx.transaction_type === "payment" && t("payment")}
                                   {tx.transaction_type === "credit_note" && t("creditNote")}
+                                  {tx.transaction_type === "opening_balance" && t("journalEntry")}
                                 </Badge>
                               </div>
                             </div>
