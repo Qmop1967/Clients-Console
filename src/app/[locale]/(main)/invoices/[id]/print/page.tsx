@@ -38,5 +38,13 @@ export default async function InvoicePrintPage({
     }
   } catch { /* default ar */ }
 
-  return <InvoicePrintView invoice={invoice} docLang={docLang} />;
+  // FIX 2026-07-02 (E2E finding): never ship the long sale description to the
+  // print client. It is not rendered, but it leaked into the RSC payload
+  // (visible in view-source, bloats the page). Ship only what we render.
+  const printInvoice = {
+    ...invoice,
+    line_items: (invoice.line_items || []).map((l) => ({ ...l, description: "" })),
+  };
+
+  return <InvoicePrintView invoice={printInvoice} docLang={docLang} />;
 }
