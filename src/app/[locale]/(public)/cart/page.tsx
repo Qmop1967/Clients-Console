@@ -230,6 +230,8 @@ export default function CartPage() {
             sku: item.sku,
           })),
           notes: combinedNotes,
+          // Phase 3: نوع الطلبية المختار من صفحة shop/order-type (bulk=نقليات، delivery=توصيل COD)
+          orderType: ((): string | undefined => { try { const v = localStorage.getItem('selectedOrderType'); return v === 'bulk' || v === 'delivery' ? v : undefined; } catch { return undefined; } })(),
         }),
       });
 

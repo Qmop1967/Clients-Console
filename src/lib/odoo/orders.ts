@@ -197,6 +197,7 @@ export async function createSalesOrder(data: {
   reference_number?: string;
   autoConfirm?: boolean;
   idempotencyKey?: string;
+  order_type?: 'transport' | 'delivery'; // Phase 3: نقليات أم توصيل (توصيل ⇒ COD تُفرض بالبوابة)
 }): Promise<CreateOrderResult> {
   try {
     // Order creation goes through the central gateway, which enforces the
@@ -218,6 +219,7 @@ export async function createSalesOrder(data: {
         notes: data.notes || false,
         autoConfirm: data.autoConfirm !== false,
         idempotencyKey: data.idempotencyKey,
+        ...(data.order_type ? { order_type: data.order_type } : {}),
       }),
     });
     const gw: any = await resp.json().catch(() => ({}));

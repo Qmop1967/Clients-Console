@@ -47,6 +47,7 @@ const checkoutSchema = z.object({
     sku: z.string(),
   })),
   notes: z.string().optional(),
+  orderType: z.enum(['bulk', 'delivery']).optional(), // Phase 3: bulk=نقليات، delivery=توصيل COD
   idempotencyKey: z.string().optional(),
 });
 
@@ -71,7 +72,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { items, notes } = validation.data;
+    const { items, notes, orderType } = validation.data;
 
     if (items.length === 0) {
       return NextResponse.json({ error: 'No items in cart' }, { status: 400 });
@@ -102,6 +103,7 @@ export async function POST(request: NextRequest) {
       customer_id: session.user.odooPartnerId,
       line_items: lineItems,
       notes: notes || `Order placed via TSH Web Portal`,
+      order_type: orderType === 'bulk' ? 'transport' : orderType === 'delivery' ? 'delivery' : undefined,
       idempotencyKey,
     });
 

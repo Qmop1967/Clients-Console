@@ -105,6 +105,7 @@ export async function POST(request: NextRequest) {
         rate: item.rate,
       })),
       notes: notes || 'Order placed via TSH Mobile App',
+      order_type: (body?.orderType === 'bulk' ? 'transport' : body?.orderType === 'delivery' ? 'delivery' : undefined),
     });
 
     if (!result.success || !result.order) {
