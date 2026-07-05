@@ -886,6 +886,19 @@
     "backToList": "گەڕانەوە بۆ ئەمانەتەکان",
     "confirm": "پشتڕاستکردنەوە",
     "confirmReportSale": "دڵنیایت لە ناردنی ڕاپۆرتی فرۆشتنەکە؟",
-    "confirmReturn": "دڵنیایت لە داواکاری گەڕاندنەوەکە؟"
+    "confirmReturn": "دڵنیایت لە داواکاری گەڕاندنەوەکە؟",
+    "valueHeld": "قيمة البضاعة لديك",
+    "totalCharged": "أُضيف إلى رصيدك",
+    "remainingValue": "قيمة المتبقّي",
+    "yourCost": "سعر الكلفة عليك",
+    "amountDue": "المبلغ المستحق",
+    "retailValue": "قيمة بيعك بالتجزئة",
+    "addedToBalance": "أُضيف لرصيدك",
+    "invoiceNo": "رقم الفاتورة",
+    "timeline": "سجل الأحداث",
+    "eventCreated": "أُنشئت العهدة",
+    "eventDelivered": "تم التسليم",
+    "eventSold": "بيع",
+    "reportStateInvoiced": "مفوتر"
   }
 }

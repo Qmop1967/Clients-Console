@@ -889,6 +889,19 @@
     "backToList": "Back to Consignments",
     "confirm": "Confirm",
     "confirmReportSale": "Are you sure you want to report this sale?",
-    "confirmReturn": "Are you sure you want to request this return?"
+    "confirmReturn": "Are you sure you want to request this return?",
+    "valueHeld": "Goods Value Held",
+    "totalCharged": "Added to Your Account",
+    "remainingValue": "Remaining Value",
+    "yourCost": "Your Cost",
+    "amountDue": "Amount Due",
+    "retailValue": "Your Retail Value",
+    "addedToBalance": "Added to Balance",
+    "invoiceNo": "Invoice No.",
+    "timeline": "Timeline",
+    "eventCreated": "Consignment Created",
+    "eventDelivered": "Delivered",
+    "eventSold": "Sold",
+    "reportStateInvoiced": "Invoiced"
   }
 }

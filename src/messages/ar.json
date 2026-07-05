@@ -889,6 +889,19 @@
     "backToList": "العودة للعهدات",
     "confirm": "تأكيد",
     "confirmReportSale": "هل أنت متأكد من إرسال بلاغ البيع؟",
-    "confirmReturn": "هل أنت متأكد من طلب الإرجاع؟"
+    "confirmReturn": "هل أنت متأكد من طلب الإرجاع؟",
+    "valueHeld": "قيمة البضاعة لديك",
+    "totalCharged": "أُضيف إلى رصيدك",
+    "remainingValue": "قيمة المتبقّي",
+    "yourCost": "سعر الكلفة عليك",
+    "amountDue": "المبلغ المستحق",
+    "retailValue": "قيمة بيعك بالتجزئة",
+    "addedToBalance": "أُضيف لرصيدك",
+    "invoiceNo": "رقم الفاتورة",
+    "timeline": "سجل الأحداث",
+    "eventCreated": "أُنشئت العهدة",
+    "eventDelivered": "تم التسليم",
+    "eventSold": "بيع",
+    "reportStateInvoiced": "مفوتر"
   }
 }

@@ -886,6 +886,19 @@
     "backToList": "Emanetlere dön",
     "confirm": "Onayla",
     "confirmReportSale": "Satış bildirimini göndermek istediğinizden emin misiniz?",
-    "confirmReturn": "İade talep etmek istediğinizden emin misiniz?"
+    "confirmReturn": "İade talep etmek istediğinizden emin misiniz?",
+    "valueHeld": "Goods Value Held",
+    "totalCharged": "Added to Your Account",
+    "remainingValue": "Remaining Value",
+    "yourCost": "Your Cost",
+    "amountDue": "Amount Due",
+    "retailValue": "Your Retail Value",
+    "addedToBalance": "Added to Balance",
+    "invoiceNo": "Invoice No.",
+    "timeline": "Timeline",
+    "eventCreated": "Consignment Created",
+    "eventDelivered": "Delivered",
+    "eventSold": "Sold",
+    "reportStateInvoiced": "Invoiced"
   }
 }

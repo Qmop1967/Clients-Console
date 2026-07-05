@@ -37,7 +37,7 @@ export default async function ConsignmentDetailPage({
       // Defense in depth: strip sensitive fields
       if (data?.lines) {
         data.lines = data.lines.map((l: any) => {
-          const { x_invoice_unit_price, x_cost, x_margin, x_cogs, ...safe } = l;
+          const { x_cost, x_margin, x_cogs, ...safe } = l; // keep x_invoice_unit_price — customer's own purchase price
           return safe;
         });
       }

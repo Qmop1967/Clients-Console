@@ -7,7 +7,7 @@ import { Link } from "@/i18n/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Package, ShoppingCart, RotateCcw, MessageSquare, Clock, CheckCircle2, XCircle, AlertTriangle } from "lucide-react";
+import { ArrowLeft, Package, ShoppingCart, RotateCcw, MessageSquare, Clock, CheckCircle2, XCircle, AlertTriangle, Wallet, FileText, PackageCheck, Boxes } from "lucide-react";
 import { ReportSaleForm } from "./report-sale-form";
 import { RequestReturnForm } from "./request-return-form";
 import { AddNoteForm } from "./add-note-form";
@@ -21,7 +21,9 @@ interface Line {
   x_qty_sold: number;
   x_qty_remaining: number;
   x_qty_returned: number;
+  x_qty_invoiced: number;
   x_suggested_retail_price: number;
+  x_invoice_unit_price: number;
   pending_reported_qty: number;
   reportable_qty: number;
 }
@@ -34,14 +36,27 @@ interface SaleReport {
   x_total_amount: number;
   x_state: string;
   x_date_reported: string;
+  x_invoice_id: number | null;
+  invoice_name: string | null;
+  invoice_state: string | null;
+  invoice_amount: number | null;
+  amount_due: number;
+}
+
+interface Financials {
+  delivered_value: number;
+  charged_value: number;
+  remaining_value: number;
 }
 
 interface ConsignmentData {
   id: number;
   name: string;
   state: string;
+  date_created: string | null;
   date_delivered: string | null;
   currency_id: number;
+  financials?: Financials;
   lines: Line[];
   sale_reports: SaleReport[];
 }
@@ -63,6 +78,7 @@ const reportStateIcons: Record<string, typeof Clock> = {
   reported: Clock,
   pending_review: Clock,
   approved: CheckCircle2,
+  invoiced: CheckCircle2,
   rejected: XCircle,
   failed_needs_review: AlertTriangle,
 };
@@ -73,13 +89,40 @@ export function ConsignmentDetail({ consignment, consignmentId, currencyCode }: 
   const [activeForm, setActiveForm] = useState<"sale" | "return" | "note" | null>(null);
 
   const c = consignment;
+  const cur = currencyCode;
+  const num = (v: any) => Number(v || 0);
+  const fmt = (v: any) => Number(v || 0).toLocaleString("en-US");
   const stateKey = ("state" + c.state.charAt(0).toUpperCase() + c.state.slice(1)) as any;
   const canAct = c.state === "active" || c.state === "delivered";
+
+  const fin: Financials = c.financials || {
+    delivered_value: c.lines.reduce((a, l) => a + num(l.x_qty_delivered) * num(l.x_invoice_unit_price), 0),
+    charged_value: c.lines.reduce((a, l) => a + num(l.x_qty_invoiced) * num(l.x_invoice_unit_price), 0),
+    remaining_value: c.lines.reduce((a, l) => a + num(l.x_qty_remaining) * num(l.x_invoice_unit_price), 0),
+  };
 
   const handleSuccess = () => {
     setActiveForm(null);
     router.refresh();
   };
+
+  const events: Array<{ icon: typeof Clock; title: string; date: string | null; amount?: number; invoice?: string | null; tone: string }> = [];
+  if (c.date_created) events.push({ icon: Boxes, title: t("eventCreated"), date: c.date_created, tone: "text-muted-foreground" });
+  if (c.date_delivered) events.push({ icon: PackageCheck, title: t("eventDelivered"), date: c.date_delivered, tone: "text-blue-600 dark:text-blue-400" });
+  [...c.sale_reports]
+    .filter((r) => r.x_state !== "rejected")
+    .sort((a, b) => new Date(a.x_date_reported).getTime() - new Date(b.x_date_reported).getTime())
+    .forEach((r) => {
+      const invoiced = r.x_state === "invoiced" || r.invoice_state === "posted";
+      events.push({
+        icon: invoiced ? Wallet : Clock,
+        title: t("eventSold") + " " + fmt(r.x_qty_sold),
+        date: r.x_date_reported,
+        amount: num(r.amount_due),
+        invoice: invoiced ? r.invoice_name : null,
+        tone: invoiced ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400",
+      });
+    });
 
   return (
     <div className="space-y-4">
@@ -102,6 +145,28 @@ export function ConsignmentDetail({ consignment, consignmentId, currencyCode }: 
               </span>
             )}
           </div>
+        </div>
+      </div>
+
+      {/* Financial summary */}
+      <div className="grid grid-cols-3 gap-2">
+        <div className="rounded-xl border bg-card p-3 text-center">
+          <PackageCheck className="h-4 w-4 mx-auto mb-1 text-muted-foreground" />
+          <p className="text-[10px] text-muted-foreground leading-tight">{t("valueHeld")}</p>
+          <p className="text-sm font-bold mt-0.5 tabular-nums">{fmt(fin.delivered_value)}</p>
+          <p className="text-[9px] text-muted-foreground">{cur}</p>
+        </div>
+        <div className="rounded-xl border-2 border-primary/30 bg-primary/5 p-3 text-center">
+          <Wallet className="h-4 w-4 mx-auto mb-1 text-primary" />
+          <p className="text-[10px] text-primary leading-tight">{t("totalCharged")}</p>
+          <p className="text-sm font-bold mt-0.5 text-primary tabular-nums">{fmt(fin.charged_value)}</p>
+          <p className="text-[9px] text-primary/70">{cur}</p>
+        </div>
+        <div className="rounded-xl border bg-card p-3 text-center">
+          <Boxes className="h-4 w-4 mx-auto mb-1 text-muted-foreground" />
+          <p className="text-[10px] text-muted-foreground leading-tight">{t("remainingValue")}</p>
+          <p className="text-sm font-bold mt-0.5 tabular-nums">{fmt(fin.remaining_value)}</p>
+          <p className="text-[9px] text-muted-foreground">{cur}</p>
         </div>
       </div>
 
@@ -163,6 +228,23 @@ export function ConsignmentDetail({ consignment, consignmentId, currencyCode }: 
                   </div>
                   <Package className="h-4 w-4 text-muted-foreground/50 ms-2 mt-0.5 flex-shrink-0" />
                 </div>
+
+                {/* Price row: your cost + suggested retail */}
+                <div className="flex flex-wrap items-center gap-2 mt-2 text-xs">
+                  <span className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-1">
+                    <span className="text-muted-foreground">{t("yourCost")}:</span>
+                    <b className="tabular-nums">{fmt(line.x_invoice_unit_price)}</b>
+                    <span className="text-muted-foreground">{cur}</span>
+                  </span>
+                  {line.x_suggested_retail_price > 0 && (
+                    <span className="inline-flex items-center gap-1 text-muted-foreground">
+                      <span>{t("suggestedPrice")}:</span>
+                      <b className="tabular-nums text-foreground">{fmt(line.x_suggested_retail_price)}</b>
+                    </span>
+                  )}
+                </div>
+
+                {/* Quantities */}
                 <div className="grid grid-cols-3 gap-2 mt-3 text-center">
                   <div className="rounded-md bg-muted/50 p-2">
                     <p className="text-[10px] text-muted-foreground">{t("qtyDelivered")}</p>
@@ -177,6 +259,7 @@ export function ConsignmentDetail({ consignment, consignmentId, currencyCode }: 
                     <p className="font-bold text-sm text-primary">{Number(line.x_qty_remaining).toLocaleString("en-US")}</p>
                   </div>
                 </div>
+
                 {(Number(line.pending_reported_qty) > 0 || Number(line.x_qty_returned) > 0) && (
                   <div className="flex gap-3 mt-2 text-xs">
                     {Number(line.pending_reported_qty) > 0 && (
@@ -196,44 +279,72 @@ export function ConsignmentDetail({ consignment, consignmentId, currencyCode }: 
                     {t("qtyReportable")}: {Number(line.reportable_qty).toLocaleString("en-US")}
                   </p>
                 )}
-                {line.x_suggested_retail_price > 0 && (
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {t("suggestedPrice")}: {Number(line.x_suggested_retail_price).toLocaleString("en-US")} {currencyCode}
-                  </p>
-                )}
               </div>
             ))}
           </div>
         </CardContent>
       </Card>
 
-      {/* Sale reports */}
+      {/* Sales & invoices */}
       {c.sale_reports && c.sale_reports.length > 0 && (
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-semibold">{t("saleReports")}</CardTitle>
+            <CardTitle className="text-sm font-semibold flex items-center gap-1.5"><FileText className="h-4 w-4" /> {t("saleReports")}</CardTitle>
           </CardHeader>
           <CardContent className="p-0">
             <div className="divide-y">
               {c.sale_reports.map((r) => {
+                const invoiced = r.x_state === "invoiced" || r.invoice_state === "posted";
+                const rejected = r.x_state === "rejected";
                 const stKey = r.x_state === "pending_review" ? "reportStatePending"
                   : r.x_state === "failed_needs_review" ? "reportStateFailed"
                   : ("reportState" + r.x_state.charAt(0).toUpperCase() + r.x_state.slice(1));
                 const Icon = reportStateIcons[r.x_state] || Clock;
                 return (
-                  <div key={r.id} className="p-4 flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium">
-                        {Number(r.x_qty_sold).toLocaleString("en-US")} {t("reportQty")}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {r.x_date_reported ? new Date(r.x_date_reported).toLocaleDateString("en-US") : ""}
-                      </p>
+                  <div key={r.id} className="p-4">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold">
+                          {Number(r.x_qty_sold).toLocaleString("en-US")} {t("reportQty")}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {r.x_date_reported ? new Date(r.x_date_reported).toLocaleDateString("en-US") : ""}
+                        </p>
+                      </div>
+                      {invoiced ? (
+                        <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 text-[10px] shrink-0">
+                          <CheckCircle2 className="h-3 w-3 me-1" /> {t("addedToBalance")}
+                        </Badge>
+                      ) : (
+                        <span className="flex items-center gap-1.5 shrink-0">
+                          <Icon className="h-3.5 w-3.5 text-muted-foreground" />
+                          <span className="text-xs text-muted-foreground">{t(stKey as any)}</span>
+                        </span>
+                      )}
                     </div>
-                    <div className="flex items-center gap-1.5">
-                      <Icon className="h-3.5 w-3.5 text-muted-foreground" />
-                      <span className="text-xs text-muted-foreground">{t(stKey as any)}</span>
-                    </div>
+
+                    {!rejected && (
+                      <div className="mt-2.5 rounded-lg bg-muted/40 p-2.5 space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs text-muted-foreground">{t("amountDue")}</span>
+                          <span className={`text-sm font-bold tabular-nums ${invoiced ? "text-emerald-700 dark:text-emerald-400" : "text-foreground"}`}>
+                            {fmt(r.amount_due)} <span className="text-[10px] font-normal text-muted-foreground">{cur}</span>
+                          </span>
+                        </div>
+                        {invoiced && r.invoice_name && (
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs text-muted-foreground">{t("invoiceNo")}</span>
+                            <span className="text-xs font-mono text-foreground">{r.invoice_name}</span>
+                          </div>
+                        )}
+                        {Number(r.x_total_amount) > 0 && (
+                          <div className="flex items-center justify-between">
+                            <span className="text-[11px] text-muted-foreground">{t("retailValue")}</span>
+                            <span className="text-[11px] text-muted-foreground tabular-nums">{fmt(r.x_total_amount)} {cur}</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -244,6 +355,37 @@ export function ConsignmentDetail({ consignment, consignmentId, currencyCode }: 
 
       {c.sale_reports && c.sale_reports.length === 0 && (
         <p className="text-sm text-muted-foreground text-center py-4">{t("noReports")}</p>
+      )}
+
+      {/* Timeline */}
+      {events.length > 0 && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-semibold flex items-center gap-1.5"><Clock className="h-4 w-4" /> {t("timeline")}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {events.map((ev, i) => {
+                const Icon = ev.icon;
+                return (
+                  <div key={i} className="flex items-start gap-3">
+                    <div className="mt-0.5"><Icon className={`h-4 w-4 ${ev.tone}`} /></div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-sm">{ev.title}</p>
+                        {ev.amount ? (<span className={`text-xs font-bold tabular-nums ${ev.tone}`}>{fmt(ev.amount)} {cur}</span>) : null}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <p className="text-[11px] text-muted-foreground">{ev.date ? new Date(ev.date).toLocaleDateString("en-US") : ""}</p>
+                        {ev.invoice && <span className="text-[11px] font-mono text-muted-foreground">· {ev.invoice}</span>}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
       )}
     </div>
   );
