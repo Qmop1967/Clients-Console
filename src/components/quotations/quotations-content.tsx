@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { useTranslations } from "next-intl";
+import { useTranslations, useLocale } from "next-intl";
+import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -20,6 +21,7 @@ import {
   Package,
   Loader2,
   AlertTriangle,
+  Handshake,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import type { SalesOrder } from "@/types";
@@ -31,6 +33,7 @@ interface QuotationsContentProps {
 
 export function QuotationsContent({ quotations, currencyCode }: QuotationsContentProps) {
   const t = useTranslations("quotations");
+  const locale = useLocale();
   const { toast } = useToast();
   const [loading, setLoading] = useState<Record<string, string>>({});
   const [dismissed, setDismissed] = useState<string[]>([]);
@@ -195,6 +198,12 @@ export function QuotationsContent({ quotations, currencyCode }: QuotationsConten
                     <p className="price-tag font-bold text-lg">{formatCurrency(q.total, q.currency_code)}</p>
                   </div>
                   <div className="flex gap-2">
+                    <Link href={`/${locale}/quotations/${q.salesorder_id}/negotiate`}>
+                      <Button variant="outline" size="sm" className="text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-900/10">
+                        <Handshake className="h-4 w-4 me-1" />
+                        تفاوض
+                      </Button>
+                    </Link>
                     <Button
                       variant="outline"
                       size="sm"
