@@ -38,7 +38,7 @@ const SCROLL_POSITION_KEY = "shop_scroll_position";
 const PRODUCTS_PER_PAGE = 24;
 
 // Sort options
-type SortOption = "name-asc" | "name-desc" | "price-asc" | "price-desc" | "stock-desc";
+type SortOption = "newest" | "name-asc" | "name-desc" | "price-asc" | "price-desc" | "stock-desc";
 
 // Product type from server
 interface PublicProduct {
@@ -381,7 +381,7 @@ export function PublicProductsContent({
   // Get page from URL params, default to 1
   const pageFromUrl = parseInt(searchParams.get("page") || "1", 10);
   const searchFromUrl = searchParams.get("q") || "";
-  const sortFromUrl = (searchParams.get("sort") as SortOption) || "name-asc";
+  const sortFromUrl = (searchParams.get("sort") as SortOption) || "newest";
 
   const [searchQuery, setSearchQuery] = useState(searchFromUrl);
   const [currentPage, setCurrentPage] = useState(pageFromUrl);
@@ -423,7 +423,7 @@ export function PublicProductsContent({
       params.delete("q");
     }
 
-    if (sortBy !== "name-asc") {
+    if (sortBy !== "newest") {
       params.set("sort", sortBy);
     } else {
       params.delete("sort");
@@ -460,6 +460,9 @@ export function PublicProductsContent({
     // Sort based on selected option
     filtered.sort((a, b) => {
       switch (sortBy) {
+        case "newest":
+          // pp_id (item_id) is monotonic with creation → highest = newest product
+          return parseInt(b.item_id, 10) - parseInt(a.item_id, 10);
         case "name-asc":
           return a.name.localeCompare(b.name);
         case "name-desc":
@@ -471,7 +474,7 @@ export function PublicProductsContent({
         case "stock-desc":
           return b.available_stock - a.available_stock;
         default:
-          return a.name.localeCompare(b.name);
+          return parseInt(b.item_id, 10) - parseInt(a.item_id, 10);
       }
     });
 
@@ -520,6 +523,7 @@ export function PublicProductsContent({
                 <SelectValue placeholder={t("sortBy")} />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value="newest">{t("sortOptions.newest")}</SelectItem>
                 <SelectItem value="name-asc">{t("sortOptions.nameAsc")}</SelectItem>
                 <SelectItem value="name-desc">{t("sortOptions.nameDesc")}</SelectItem>
                 <SelectItem value="price-asc">{t("sortOptions.priceAsc")}</SelectItem>

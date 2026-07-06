@@ -154,6 +154,7 @@
     "filterByStock": "المتوفر فقط",
     "sortBy": "ترتيب حسب",
     "sortOptions": {
+      "newest": "الأحدث",
       "nameAsc": "الاسم (أ-ي)",
       "nameDesc": "الاسم (ي-أ)",
       "priceAsc": "السعر (الأقل أولاً)",

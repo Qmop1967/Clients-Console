@@ -154,6 +154,7 @@
     "filterByStock": "In Stock Only",
     "sortBy": "Sort by",
     "sortOptions": {
+      "newest": "Newest",
       "nameAsc": "Name (A-Z)",
       "nameDesc": "Name (Z-A)",
       "priceAsc": "Price (Low to High)",
