@@ -194,7 +194,7 @@ export function AccountStatementContent({
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">{t("totalDebit")}</p>
-                <p className="text-xl font-bold text-red-600 dark:text-red-400 truncate">
+                <p className="text-lg sm:text-xl font-bold text-red-600 dark:text-red-400 leading-tight tabular-nums">
                   {formatCurrency(statement.total_debits)}
                 </p>
               </div>
@@ -211,7 +211,7 @@ export function AccountStatementContent({
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">{t("totalCredit")}</p>
-                <p className="text-xl font-bold text-green-600 dark:text-green-400 truncate">
+                <p className="text-lg sm:text-xl font-bold text-green-600 dark:text-green-400 leading-tight tabular-nums">
                   {formatCurrency(statement.total_credits)}
                 </p>
               </div>
@@ -228,7 +228,7 @@ export function AccountStatementContent({
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">{t("openingBalance")}</p>
-                <p className="text-xl font-bold truncate">
+                <p className="text-lg sm:text-xl font-bold leading-tight tabular-nums">
                   {formatCurrency(statement.opening_balance)}
                 </p>
               </div>
@@ -259,7 +259,7 @@ export function AccountStatementContent({
               <div className="flex-1 min-w-0">
                 <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">{t("closingBalance")}</p>
                 <p className={cn(
-                  "text-xl font-bold truncate",
+                  "text-lg sm:text-xl font-bold leading-tight tabular-nums",
                   statement.closing_balance > 0
                     ? "text-amber-600 dark:text-amber-400"
                     : "text-green-600 dark:text-green-400"
@@ -288,12 +288,12 @@ export function AccountStatementContent({
           </div>
 
           {/* Filter Tabs */}
-          <div className="flex items-center gap-1 p-1 bg-muted/50 rounded-lg">
+          <div className="flex items-center gap-1 p-1 bg-muted/50 rounded-lg overflow-x-auto min-w-0">
             <Button
               variant={activeFilter === "all" ? "default" : "ghost"}
               size="sm"
               onClick={() => setActiveFilter("all")}
-              className="h-8 px-3 text-xs"
+              className="h-8 px-3 text-xs shrink-0"
             >
               {t("filterAll")}
               <Badge variant="secondary" className="ml-1.5 text-[10px] px-1.5 py-0">
@@ -304,7 +304,7 @@ export function AccountStatementContent({
               variant={activeFilter === "invoice" ? "destructive" : "ghost"}
               size="sm"
               onClick={() => setActiveFilter("invoice")}
-              className="h-8 px-3 text-xs"
+              className="h-8 px-3 text-xs shrink-0"
             >
               {t("invoices")}
               <Badge variant="secondary" className="ml-1.5 text-[10px] px-1.5 py-0">
@@ -315,7 +315,7 @@ export function AccountStatementContent({
               variant={activeFilter === "payment" ? "default" : "ghost"}
               size="sm"
               onClick={() => setActiveFilter("payment")}
-              className={cn("h-8 px-3 text-xs", activeFilter === "payment" && "bg-green-500 hover:bg-green-600")}
+              className={cn("h-8 px-3 text-xs shrink-0", activeFilter === "payment" && "bg-green-500 hover:bg-green-600")}
             >
               {t("payments")}
               <Badge variant="secondary" className="ml-1.5 text-[10px] px-1.5 py-0">
@@ -326,7 +326,7 @@ export function AccountStatementContent({
               variant={activeFilter === "credit_note" ? "default" : "ghost"}
               size="sm"
               onClick={() => setActiveFilter("credit_note")}
-              className={cn("h-8 px-3 text-xs", activeFilter === "credit_note" && "bg-blue-500 hover:bg-blue-600")}
+              className={cn("h-8 px-3 text-xs shrink-0", activeFilter === "credit_note" && "bg-blue-500 hover:bg-blue-600")}
             >
               {t("credits")}
               <Badge variant="secondary" className="ml-1.5 text-[10px] px-1.5 py-0">

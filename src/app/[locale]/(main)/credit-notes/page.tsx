@@ -159,9 +159,9 @@ export default async function CreditNotesPage({
               >
                 <Card className="hover:bg-muted/30 transition-colors">
                   <CardContent className="p-4">
-                    <div className="flex items-start justify-between">
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="space-y-1 min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
                           <span className="font-semibold">
                             {creditNote.creditnote_number}
                           </span>
@@ -173,7 +173,7 @@ export default async function CreditNotesPage({
                           {t("date")}: {creditNote.date}
                         </p>
                       </div>
-                      <div className="text-right">
+                      <div className="text-right shrink-0">
                         <p className="font-semibold">
                           {formatCurrency(creditNote.total)}
                         </p>

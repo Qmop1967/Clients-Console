@@ -425,7 +425,13 @@
     "allCreditNotes": "All Credit Notes",
     "previous": "Previous",
     "next": "Next",
-    "page": "Page"
+    "page": "Page",
+    "creditNoteStatus": {
+      "draft": "Draft",
+      "open": "Open",
+      "closed": "Closed",
+      "void": "Void"
+    }
   },
   "accountStatement": {
     "title": "Account Statement",

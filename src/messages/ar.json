@@ -425,7 +425,13 @@
     "allCreditNotes": "جميع الإشعارات الدائنة",
     "previous": "السابق",
     "next": "التالي",
-    "page": "صفحة"
+    "page": "صفحة",
+    "creditNoteStatus": {
+      "draft": "مسودة",
+      "open": "مفتوح",
+      "closed": "مغلق",
+      "void": "ملغى"
+    }
   },
   "accountStatement": {
     "title": "كشف الحساب",

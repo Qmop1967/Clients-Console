@@ -264,12 +264,12 @@ export function DashboardContent({
                     href={`/orders/${order.salesorder_id}`}
                     className="block"
                   >
-                    <div className="flex items-center justify-between rounded-lg border p-3 hover:bg-muted/50 transition-colors">
-                      <div className="space-y-1">
-                        <p className="font-medium">{order.salesorder_number}</p>
+                    <div className="flex items-center justify-between gap-3 rounded-lg border p-3 hover:bg-muted/50 transition-colors">
+                      <div className="space-y-1 min-w-0 flex-1">
+                        <p className="font-medium truncate">{order.salesorder_number}</p>
                         <p className="text-sm text-muted-foreground">{order.date}</p>
                       </div>
-                      <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-3 shrink-0">
                         <Badge variant={getOrderStatusColor(order.status) as "default" | "secondary" | "destructive" | "outline"}>
                           {order.status}
                         </Badge>
@@ -310,14 +310,14 @@ export function DashboardContent({
                     href={`/invoices/${invoice.invoice_id}`}
                     className="block"
                   >
-                    <div className="flex items-center justify-between rounded-lg border p-3 hover:bg-muted/50 transition-colors">
-                      <div className="space-y-1">
-                        <p className="font-medium">{invoice.invoice_number}</p>
+                    <div className="flex items-center justify-between gap-3 rounded-lg border p-3 hover:bg-muted/50 transition-colors">
+                      <div className="space-y-1 min-w-0 flex-1">
+                        <p className="font-medium truncate">{invoice.invoice_number}</p>
                         <p className="text-sm text-muted-foreground">
                           {t("dueDate")}: {invoice.due_date}
                         </p>
                       </div>
-                      <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-3 shrink-0">
                         <Badge variant={getInvoiceStatusColor(invoice.status) as "default" | "secondary" | "destructive" | "outline"}>
                           {invoice.status}
                         </Badge>
