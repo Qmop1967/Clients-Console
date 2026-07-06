@@ -20,7 +20,9 @@ export default function LoginPage() {
   const router = useRouter();
   const isAr = locale === "ar";
 
-  const [method, setMethod] = useState<LoginMethod>("phone");
+  // Default to email while WhatsApp OTP is offline (until official WhatsApp Business API).
+  // Revert to "phone" once WhatsApp is restored; the health poll below still auto-adapts.
+  const [method, setMethod] = useState<LoginMethod>("email");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
