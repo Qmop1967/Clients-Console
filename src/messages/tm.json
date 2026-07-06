@@ -899,6 +899,7 @@
     "eventCreated": "Consignment Created",
     "eventDelivered": "Delivered",
     "eventSold": "Sold",
+    "eventReplenished": "Replenished",
     "reportStateInvoiced": "Invoiced"
   }
 }

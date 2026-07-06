@@ -59,6 +59,7 @@ interface ConsignmentData {
   financials?: Financials;
   lines: Line[];
   sale_reports: SaleReport[];
+  topups?: Array<{ id: number; x_name: string; x_total_qty: number; x_date_delivered: string | null; lines: Array<{ product_name: string; qty: number }> }>;
 }
 
 interface Props {
@@ -123,6 +124,16 @@ export function ConsignmentDetail({ consignment, consignmentId, currencyCode }: 
         tone: invoiced ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400",
       });
     });
+  (c.topups || []).forEach((tp) => {
+    const q = (tp.lines || []).reduce((a, l) => a + Number(l.qty || 0), 0) || Number(tp.x_total_qty || 0);
+    events.push({
+      icon: PackageCheck,
+      title: t("eventReplenished") + " " + fmt(q),
+      date: tp.x_date_delivered,
+      tone: "text-indigo-600 dark:text-indigo-400",
+    });
+  });
+  events.sort((a, b) => (a.date ? new Date(a.date).getTime() : 0) - (b.date ? new Date(b.date).getTime() : 0));
 
   return (
     <div className="space-y-4">

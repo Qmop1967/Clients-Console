@@ -18,7 +18,7 @@
  * static asset delivery and lets iOS treat the install as a real PWA.
  */
 
-const CACHE_VERSION = 'v1783262047';
+const CACHE_VERSION = 'v1783375072';
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 

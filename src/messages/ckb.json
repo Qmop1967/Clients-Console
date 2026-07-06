@@ -899,6 +899,7 @@
     "eventCreated": "أُنشئت العهدة",
     "eventDelivered": "تم التسليم",
     "eventSold": "بيع",
+    "eventReplenished": "تعويض مُسلّم",
     "reportStateInvoiced": "مفوتر"
   }
 }

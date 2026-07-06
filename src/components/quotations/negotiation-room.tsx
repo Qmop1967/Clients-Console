@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   Loader2, Send, Check, X, AlertTriangle, Trash2, ArrowRight,
   Clock, ShieldCheck, MessageCircle, PackageCheck, Ban, Handshake,
+  Plus, Search,
 } from "lucide-react";
 
 interface Line {
@@ -83,6 +84,12 @@ export default function NegotiationRoom({ orderId, currencyCode }: { orderId: nu
   const [objPrice, setObjPrice] = useState("");
   const [noteLine, setNoteLine] = useState<number | null>(null);
   const [noteText, setNoteText] = useState("");
+  // Add-product picker
+  const [addOpen, setAddOpen] = useState(false);
+  const [pq, setPq] = useState("");
+  const [pres, setPres] = useState<{ id: number; name: string; sku: string; stock: number }[]>([]);
+  const [psearching, setPsearching] = useState(false);
+  const [pqty, setPqty] = useState<Record<number, string>>({});
 
   const cur = view?.order?.currency || currencyCode || "IQD";
 
@@ -102,6 +109,24 @@ export default function NegotiationRoom({ orderId, currencyCode }: { orderId: nu
     const t = setInterval(() => load(true), 15000);
     return () => clearInterval(t);
   }, [load]);
+
+  // Debounced product search (add-product) — /api/stock/search returns product.product (pp_id)
+  useEffect(() => {
+    if (!addOpen) return;
+    const q = pq.trim();
+    if (q.length < 2) { setPres([]); return; }
+    setPsearching(true);
+    const t = setTimeout(async () => {
+      try {
+        const r = await fetch(`/api/stock/search?query=${encodeURIComponent(q)}`, { cache: "no-store" });
+        const d = await r.json();
+        const arr = Array.isArray(d?.products) ? d.products : [];
+        setPres(arr.map((x: any) => ({ id: x.id, name: x.name || "", sku: x.sku || "", stock: x.qty_available ?? 0 })));
+      } catch { setPres([]); }
+      finally { setPsearching(false); }
+    }, 350);
+    return () => clearTimeout(t);
+  }, [pq, addOpen]);
 
   async function act(path: string, body: Record<string, unknown>, key: string): Promise<boolean> {
     setBusy(key); setErr("");
@@ -259,6 +284,56 @@ export default function NegotiationRoom({ orderId, currencyCode }: { orderId: nu
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Add product (customer's turn) */}
+      {st !== "none" && p.canAddLine && (
+        <div className="mb-5">
+          {!addOpen ? (
+            <button onClick={() => { setAddOpen(true); setPq(""); setPres([]); }}
+              className="w-full py-3 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-300 font-semibold flex items-center justify-center gap-2">
+              <Plus className="w-4 h-4" /> إضافة منتج للعرض
+            </button>
+          ) : (
+            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+              <div className="flex items-center gap-2 mb-2">
+                <Search className="w-4 h-4 text-emerald-400 shrink-0" />
+                <input autoFocus value={pq} onChange={(e) => setPq(e.target.value)} placeholder="ابحث عن منتج بالاسم أو الرمز..."
+                  className="flex-1 text-sm rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-white placeholder:text-gray-500 outline-none focus:border-emerald-500/40" />
+                <button onClick={() => { setAddOpen(false); setPq(""); setPres([]); }} className="p-1.5 rounded-lg text-gray-400 hover:bg-white/5"><X className="w-4 h-4" /></button>
+              </div>
+              {psearching && <div className="py-3 flex justify-center"><Loader2 className="w-4 h-4 animate-spin text-emerald-400" /></div>}
+              {!psearching && pq.trim().length >= 2 && pres.length === 0 && <p className="text-xs text-gray-500 py-2 text-center">لا نتائج</p>}
+              <div className="space-y-2 max-h-72 overflow-y-auto">
+                {pres.map((pr) => {
+                  const q = pqty[pr.id] ?? "1";
+                  return (
+                    <div key={pr.id} className="flex items-center gap-2 rounded-xl bg-black/20 border border-white/10 px-2.5 py-2">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm text-white truncate" dir="ltr">{pr.name}</p>
+                        <div className="flex items-center gap-2 text-[11px]">
+                          {pr.sku && <span dir="ltr" className="text-gray-500">{pr.sku}</span>}
+                          <span dir="ltr" className={pr.stock > 0 ? "text-emerald-400" : "text-red-400"}>{pr.stock > 0 ? `متوفر ${pr.stock.toLocaleString("en-US")}` : "غير متوفر"}</span>
+                        </div>
+                      </div>
+                      <input value={q} onChange={(e) => setPqty((sx) => ({ ...sx, [pr.id]: e.target.value.replace(/[^\d]/g, "") }))}
+                        inputMode="numeric" dir="ltr" aria-label="الكمية"
+                        className="w-14 text-center text-sm rounded-lg bg-white/5 border border-white/10 px-1 py-1.5 text-white outline-none focus:border-emerald-500/40" />
+                      <button onClick={async () => {
+                          const qn = Math.max(1, parseInt(q || "1") || 1);
+                          const ok = await act("/line", { product_id: pr.id, quantity: qn, idempotency_key: `addline-${orderId}-${pr.id}-${view?.order?.x_revision_number}` }, `add-${pr.id}`);
+                          if (ok) { setAddOpen(false); setPq(""); setPres([]); }
+                        }}
+                        disabled={busy === `add-${pr.id}`}
+                        className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-sm font-semibold shrink-0 disabled:opacity-60">
+                        {busy === `add-${pr.id}` ? <Loader2 className="w-4 h-4 animate-spin" /> : "أضف"}</button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
