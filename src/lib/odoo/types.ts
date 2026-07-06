@@ -22,6 +22,7 @@ export interface OdooProduct {
   qty_available: number;
   virtual_available: number;
   free_qty: number;
+  create_date?: string; // Odoo creation timestamp (for New badge / New Arrivals)
   description?: string | false;
   description_sale?: string | false;
   image_1920?: string | false; // base64 (large, avoid fetching)

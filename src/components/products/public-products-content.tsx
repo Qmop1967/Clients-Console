@@ -24,6 +24,9 @@ import { Search, ShoppingCart, Check, Eye, ChevronRight, X, SlidersHorizontal, M
 import { NumberedPagination } from "@/components/ui/pagination";
 import { cn } from "@/lib/utils/cn";
 import { formatCurrency } from "@/lib/utils/format";
+import { ShopHero } from "./shop-hero";
+import { CategoryStrip } from "./category-strip";
+import { NewArrivalsRail } from "./new-arrivals-rail";
 
 // PERF: Lazy load quantity input - not needed for LCP, reduces initial JS bundle
 const WholesaleQuantityInput = dynamic(
@@ -36,6 +39,15 @@ const SCROLL_POSITION_KEY = "shop_scroll_position";
 
 // Pagination configuration - 24 items per page (6 rows of 4 on desktop)
 const PRODUCTS_PER_PAGE = 24;
+
+// A product is flagged "New" if created within this window (days).
+const NEW_WINDOW_DAYS = 45;
+function isProductNew(createDate?: string): boolean {
+  if (!createDate) return false;
+  const ts = Date.parse(createDate.replace(" ", "T") + "Z");
+  if (Number.isNaN(ts)) return false;
+  return Date.now() - ts < NEW_WINDOW_DAYS * 24 * 60 * 60 * 1000;
+}
 
 // Sort options
 type SortOption = "newest" | "name-asc" | "name-desc" | "price-asc" | "price-desc" | "stock-desc";
@@ -55,6 +67,7 @@ interface PublicProduct {
   brand?: string;
   unit: string;
   inPriceList?: boolean; // Whether item has a price in the Consumer price list
+  create_date?: string; // Odoo create_date (New badge / New Arrivals)
 }
 
 // Category type from server
@@ -67,11 +80,13 @@ interface PublicCategory {
 
 interface PublicProductsContentProps {
   products: PublicProduct[];
+  allProducts: PublicProduct[];
   categories: PublicCategory[];
   currencyCode: string;
   selectedCategory?: string | null;
   selectedCategoryName?: string | null;
   onClearCategory?: () => void;
+  onCategorySelect?: (categoryId: string) => void;
 }
 
 // LCP OPTIMIZATION: Reduced from 4 to 2 priority products
@@ -175,6 +190,15 @@ const ProductCardWithCart = memo(function ProductCardWithCart({
           <div className="absolute top-2.5 left-2.5 rtl:left-auto rtl:right-2.5 z-10">
             <span className="px-2 py-0.5 text-[10px] font-medium bg-black/60 text-white/90 rounded-full backdrop-blur-sm">
               {product.category_name}
+            </span>
+          </div>
+        )}
+
+        {/* New badge — recently added products */}
+        {isProductNew(product.create_date) && (
+          <div className="absolute top-2.5 right-2.5 rtl:right-auto rtl:left-2.5 z-10">
+            <span className="px-2 py-0.5 text-[10px] font-bold rounded-full gradient-gold text-white shadow-sm">
+              {t("newBadge")}
             </span>
           </div>
         )}
@@ -339,13 +363,13 @@ const ProductCardWithCart = memo(function ProductCardWithCart({
 
 export function PublicProductsContent({
   products,
-  // categories is passed for potential future use (e.g., category dropdown filter)
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  allProducts,
   categories,
   currencyCode,
   selectedCategory = null,
   selectedCategoryName = null,
   onClearCategory,
+  onCategorySelect,
 }: PublicProductsContentProps) {
   const t = useTranslations("products");
   const locale = useLocale();
@@ -481,6 +505,20 @@ export function PublicProductsContent({
     return filtered;
   }, [products, deferredSearchQuery, sortBy]);
 
+  // New Arrivals — newest in-stock products (create_date desc, fallback pp_id desc)
+  const newArrivals = useMemo(() => {
+    return allProducts
+      .filter((p) => p.available_stock > 0)
+      .slice()
+      .sort((a, b) => {
+        const da = a.create_date ? Date.parse(a.create_date.replace(" ", "T") + "Z") : 0;
+        const db = b.create_date ? Date.parse(b.create_date.replace(" ", "T") + "Z") : 0;
+        if (db !== da) return db - da;
+        return parseInt(b.item_id, 10) - parseInt(a.item_id, 10);
+      })
+      .slice(0, 12);
+  }, [allProducts]);
+
   // Pagination calculations
   const totalPages = Math.ceil(filteredProducts.length / PRODUCTS_PER_PAGE);
   const startIndex = (currentPage - 1) * PRODUCTS_PER_PAGE;
@@ -496,6 +534,20 @@ export function PublicProductsContent({
 
   return (
     <div className="space-y-6">
+      {/* Merchandising header — hero + category strip + new arrivals */}
+      <ShopHero />
+
+      <CategoryStrip
+        categories={categories}
+        selectedCategory={selectedCategory}
+        onSelect={onCategorySelect}
+        onClear={onClearCategory}
+      />
+
+      {!deferredSearchQuery && !selectedCategory && newArrivals.length > 0 && (
+        <NewArrivalsRail products={newArrivals} currencyCode={currencyCode} />
+      )}
+
       {/* Filters Row */}
       <div className="flex flex-col gap-4">
         {/* Search and Sort Row */}
@@ -560,6 +612,7 @@ export function PublicProductsContent({
       </div>
 
       {/* Products Section */}
+      <div id="all-products" className="scroll-mt-4" />
       {filteredProducts.length === 0 ? (
         <div className="py-12 text-center text-muted-foreground">
           {t("noProducts")}

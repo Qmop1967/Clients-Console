@@ -81,6 +81,7 @@ export interface Product {
   reorder_level?: number;
   created_time?: string;
   last_modified_time?: string;
+  create_date?: string; // Odoo creation timestamp (for New badge / New Arrivals)
   // Custom fields
   custom_fields?: Array<{
     customfield_id: string;

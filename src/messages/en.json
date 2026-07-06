@@ -162,6 +162,12 @@
       "stockDesc": "Stock (High to Low)"
     },
     "heroTitle": "Welcome to TSH Shop, Sir",
+    "heroBadge": "Updated daily",
+    "heroGreeting": "Welcome, {name}",
+    "heroSubtitle": "The newest arrivals and your best prices — something new every day",
+    "newArrivals": "New Arrivals",
+    "viewAll": "View all",
+    "newBadge": "New",
     "heroDescription": "Browse our catalog of IT products, security systems, networking equipment, and more.",
     "wholesaleCta": "Want wholesale prices, Sir?",
     "wholesaleCtaDescription": "Login to your wholesale account to see special pricing and place orders.",

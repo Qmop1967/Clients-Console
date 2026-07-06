@@ -65,7 +65,7 @@ async function getWarehouseProductIds(): Promise<number[]> {
 const PRODUCT_LIST_FIELDS = [
   'id', 'name', 'default_code', 'barcode', 'list_price', 'standard_price',
   'type', 'categ_id', 'product_tmpl_id', 'uom_id', 'active', 'sale_ok',
-  'qty_available', 'virtual_available', 'free_qty',
+  'qty_available', 'virtual_available', 'free_qty', 'create_date',
   'description_sale', 'weight', 'volume',
   'x_name_ar', 'x_name_ckb', 'x_name_kmr', 'x_name_tm',
 ];
@@ -105,6 +105,7 @@ function odooProductToProduct(p: OdooProduct, versionMap?: Map<number, number>):
     item_type: p.type === 'product' ? 'inventory' : p.type,
     stock_on_hand: p.qty_available,
     available_stock: p.free_qty ?? p.qty_available,
+    create_date: p.create_date,
     category_id: Array.isArray(p.categ_id) ? String(p.categ_id[0]) : undefined,
     category_name: Array.isArray(p.categ_id) ? p.categ_id[1] : undefined,
     brand: undefined,

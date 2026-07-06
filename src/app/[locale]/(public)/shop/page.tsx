@@ -68,6 +68,7 @@ async function fetchShopData(priceListId?: string) {
       unit: product.unit,
       minimum_quantity: product.minimum_quantity,
       inPriceList: product.in_price_list ?? (product.display_price > 0),
+      create_date: product.create_date,
     }));
 
     // Filter to only in-stock products

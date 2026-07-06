@@ -1,19 +1,15 @@
 "use client";
 
 import { Suspense, useCallback, useMemo } from "react";
-import { useTranslations } from "next-intl";
 import { useSearchParams, usePathname, useRouter } from "next/navigation";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Badge } from "@/components/ui/badge";
-import { Package, Layers, Loader2 } from "lucide-react";
-import { CategoriesGrid } from "./categories-grid";
+import { Loader2 } from "lucide-react";
 import { PublicProductsContent } from "./public-products-content";
-import { cn } from "@/lib/utils/cn";
 
 // Product type from server
 interface PublicProduct {
   item_id: string;
   name: string;
+  localized_names?: { ar?: string; ckb?: string; kmr?: string; tm?: string };
   sku: string;
   description?: string;
   rate: number;
@@ -24,6 +20,7 @@ interface PublicProduct {
   brand?: string;
   unit: string;
   inPriceList?: boolean;
+  create_date?: string;
 }
 
 // Category type from server
@@ -40,19 +37,15 @@ interface ShopContainerProps {
   currencyCode: string;
 }
 
-type TabValue = "products" | "categories";
-
 // Loading fallback component
 function ShopContainerSkeleton() {
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div className="h-9 w-40 bg-muted animate-pulse rounded-lg" />
-        <div className="h-6 w-32 bg-muted animate-pulse rounded-full" />
-      </div>
+      <div className="h-28 sm:h-32 w-full bg-muted animate-pulse rounded-2xl" />
       <div className="flex gap-2">
-        <div className="h-10 w-32 bg-muted animate-pulse rounded-lg" />
-        <div className="h-10 w-32 bg-muted animate-pulse rounded-lg" />
+        <div className="h-10 w-20 bg-muted animate-pulse rounded-full" />
+        <div className="h-10 w-24 bg-muted animate-pulse rounded-full" />
+        <div className="h-10 w-24 bg-muted animate-pulse rounded-full" />
       </div>
       <div className="flex items-center justify-center py-12">
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -67,35 +60,19 @@ function ShopContainerInner({
   categories,
   currencyCode,
 }: ShopContainerProps) {
-  const t = useTranslations("products");
   const searchParams = useSearchParams();
   const pathname = usePathname();
   const router = useRouter();
 
-  // Get current tab from URL, default to "products"
-  const currentTab = (searchParams.get("view") as TabValue) || "products";
-
-  // Get selected category from URL
+  // Selected category from URL (drives the category strip + grid filter)
   const selectedCategory = searchParams.get("category");
 
-  // Calculate product counts per category
-  const productCounts = useMemo(() => {
-    const counts: Record<string, number> = {};
-    products.forEach((product) => {
-      if (product.category_id) {
-        counts[product.category_id] = (counts[product.category_id] || 0) + 1;
-      }
-    });
-    return counts;
-  }, [products]);
-
-  // Filter products by selected category
+  // Filter products by selected category (grid). The rail always uses the full list.
   const filteredProducts = useMemo(() => {
     if (!selectedCategory) return products;
     return products.filter((p) => p.category_id === selectedCategory);
   }, [products, selectedCategory]);
 
-  // Get category name by ID
   const getCategoryName = useCallback(
     (categoryId: string) => {
       const category = categories.find((c) => c.category_id === categoryId);
@@ -104,42 +81,17 @@ function ShopContainerInner({
     [categories]
   );
 
-  // Handle tab change
-  const handleTabChange = useCallback(
-    (value: string) => {
-      const params = new URLSearchParams(searchParams.toString());
-
-      if (value === "products") {
-        params.delete("view");
-      } else {
-        params.set("view", value);
-      }
-
-      // Clear category filter when switching to categories tab
-      if (value === "categories") {
-        params.delete("category");
-        params.delete("page");
-        params.delete("q");
-      }
-
-      const newUrl = params.toString() ? `${pathname}?${params.toString()}` : pathname;
-      router.push(newUrl, { scroll: false });
-    },
-    [searchParams, pathname, router]
-  );
-
-  // Handle category selection (from categories tab)
+  // Select a category (from the strip)
   const handleCategorySelect = useCallback(
     (categoryId: string) => {
       const params = new URLSearchParams();
       params.set("category", categoryId);
-      // Switch to products tab with category filter
       router.push(`${pathname}?${params.toString()}`, { scroll: false });
     },
     [pathname, router]
   );
 
-  // Handle clearing category filter
+  // Clear the active category filter
   const handleClearCategory = useCallback(() => {
     const params = new URLSearchParams(searchParams.toString());
     params.delete("category");
@@ -148,72 +100,17 @@ function ShopContainerInner({
     router.push(newUrl, { scroll: false });
   }, [searchParams, pathname, router]);
 
-  // Determine which tab should be active
-  const activeTab = selectedCategory ? "products" : currentTab;
-
   return (
-    <div className="space-y-6">
-      {/* Shop Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <h1 className="text-3xl font-bold">{t("title")}</h1>
-
-        {/* Product Count Badge */}
-        <Badge variant="secondary" className="w-fit">
-          {t("productsAvailable", { count: products.length })}
-        </Badge>
-      </div>
-
-      {/* Tabs */}
-      <Tabs
-        value={activeTab}
-        onValueChange={handleTabChange}
-        className="w-full"
-      >
-        <TabsList className="grid w-full max-w-md grid-cols-2 mb-6">
-          <TabsTrigger
-            value="products"
-            className={cn(
-              "flex items-center gap-2",
-              "data-[state=active]:bg-gold data-[state=active]:text-white"
-            )}
-          >
-            <Package className="h-4 w-4" />
-            {t("allProducts")}
-          </TabsTrigger>
-          <TabsTrigger
-            value="categories"
-            className={cn(
-              "flex items-center gap-2",
-              "data-[state=active]:bg-gold data-[state=active]:text-white"
-            )}
-          >
-            <Layers className="h-4 w-4" />
-            {t("categories")}
-          </TabsTrigger>
-        </TabsList>
-
-        {/* Products Tab Content */}
-        <TabsContent value="products" className="mt-0">
-          <PublicProductsContent
-            products={filteredProducts}
-            categories={categories}
-            currencyCode={currencyCode}
-            selectedCategory={selectedCategory}
-            selectedCategoryName={selectedCategory ? getCategoryName(selectedCategory) : null}
-            onClearCategory={handleClearCategory}
-          />
-        </TabsContent>
-
-        {/* Categories Tab Content */}
-        <TabsContent value="categories" className="mt-0">
-          <CategoriesGrid
-            categories={categories}
-            productCounts={productCounts}
-            onCategorySelect={handleCategorySelect}
-          />
-        </TabsContent>
-      </Tabs>
-    </div>
+    <PublicProductsContent
+      products={filteredProducts}
+      allProducts={products}
+      categories={categories}
+      currencyCode={currencyCode}
+      selectedCategory={selectedCategory}
+      selectedCategoryName={selectedCategory ? getCategoryName(selectedCategory) : null}
+      onClearCategory={handleClearCategory}
+      onCategorySelect={handleCategorySelect}
+    />
   );
 }
 
