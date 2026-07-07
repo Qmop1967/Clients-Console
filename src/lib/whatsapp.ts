@@ -559,6 +559,10 @@ async function alertProviderDown(provider: string, error: string) {
 // Main Send Function — with Retry + Fallback
 // ============================================
 export async function sendWhatsAppOTP(phone: string, code: string): Promise<SendResult> {
+  if (process.env.WA_OUTBOUND_DISABLED === 'true') {
+    console.log('[WhatsApp] outbound disabled by config - instant email-login fallback');
+    return { success: false, error: 'WA_OUTBOUND_DISABLED', provider: 'disabled' };
+  }
   const message = otpMessage(code);
 
   // Dev mode — skip all fallback logic
