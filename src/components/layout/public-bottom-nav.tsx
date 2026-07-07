@@ -6,7 +6,7 @@ import { useTranslations } from "next-intl";
 import { useSession } from "next-auth/react";
 import { useCart } from "@/components/providers/cart-provider";
 import {
-  ShoppingBag,
+  Store,
   ShoppingCart,
   User,
   LayoutDashboard,
@@ -33,7 +33,7 @@ export function PublicBottomNav({ onMenuClick }: PublicBottomNavProps) {
     {
       key: "shop",
       href: "/shop",
-      icon: ShoppingBag,
+      icon: Store,
       label: tCommon("shop"),
     },
     {

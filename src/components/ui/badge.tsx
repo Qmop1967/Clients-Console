@@ -29,10 +29,10 @@ const badgeVariants = cva(
           "border-transparent bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400",
         // Gold - Premium accent
         gold:
-          "border-transparent bg-amber-500 text-white shadow-sm dark:bg-amber-500",
+          "border-transparent bg-gold text-white shadow-sm dark:bg-gold dark:text-slate-900",
         // Gold subtle - Light gold background
         "gold-subtle":
-          "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-400",
+          "border-sky-200 bg-sky-50 text-sky-800 dark:border-sky-800 dark:bg-sky-900/20 dark:text-sky-300",
         // Glass - Blur effect
         glass:
           "border-white/20 bg-white/10 backdrop-blur-sm text-foreground dark:border-white/10 dark:bg-white/5",

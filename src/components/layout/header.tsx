@@ -66,7 +66,7 @@ export function Header({ title, cartCount = 0, onCartClick, user, locale = "ar" 
             size="icon"
             className="relative h-10 w-10 rounded-full transition-all hover:bg-secondary"
             onClick={isCatalogMode ? showCatalogModal : onCartClick}
-            aria-label="Shopping cart"
+            aria-label={t("cart")}
           >
             <ShoppingCart className="h-5 w-5 text-foreground/70" strokeWidth={1.5} />
             {!isCatalogMode && cartCount > 0 && (

@@ -1,7 +1,10 @@
 "use client";
 
+import { useState } from "react";
+
 import { useTranslations } from "next-intl";
 import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
   Package,
@@ -19,6 +22,7 @@ interface PackagesContentProps {
 
 export function PackagesContent({ packages, total }: PackagesContentProps) {
   const t = useTranslations("packages");
+  const [visible, setVisible] = useState(20);
 
   const formatDate = (date: string | false) => {
     if (!date) return "-";
@@ -70,8 +74,9 @@ export function PackagesContent({ packages, total }: PackagesContentProps) {
           </CardContent>
         </Card>
       ) : (
+        <>
         <div className="space-y-3">
-          {packages.map((pkg) => (
+          {packages.slice(0, visible).map((pkg) => (
             <Card key={pkg.id} variant="elevated" className="overflow-hidden">
               <CardContent className="p-4 space-y-3">
                 {/* Package Header */}
@@ -140,6 +145,14 @@ export function PackagesContent({ packages, total }: PackagesContentProps) {
             </Card>
           ))}
         </div>
+        {visible < packages.length && (
+          <div className="flex justify-center pt-2">
+            <Button variant="outline" onClick={() => setVisible((v) => v + 20)}>
+              {t("loadMore")} ({packages.length - visible})
+            </Button>
+          </div>
+        )}
+        </>
       )}
     </div>
   );

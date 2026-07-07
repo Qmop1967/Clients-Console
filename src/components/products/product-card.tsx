@@ -108,8 +108,11 @@ export const ProductCard = memo(function ProductCard({ product, currencyCode }: 
             onError={handleImgError}
           />
         ) : (
-          <div className="flex h-full items-center justify-center bg-gradient-to-br from-muted to-muted/50">
-            <Package className="h-12 w-12 text-muted-foreground/30" strokeWidth={1} />
+          <div className="flex h-full flex-col items-center justify-center gap-2 bg-gradient-to-br from-muted/40 via-background to-muted/40">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-border/50 bg-primary/5">
+              <Package className="h-7 w-7 text-primary/40" strokeWidth={1.5} />
+            </div>
+            <span className="text-[10px] font-semibold tracking-[0.2em] text-muted-foreground/50">TSH</span>
           </div>
         )}
 

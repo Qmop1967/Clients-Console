@@ -29,7 +29,7 @@
     --popover-foreground: 220 25% 12%;
 
     /* Primary - Refined Deep Blue */
-    --primary: 213 57% 24%;
+    --primary: 204 84% 32%;
     --primary-foreground: 0 0% 100%;
 
     /* Secondary - Warm Light Gray */
@@ -41,8 +41,8 @@
     --muted-foreground: 220 15% 46%;
 
     /* Accent - Muted Gold */
-    --accent: 38 60% 45%;
-    --accent-foreground: 38 60% 10%;
+    --accent: 199 83% 45%;
+    --accent-foreground: 210 60% 10%;
 
     /* Semantic Colors */
     --destructive: 0 72% 51%;
@@ -54,15 +54,15 @@
     --info: 200 65% 45%;
     --info-foreground: 0 0% 100%;
 
-    /* Premium Gold Accents */
-    --gold: 38 70% 50%;
-    --gold-subtle: 38 40% 92%;
-    --gold-dark: 38 65% 35%;
+    /* Brand Azure Accents (legacy 'gold' token naming) */
+    --gold: 202 82% 38%;
+    --gold-subtle: 202 60% 93%;
+    --gold-dark: 206 85% 27%;
 
     /* Borders & Inputs */
     --border: 30 12% 88%;
     --input: 30 12% 88%;
-    --ring: 38 60% 45%;                 /* Gold ring for focus */
+    --ring: 199 83% 45%;                /* Brand sky ring for focus */
 
     /* Radius - Slightly rounder for luxury feel */
     --radius: 0.75rem;
@@ -111,7 +111,7 @@
     --popover-foreground: 30 15% 95%;
 
     /* Primary - Brighter for dark mode */
-    --primary: 213 70% 53%;
+    --primary: 198 83% 56%;
     --primary-foreground: 220 25% 7%;
 
     /* Secondary - Dark surface */
@@ -123,7 +123,7 @@
     --muted-foreground: 220 15% 60%;
 
     /* Accent - Brighter gold for dark mode */
-    --accent: 38 70% 55%;
+    --accent: 198 83% 56%;
     --accent-foreground: 220 25% 7%;
 
     /* Semantic Colors - Adjusted for dark */
@@ -136,15 +136,15 @@
     --info: 200 70% 55%;
     --info-foreground: 220 25% 7%;
 
-    /* Premium Gold Accents */
-    --gold: 38 75% 55%;
-    --gold-subtle: 38 30% 18%;
-    --gold-dark: 38 60% 45%;
+    /* Brand Azure Accents (legacy 'gold' token naming) */
+    --gold: 198 80% 55%;
+    --gold-subtle: 206 45% 16%;
+    --gold-dark: 199 80% 62%;
 
     /* Borders & Inputs */
     --border: 220 20% 18%;
     --input: 220 20% 18%;
-    --ring: 38 70% 55%;
+    --ring: 198 83% 56%;
 
     /* Dark Mode Shadows */
     --shadow-xs: 0 1px 2px 0 rgb(0 0 0 / 0.2);

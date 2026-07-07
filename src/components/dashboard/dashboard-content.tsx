@@ -237,7 +237,7 @@ export function DashboardContent({
       {/* Recent Orders & Invoices Grid */}
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Recent Orders */}
-        <Card>
+        <Card className="min-w-0">
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle>{t("recentOrders")}</CardTitle>
             <Link href="/orders">
@@ -286,7 +286,7 @@ export function DashboardContent({
         </Card>
 
         {/* Recent Invoices */}
-        <Card>
+        <Card className="min-w-0">
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle>{t("recentInvoices")}</CardTitle>
             <Link href="/invoices">

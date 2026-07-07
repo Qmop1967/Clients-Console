@@ -35,15 +35,15 @@ export default async function ProfilePage() {
   const profile = {
     name: customer?.contact_name || session.user.name || "Customer",
     email: customer?.email || session.user.email || "",
-    phone: customer?.phone || customer?.mobile || "Not provided",
-    company: customer?.company_name || "Not provided",
+    phone: customer?.phone || customer?.mobile || t("notProvided"),
+    company: customer?.company_name || t("notProvided"),
     billingAddress: customer?.billing_address || {
-      address: "Not provided",
+      address: t("notProvided"),
       city: "",
       country: "",
     },
     shippingAddress: customer?.shipping_address || {
-      address: "Not provided",
+      address: t("notProvided"),
       city: "",
       country: "",
     },
@@ -52,7 +52,7 @@ export default async function ProfilePage() {
   // Helper to format address
   const formatAddress = (addr: { address?: string; city?: string; state?: string; country?: string; zip?: string }) => {
     const parts = [addr.address, addr.city, addr.state, addr.country].filter(Boolean);
-    return parts.length > 0 ? parts.join(", ") : "Not provided";
+    return parts.length > 0 ? parts.join(", ") : t("notProvided");
   };
 
   return (
@@ -93,7 +93,7 @@ export default async function ProfilePage() {
                 <p className="text-muted-foreground">{profile.company}</p>
                 {session.user.odooPartnerId && (
                   <Badge variant="secondary" className="mt-1">
-                    Connected
+                    {t("connected")}
                   </Badge>
                 )}
               </div>

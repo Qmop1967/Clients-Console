@@ -16,8 +16,11 @@ interface ProductImageProps {
 // Memoized placeholder component for fast render
 const ImagePlaceholder = memo(function ImagePlaceholder({ className }: { className?: string }) {
   return (
-    <div className={cn("flex items-center justify-center bg-muted", className)}>
-      <Package className="h-12 w-12 text-muted-foreground/50" />
+    <div className={cn("flex flex-col items-center justify-center gap-2 bg-gradient-to-br from-muted/40 via-background to-muted/40", className)}>
+      <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-border/50 bg-primary/5">
+        <Package className="h-7 w-7 text-primary/40" strokeWidth={1.5} />
+      </div>
+      <span className="text-[10px] font-semibold tracking-[0.2em] text-muted-foreground/50">TSH</span>
     </div>
   );
 });

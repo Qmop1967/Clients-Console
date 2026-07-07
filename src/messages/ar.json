@@ -503,7 +503,9 @@
     "shippingAddress": "عنوان الشحن",
     "priceList": "قائمة الأسعار",
     "currency": "العملة",
-    "paymentTerms": "شروط الدفع"
+    "paymentTerms": "شروط الدفع",
+    "notProvided": "غير مُتاح",
+    "connected": "مرتبط"
   },
   "cart": {
     "title": "السلة",
@@ -740,7 +742,8 @@
     "date": "التاريخ",
     "location": "الموقع",
     "contents": "المحتويات",
-    "moreItems": "منتجات أخرى"
+    "moreItems": "منتجات أخرى",
+    "loadMore": "تحميل المزيد"
   },
   "deliveries": {
     "title": "وصولات التوصيل",

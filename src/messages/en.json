@@ -503,7 +503,9 @@
     "shippingAddress": "Shipping Address",
     "priceList": "Price List",
     "currency": "Currency",
-    "paymentTerms": "Payment Terms"
+    "paymentTerms": "Payment Terms",
+    "notProvided": "Not provided",
+    "connected": "Connected"
   },
   "cart": {
     "title": "Cart",
@@ -740,7 +742,8 @@
     "date": "Date",
     "location": "Location",
     "contents": "Contents",
-    "moreItems": "more items"
+    "moreItems": "more items",
+    "loadMore": "Load more"
   },
   "deliveries": {
     "title": "Delivery Receipts",
