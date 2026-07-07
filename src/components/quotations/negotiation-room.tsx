@@ -31,7 +31,7 @@ interface Perms {
 }
 interface View {
   success: boolean;
-  order: { id: number; name: string; state: string; x_nego_state: string; x_revision_number: number; x_quote_locked: boolean; x_price_modified: boolean; currency: string; };
+  order: { id: number; name: string; state: string; x_nego_state: string; x_revision_number: number; x_quote_locked: boolean; amountTotal?: number; x_price_modified: boolean; currency: string; };
   counter: { revision: number; roundCount: number };
   lines: Line[];
   rounds: Round[];
@@ -77,6 +77,7 @@ export default function NegotiationRoom({ orderId, currencyCode }: { orderId: nu
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState("");
+  const [flash, setFlash] = useState("");
   const [chatText, setChatText] = useState("");
   const [objLine, setObjLine] = useState<number | null>(null);
   const [objType, setObjType] = useState("price_high");
@@ -128,7 +129,7 @@ export default function NegotiationRoom({ orderId, currencyCode }: { orderId: nu
     return () => clearTimeout(t);
   }, [pq, addOpen]);
 
-  async function act(path: string, body: Record<string, unknown>, key: string): Promise<boolean> {
+  async function act(path: string, body: Record<string, unknown>, key: string, okMsg?: string): Promise<boolean> {
     setBusy(key); setErr("");
     try {
       const rev = view?.order?.x_revision_number ?? 0;
@@ -138,8 +139,17 @@ export default function NegotiationRoom({ orderId, currencyCode }: { orderId: nu
         body: JSON.stringify({ expected_revision_number: rev, ...body }),
       });
       const d = await r.json().catch(() => ({}));
-      if (!r.ok || d?.success === false) { setErr(d?.message || d?.code || "فشلت العملية"); setBusy(null); return false; }
-      await load(true); setBusy(null); return true;
+      if (!r.ok || d?.success === false) {
+        const code = String(d?.code || "");
+        if (code === "REVISION_MISMATCH" || code === "REVISION_REQUIRED") {
+          await load(true); setBusy(null);
+          showFlash("تحدّث العرض من الطرف الآخر — راجع التغييرات");
+          return false;
+        }
+        if (code === "NOT_YOUR_TURN") await load(true);
+        setErr(d?.message || code || "فشلت العملية"); setBusy(null); return false;
+      }
+      await load(true); if (okMsg) showFlash(okMsg); setBusy(null); return true;
     } catch { setErr("تعذّر الاتصال"); setBusy(null); return false; }
   }
 
@@ -147,6 +157,13 @@ export default function NegotiationRoom({ orderId, currencyCode }: { orderId: nu
   const ui = STATE_UI[st] || STATE_UI.none;
   const p = view?.permissions || {};
   const locked = !!view?.order?.x_quote_locked;
+  const linesArr = view?.lines || [];
+  const lineSum = linesArr.reduce((t, l) => t + (l.priceUnit || 0) * (l.quantity || 0), 0);
+  const apiTotal = view?.order?.amountTotal ?? 0;
+  const grandTotal = apiTotal > 0 ? apiTotal : lineSum;
+  const savings = linesArr.reduce((t, l) => t + (l.originalPrice > 0 ? (l.originalPrice - l.priceUnit) * l.quantity : 0), 0);
+
+  function showFlash(msg: string) { setFlash(msg); setTimeout(() => setFlash(""), 2600); }
 
   if (loading) {
     return <div className="flex justify-center py-24"><Loader2 className="w-8 h-8 animate-spin text-emerald-500" /></div>;
@@ -184,10 +201,18 @@ export default function NegotiationRoom({ orderId, currencyCode }: { orderId: nu
         </div>
       )}
 
+      {flash && (
+        <div className="fixed bottom-24 inset-x-0 z-50 flex justify-center px-4 pointer-events-none">
+          <div className="bg-emerald-600 text-white text-sm font-semibold px-4 py-2.5 rounded-2xl shadow-xl flex items-center gap-2">
+            <Check className="w-4 h-4 shrink-0" /> {flash}
+          </div>
+        </div>
+      )}
+
       {/* Start room */}
       {st === "none" && p.canStart && (
         <button
-          onClick={() => act("/start", {}, "start")}
+          onClick={() => act("/start", {}, "start", "فُتحت غرفة التفاوض")}
           disabled={busy === "start"}
           className="w-full py-4 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold flex items-center justify-center gap-2 mb-4 disabled:opacity-60"
         >
@@ -210,6 +235,7 @@ export default function NegotiationRoom({ orderId, currencyCode }: { orderId: nu
                     <div className="flex items-center gap-3 mt-1 text-xs text-gray-400">
                       <span dir="ltr">×{l.quantity}</span>
                       <span dir="ltr" className="text-gray-200">{fmtMoney(l.priceUnit, cur)}</span>
+                      {l.customerAdded && <span className="text-[10px] px-1.5 py-0.5 rounded bg-sky-500/15 text-sky-300">أضفته أنت</span>}
                     </div>
                   </div>
                   <span className={`text-[11px] px-2 py-1 rounded-lg shrink-0 ${ls.cls}`}>{ls.label}</span>
@@ -234,10 +260,10 @@ export default function NegotiationRoom({ orderId, currencyCode }: { orderId: nu
                         className="text-xs px-3 py-1.5 rounded-lg bg-amber-500/15 text-amber-300 border border-amber-500/25">اعتراض</button>
                       <button onClick={() => { setNoteLine(noteLine === l.id ? null : l.id); setNoteText(l.customerNote || ""); }}
                         className="text-xs px-3 py-1.5 rounded-lg bg-white/5 text-gray-300 border border-white/10">ملاحظة</button>
-                      <button onClick={() => act(`/line/${l.id}/approve`, {}, `appr-${l.id}`)} disabled={busy === `appr-${l.id}`}
+                      <button onClick={() => act(`/line/${l.id}/approve`, {}, `appr-${l.id}`, "تم قبول السطر")} disabled={busy === `appr-${l.id}`}
                         className="text-xs px-3 py-1.5 rounded-lg bg-emerald-500/15 text-emerald-300 border border-emerald-500/25 flex items-center gap-1">
                         {busy === `appr-${l.id}` ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />} موافق</button>
-                      <button onClick={() => act(`/line/${l.id}/request-remove`, {}, `rm-${l.id}`)} disabled={busy === `rm-${l.id}`}
+                      <button onClick={() => act(`/line/${l.id}/request-remove`, {}, `rm-${l.id}`, "أُرسل طلب حذف السطر")} disabled={busy === `rm-${l.id}`}
                         className="text-xs px-3 py-1.5 rounded-lg bg-red-500/15 text-red-300 border border-red-500/25 flex items-center gap-1">
                         {busy === `rm-${l.id}` ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />} طلب حذف</button>
                     </div>
@@ -256,7 +282,7 @@ export default function NegotiationRoom({ orderId, currencyCode }: { orderId: nu
                         <input value={objPrice} onChange={(e) => setObjPrice(e.target.value.replace(/[^\d.]/g, ""))} inputMode="decimal" placeholder="السعر الذي تريده (اختياري)" dir="ltr"
                           className="w-full text-sm rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-white placeholder:text-gray-500 outline-none focus:border-amber-500/40" />
                         <div className="flex gap-2">
-                          <button onClick={async () => { const ok = await act(`/line/${l.id}/object`, { objection_type: objType, objection_reason: objReason, requested_price: objPrice || undefined }, `obj-${l.id}`); if (ok) setObjLine(null); }}
+                          <button onClick={async () => { const ok = await act(`/line/${l.id}/object`, { objection_type: objType, objection_reason: objReason, requested_price: objPrice || undefined }, `obj-${l.id}`, "سُجّل اعتراضك"); if (ok) setObjLine(null); }}
                             disabled={busy === `obj-${l.id}`}
                             className="flex-1 text-sm py-2 rounded-lg bg-amber-600 text-white font-semibold disabled:opacity-60">
                             {busy === `obj-${l.id}` ? "..." : "حفظ الاعتراض"}</button>
@@ -271,7 +297,7 @@ export default function NegotiationRoom({ orderId, currencyCode }: { orderId: nu
                         <textarea value={noteText} onChange={(e) => setNoteText(e.target.value)} rows={2} placeholder="ملاحظتك على هذا البند"
                           className="w-full text-sm rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-white placeholder:text-gray-500 outline-none focus:border-emerald-500/40" />
                         <div className="flex gap-2">
-                          <button onClick={async () => { const ok = await act(`/line/${l.id}/note`, { note: noteText }, `note-${l.id}`); if (ok) setNoteLine(null); }}
+                          <button onClick={async () => { const ok = await act(`/line/${l.id}/note`, { note: noteText }, `note-${l.id}`, "حُفظت الملاحظة"); if (ok) setNoteLine(null); }}
                             disabled={busy === `note-${l.id}`}
                             className="flex-1 text-sm py-2 rounded-lg bg-emerald-600 text-white font-semibold disabled:opacity-60">
                             {busy === `note-${l.id}` ? "..." : "حفظ الملاحظة"}</button>
@@ -284,6 +310,18 @@ export default function NegotiationRoom({ orderId, currencyCode }: { orderId: nu
               </div>
             );
           })}
+        </div>
+      )}
+
+      {st !== "none" && linesArr.length > 0 && (
+        <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.06] px-4 py-3 mb-5 flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-xs text-gray-400">المجموع الكلي للعرض</p>
+            {savings > 0.009 && (
+              <p className="text-[11px] text-emerald-400 mt-0.5">وفّرت <span dir="ltr" className="font-semibold">{fmtMoney(savings, cur)}</span> منذ بداية التفاوض 🎉</p>
+            )}
+          </div>
+          <p className="text-lg font-extrabold text-white shrink-0" dir="ltr">{fmtMoney(grandTotal, cur)}</p>
         </div>
       )}
 
@@ -322,7 +360,7 @@ export default function NegotiationRoom({ orderId, currencyCode }: { orderId: nu
                         className="w-14 text-center text-sm rounded-lg bg-white/5 border border-white/10 px-1 py-1.5 text-white outline-none focus:border-emerald-500/40" />
                       <button onClick={async () => {
                           const qn = Math.max(1, parseInt(q || "1") || 1);
-                          const ok = await act("/line", { product_id: pr.id, quantity: qn, idempotency_key: `addline-${orderId}-${pr.id}-${view?.order?.x_revision_number}` }, `add-${pr.id}`);
+                          const ok = await act("/line", { product_id: pr.id, quantity: qn, idempotency_key: `addline-${orderId}-${pr.id}-${view?.order?.x_revision_number}` }, `add-${pr.id}`, "تمت إضافة المنتج");
                           if (ok) { setAddOpen(false); setPq(""); setPres([]); }
                         }}
                         disabled={busy === `add-${pr.id}`}
@@ -387,14 +425,14 @@ export default function NegotiationRoom({ orderId, currencyCode }: { orderId: nu
         <div className="fixed bottom-0 inset-x-0 bg-gradient-to-t from-black via-black/95 to-transparent p-4">
           <div className="max-w-2xl mx-auto flex gap-2">
             {p.canCommitRound && (
-              <button onClick={() => act("/round", { idempotency_key: `round-${orderId}-${view?.order?.x_revision_number}` }, "round")}
+              <button onClick={() => act("/round", { idempotency_key: `round-${orderId}-${view?.order?.x_revision_number}` }, "round", "أُرسل ردّك للمندوب")}
                 disabled={busy === "round"}
                 className="flex-1 py-3.5 rounded-2xl bg-amber-600 hover:bg-amber-500 text-white font-bold flex items-center justify-center gap-2 disabled:opacity-60">
                 {busy === "round" ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />} أرسل ردّي للمندوب
               </button>
             )}
             {p.canCustomerConfirm && (
-              <button onClick={() => act("/customer-confirm", { idempotency_key: `confirm-${orderId}-${view?.order?.x_revision_number}` }, "confirm")}
+              <button onClick={() => act("/customer-confirm", { idempotency_key: `confirm-${orderId}-${view?.order?.x_revision_number}` }, "confirm", "تم إرسال تأكيدك ✅")}
                 disabled={busy === "confirm"}
                 className="flex-1 py-3.5 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold flex items-center justify-center gap-2 disabled:opacity-60">
                 {busy === "confirm" ? <Loader2 className="w-5 h-5 animate-spin" /> : <Check className="w-5 h-5" />} تأكيد العرض
@@ -403,7 +441,7 @@ export default function NegotiationRoom({ orderId, currencyCode }: { orderId: nu
           </div>
           {p.canCancel && (
             <div className="max-w-2xl mx-auto mt-2">
-              <button onClick={() => { if (confirm("هل تريد إلغاء التفاوض؟")) act("/cancel", {}, "cancel"); }}
+              <button onClick={() => { if (confirm("هل تريد إلغاء التفاوض؟")) act("/cancel", {}, "cancel", "أُلغي التفاوض"); }}
                 disabled={busy === "cancel"} className="w-full py-2 text-sm text-red-400/80 flex items-center justify-center gap-1">
                 <Ban className="w-4 h-4" /> إلغاء التفاوض
               </button>
