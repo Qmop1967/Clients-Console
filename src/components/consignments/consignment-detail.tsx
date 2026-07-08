@@ -65,7 +65,6 @@ interface ConsignmentData {
 interface Props {
   consignment: ConsignmentData;
   consignmentId: number;
-  currencyCode: string;
 }
 
 const stateColors: Record<string, string> = {
@@ -84,13 +83,15 @@ const reportStateIcons: Record<string, typeof Clock> = {
   failed_needs_review: AlertTriangle,
 };
 
-export function ConsignmentDetail({ consignment, consignmentId, currencyCode }: Props) {
+export function ConsignmentDetail({ consignment, consignmentId }: Props) {
   const t = useTranslations("consignments");
   const router = useRouter();
   const [activeForm, setActiveForm] = useState<"sale" | "return" | "note" | null>(null);
 
   const c = consignment;
-  const cur = currencyCode;
+  // Currency ALWAYS derives from the consignment record itself (87=IQD design default),
+  // NEVER from the customer session — a USD customer can hold an IQD consignment.
+  const cur = c.currency_id === 1 ? "USD" : "IQD";
   const num = (v: any) => Number(v || 0);
   const fmt = (v: any) => Number(v || 0).toLocaleString("en-US");
   const stateKey = ("state" + c.state.charAt(0).toUpperCase() + c.state.slice(1)) as any;

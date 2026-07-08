@@ -53,7 +53,6 @@ export default async function ConsignmentDetailPage({
       <ConsignmentDetail
         consignment={data}
         consignmentId={parseInt(id)}
-        currencyCode={session.user.currencyCode || "IQD"}
       />
     </div>
   );

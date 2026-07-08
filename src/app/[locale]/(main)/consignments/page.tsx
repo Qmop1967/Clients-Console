@@ -17,7 +17,7 @@ export default async function ConsignmentsPage() {
   if (!session.user.odooPartnerId) {
     return (
       <div className="container mx-auto px-4 py-6">
-        <ConsignmentsList consignments={[]} total={0} currencyCode={session.user.currencyCode || "IQD"} />
+        <ConsignmentsList consignments={[]} total={0} />
       </div>
     );
   }
@@ -40,7 +40,6 @@ export default async function ConsignmentsPage() {
       <ConsignmentsList
         consignments={data.data || []}
         total={data.total || 0}
-        currencyCode={session.user.currencyCode || "IQD"}
       />
     </div>
   );

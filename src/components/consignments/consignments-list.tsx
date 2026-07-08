@@ -19,7 +19,6 @@ interface Consignment {
 interface Props {
   consignments: Consignment[];
   total: number;
-  currencyCode: string;
 }
 
 const stateColors: Record<string, string> = {
