@@ -93,7 +93,9 @@ export function ConsignmentDetail({ consignment, consignmentId }: Props) {
   // NEVER from the customer session — a USD customer can hold an IQD consignment.
   const cur = c.currency_id === 1 ? "USD" : "IQD";
   const num = (v: any) => Number(v || 0);
-  const fmt = (v: any) => Number(v || 0).toLocaleString("en-US");
+  const fmt = (v: any) => c.currency_id === 1
+    ? Number(v || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    : Number(v || 0).toLocaleString("en-US");
   const stateKey = ("state" + c.state.charAt(0).toUpperCase() + c.state.slice(1)) as any;
   const canAct = c.state === "active" || c.state === "delivered";
 
