@@ -74,7 +74,19 @@
     "switchToMagicLink": "Use magic link instead",
     "switchToOTP": "Use verification code instead",
     "switchToPasskey": "Use Face ID / Touch ID instead",
-    "resendCode": "Resend code"
+    "resendCode": "Resend code",
+    "reauthNotice": "For security we need a one-time sign-in confirmation — after that you'll stay signed in.",
+    "dismiss": "Dismiss",
+    "passkeyLogin": "Sign in with passkey",
+    "passkeyCancelled": "Authentication cancelled. Try signing in with email.",
+    "passkeyFallback": "Passkey sign-in failed. Please use email.",
+    "passkeyNeedEmail": "Enter your email to sign in with a passkey",
+    "passkeyEnrollTitle": "Enable passkey sign-in",
+    "passkeyEnrollDesc": "Sign in with one touch — no code to wait for",
+    "passkeyEnrollActivate": "Enable",
+    "passkeyEnrollLater": "Later",
+    "passkeyEnrollDone": "Passkey sign-in enabled",
+    "passkeyEnrollError": "Couldn't enable it. Please try again."
   },
   "nav": {
     "dashboard": "Dashboard",

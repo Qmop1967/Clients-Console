@@ -20,7 +20,31 @@ import { useSession, signIn } from "next-auth/react";
 import { useEffect, useRef } from "react";
 
 export const RECOVERY_KEY = "tsh_session_recovery";
+export const LOGIN_PREFILL_KEY = "tsh_login_prefill";
 const RECOVERY_MAX_AGE_MS = 180 * 24 * 60 * 60 * 1000; // 180 days
+
+// One-time hint so the login screen can explain WHY the user was signed out and
+// pre-fill their identity. Written just before a recovery blob is wiped because
+// it can no longer silently re-login (legacy raw-phone blob, or a
+// rejected/expired rotating token). Security behavior is unchanged — we still
+// wipe; we only leave a breadcrumb for a friendlier re-auth.
+function writeLoginPrefill(data: { method?: string; email?: string; phone?: string }) {
+  try {
+    if (!data.email && !data.phone) return;
+    localStorage.setItem(
+      LOGIN_PREFILL_KEY,
+      JSON.stringify({
+        method: data.method === "email" ? "email" : data.phone ? "phone" : data.method || "",
+        email: data.email || undefined,
+        phone: data.phone || undefined,
+        reason: "security_reauth",
+        ts: Date.now(),
+      })
+    );
+  } catch {
+    /* non-critical */
+  }
+}
 
 export function SessionRecovery() {
   const { status } = useSession();
@@ -51,6 +75,7 @@ export function SessionRecovery() {
     // Those can no longer silently re-login (the whole point of the fix). Clear
     // them so the user logs in once; from then on they hold a rotating token.
     if (!data.recoveryToken) {
+      writeLoginPrefill(data);
       localStorage.removeItem(RECOVERY_KEY);
       return;
     }
@@ -70,6 +95,7 @@ export function SessionRecovery() {
         });
         if (!rec.ok) {
           console.warn("[SessionRecovery] Token rejected, clearing");
+          writeLoginPrefill(data);
           localStorage.removeItem(RECOVERY_KEY);
           return;
         }
@@ -101,6 +127,7 @@ export function SessionRecovery() {
 
         if (!result || result.error) {
           console.warn("[SessionRecovery] Recovery failed, clearing data");
+          writeLoginPrefill({ method: rj.method, email: rj.email, phone: rj.phone });
           localStorage.removeItem(RECOVERY_KEY);
           return;
         }

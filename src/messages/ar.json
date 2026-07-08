@@ -74,7 +74,19 @@
     "switchToMagicLink": "استخدام الرابط السحري بدلاً من ذلك",
     "switchToOTP": "استخدام رمز التحقق بدلاً من ذلك",
     "switchToPasskey": "استخدام Face ID بدلاً من ذلك",
-    "resendCode": "إعادة إرسال الرمز"
+    "resendCode": "إعادة إرسال الرمز",
+    "reauthNotice": "لأسباب أمنية نحتاج تأكيد الدخول لمرة واحدة فقط — بعدها يبقى حسابك مسجّلاً",
+    "dismiss": "إغلاق",
+    "passkeyLogin": "الدخول بالبصمة",
+    "passkeyCancelled": "تم إلغاء المصادقة. جرّب تسجيل الدخول بالبريد الإلكتروني.",
+    "passkeyFallback": "تعذّر الدخول بالبصمة. استخدم البريد الإلكتروني.",
+    "passkeyNeedEmail": "أدخل بريدك الإلكتروني للدخول بالبصمة",
+    "passkeyEnrollTitle": "فعّل الدخول بالبصمة",
+    "passkeyEnrollDesc": "ادخل بلمسة واحدة بدون انتظار رمز",
+    "passkeyEnrollActivate": "تفعيل",
+    "passkeyEnrollLater": "لاحقاً",
+    "passkeyEnrollDone": "تم تفعيل الدخول بالبصمة",
+    "passkeyEnrollError": "تعذّر التفعيل. حاول مرة أخرى."
   },
   "nav": {
     "dashboard": "لوحة التحكم",

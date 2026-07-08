@@ -5,13 +5,18 @@ import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Phone, Mail, Loader2, Store, ChevronLeft, Shield } from "lucide-react";
+import { Phone, Mail, Loader2, Store, ChevronLeft, Shield, Fingerprint, X } from "lucide-react";
 import Link from "next/link";
 import { useLocale } from "next-intl";
 import { useRouter } from "next/navigation";
 import { signIn } from "next-auth/react";
 import { auth, RecaptchaVerifier, signInWithPhoneNumber } from "@/lib/firebase";
 import type { ConfirmationResult } from "@/lib/firebase";
+import {
+  startAuthentication,
+  browserSupportsWebAuthn,
+  platformAuthenticatorIsAvailable,
+} from "@simplewebauthn/browser";
 
 type LoginMethod = "phone" | "email";
 
@@ -28,6 +33,135 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [notRegistered, setNotRegistered] = useState(false);
+
+  // WORKSTREAM A: one-time security re-auth notice (set when a legacy/expired
+  // recovery blob was wiped by SessionRecovery). Prefills the identity.
+  const [reauthNotice, setReauthNotice] = useState(false);
+
+  // WORKSTREAM B: passkey (WebAuthn) availability + enrollment hint.
+  const [passkeySupported, setPasskeySupported] = useState(false);
+  const [passkeyRegistered, setPasskeyRegistered] = useState(false);
+  const [passkeyBusy, setPasskeyBusy] = useState(false);
+
+  // On mount: consume the one-time login prefill hint + feature-detect passkeys.
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("tsh_login_prefill");
+      if (raw) {
+        const hint = JSON.parse(raw) as { method?: string; email?: string; phone?: string; reason?: string };
+        if (hint?.reason === "security_reauth") {
+          if (hint.email) { setEmail(hint.email); setMethod("email"); }
+          else if (hint.phone) { setPhone(hint.phone); setMethod("phone"); }
+          setReauthNotice(true);
+        }
+      }
+    } catch { /* ignore */ }
+
+    try {
+      const registered = localStorage.getItem("tsh_passkey_registered") === "1";
+      setPasskeyRegistered(registered);
+    } catch { /* ignore */ }
+
+    (async () => {
+      try {
+        if (process.env.NEXT_PUBLIC_PASSKEY_ENABLED !== "1") return; // flagged off until WebAuthn storage is real
+        if (typeof window === "undefined" || !window.PublicKeyCredential) return;
+        if (!browserSupportsWebAuthn()) return;
+        const available = await platformAuthenticatorIsAvailable();
+        setPasskeySupported(available);
+      } catch { /* unsupported — leave false */ }
+    })();
+  }, []);
+
+  const dismissReauthNotice = () => {
+    setReauthNotice(false);
+    try { localStorage.removeItem("tsh_login_prefill"); } catch { /* ignore */ }
+  };
+
+  // WORKSTREAM B: passkey login. Feature-detected; any failure (including the
+  // user cancelling the biometric prompt) falls back inline to the email flow.
+  const handlePasskeyLogin = async () => {
+    setError("");
+    setNotRegistered(false);
+
+    // Resolve the email to authenticate: the one saved at enrollment, else the
+    // email currently typed in the form.
+    let pkEmail = "";
+    try { pkEmail = localStorage.getItem("tsh_passkey_email") || ""; } catch { /* ignore */ }
+    if (!pkEmail) pkEmail = email.trim().toLowerCase();
+
+    if (!pkEmail || !pkEmail.includes("@")) {
+      setMethod("email");
+      setError(isAr
+        ? "أدخل بريدك الإلكتروني للدخول بالبصمة"
+        : "Enter your email to sign in with a passkey");
+      return;
+    }
+
+    setPasskeyBusy(true);
+    try {
+      const optRes = await fetch("/api/auth/webauthn/auth-options", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: pkEmail }),
+      });
+      if (!optRes.ok) {
+        // 404 = no passkey registered for this email → silent fallback to email.
+        setError(isAr ? "تعذّر الدخول بالبصمة. استخدم البريد الإلكتروني." : "Passkey sign-in failed. Please use email.");
+        setMethod("email");
+        return;
+      }
+      const options = await optRes.json();
+
+      const assertion = await startAuthentication({ optionsJSON: options });
+
+      const verifyRes = await fetch("/api/auth/webauthn/auth-verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: pkEmail, credential: assertion }),
+      });
+      const data = await verifyRes.json();
+      if (!verifyRes.ok || !data?.ticket) {
+        setError(isAr ? "تعذّر الدخول بالبصمة. استخدم البريد الإلكتروني." : "Passkey sign-in failed. Please use email.");
+        setMethod("email");
+        return;
+      }
+
+      const signInResult = await signIn("email", {
+        email: data.email,
+        partnerId: String(data.partnerId),
+        ticket: data.ticket,
+        redirect: false,
+      });
+      if (signInResult?.error) {
+        setError(isAr ? "خطأ بتسجيل الدخول" : "Login error");
+        setMethod("email");
+        return;
+      }
+
+      try {
+        localStorage.setItem("tsh_session_recovery", JSON.stringify({
+          recoveryToken: data.recoveryToken || "",
+          ts: Date.now(),
+        }));
+        localStorage.removeItem("tsh_login_prefill");
+      } catch { /* non-critical */ }
+
+      router.push(`/${locale}/dashboard`);
+      router.refresh();
+    } catch (err: unknown) {
+      // User cancelled the biometric prompt, or the authenticator errored.
+      const name = (err as { name?: string })?.name;
+      if (name === "NotAllowedError" || name === "AbortError") {
+        setError(isAr ? "تم إلغاء المصادقة. جرّب تسجيل الدخول بالبريد الإلكتروني." : "Authentication cancelled. Try signing in with email.");
+      } else {
+        setError(isAr ? "تعذّر الدخول بالبصمة. استخدم البريد الإلكتروني." : "Passkey sign-in failed. Please use email.");
+      }
+      setMethod("email");
+    } finally {
+      setPasskeyBusy(false);
+    }
+  };
 
   // PHASE_H_UI_ADAPT_2026_05_02
   // WhatsApp service availability (auto-detected from /api/whatsapp/health)
@@ -219,6 +353,7 @@ export default function LoginPage() {
           recoveryToken: data.recoveryToken || "",
           ts: Date.now(),
         }));
+        localStorage.removeItem("tsh_login_prefill");
       } catch { /* non-critical */ }
 
       if (signInResult?.error) {
@@ -373,6 +508,25 @@ export default function LoginPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="pb-6">
+            {/* WORKSTREAM A: one-time security re-auth notice */}
+            {reauthNotice && (
+              <div className="mb-4 flex items-start gap-2 p-3 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-xl text-sm text-blue-700 dark:text-blue-300 animate-fade-in">
+                <Shield className="h-4 w-4 shrink-0 mt-0.5" />
+                <span className="flex-1 leading-relaxed">
+                  {isAr
+                    ? "لأسباب أمنية نحتاج تأكيد الدخول لمرة واحدة فقط — بعدها يبقى حسابك مسجّلاً"
+                    : "For security we need a one-time sign-in confirmation — after that you'll stay signed in."}
+                </span>
+                <button
+                  type="button"
+                  onClick={dismissReauthNotice}
+                  aria-label={isAr ? "إغلاق" : "Dismiss"}
+                  className="shrink-0 text-blue-400 hover:text-blue-600 dark:hover:text-blue-200 transition-colors"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            )}
             {/* SMS Fallback: Code verification */}
             {smsFallback && smsStep === "code" ? (
               <form onSubmit={handleVerifySMS} className="space-y-5">
@@ -446,6 +600,35 @@ export default function LoginPage() {
             ) : (
               /* Normal login tabs */
               <>
+                {/* WORKSTREAM B: passkey as PRIMARY action when already enrolled */}
+                {passkeySupported && passkeyRegistered && (
+                  <div className="mb-5">
+                    <Button
+                      type="button"
+                      onClick={handlePasskeyLogin}
+                      disabled={passkeyBusy}
+                      className="w-full h-12 rounded-xl text-base font-semibold bg-primary hover:bg-primary/90 text-white transition-all duration-300 hover:shadow-lg active:scale-[0.98]"
+                    >
+                      {passkeyBusy ? (
+                        <Loader2 className="me-2 h-5 w-5 animate-spin" />
+                      ) : (
+                        <Fingerprint className="me-2 h-5 w-5" />
+                      )}
+                      {isAr ? "الدخول بالبصمة" : "Sign in with passkey"}
+                    </Button>
+                    <div className="relative my-4">
+                      <div className="absolute inset-0 flex items-center">
+                        <span className="w-full border-t border-border" />
+                      </div>
+                      <div className="relative flex justify-center text-xs">
+                        <span className="bg-card px-2 text-muted-foreground">
+                          {isAr ? "أو" : "or"}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {/* Method Toggle — hidden entirely while WhatsApp is unavailable */}
                 {whatsappAvailable !== false && (
                 <div className="flex gap-2 p-1 bg-muted rounded-xl mb-5">
@@ -559,6 +742,23 @@ export default function LoginPage() {
                     )}
                   </Button>
                 </form>
+
+                {/* WORKSTREAM B: passkey as SECONDARY option when not yet enrolled */}
+                {passkeySupported && !passkeyRegistered && (
+                  <button
+                    type="button"
+                    onClick={handlePasskeyLogin}
+                    disabled={passkeyBusy}
+                    className="mt-4 w-full flex items-center justify-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors disabled:opacity-60"
+                  >
+                    {passkeyBusy ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Fingerprint className="h-4 w-4" />
+                    )}
+                    {isAr ? "الدخول بالبصمة" : "Sign in with passkey"}
+                  </button>
+                )}
               </>
             )}
           </CardContent>

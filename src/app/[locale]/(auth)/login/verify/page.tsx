@@ -198,6 +198,8 @@ export default function VerifyOTPPage() {
           recoveryToken: data.recoveryToken || "",
           ts: Date.now(),
         }));
+        // Login succeeded — consume the one-time security re-auth hint.
+        localStorage.removeItem("tsh_login_prefill");
       } catch { /* localStorage full — non-critical */ }
 
       sessionStorage.removeItem("otp_phone");

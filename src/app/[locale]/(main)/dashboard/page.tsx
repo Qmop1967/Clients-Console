@@ -4,6 +4,7 @@ import { auth } from "@/lib/auth/auth";
 import { redirect } from "next/navigation";
 import { DashboardContent } from "@/components/dashboard/dashboard-content";
 import { DashboardSkeleton } from "@/components/dashboard/dashboard-skeleton";
+import { PasskeyEnrollCard } from "@/components/dashboard/passkey-enroll-card";
 import { getCustomerBalance, getCustomerFresh } from "@/lib/odoo/customers";
 import { getRecentOrders, getOrderStats } from "@/lib/odoo/orders";
 import { getRecentInvoices } from "@/lib/odoo/invoices";
@@ -115,6 +116,8 @@ export default async function DashboardPage() {
 
   return (
     <div className="container mx-auto px-4 py-6">
+      {/* Inline passkey enrollment prompt (self-hides when unsupported/enrolled/dismissed) */}
+      <PasskeyEnrollCard email={session.user.email} />
       {/* Suspense enables streaming - skeleton shows immediately while data loads */}
       <Suspense fallback={<DashboardSkeleton />}>
         <DashboardDataLoader

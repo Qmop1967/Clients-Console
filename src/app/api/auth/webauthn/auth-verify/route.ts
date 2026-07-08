@@ -5,15 +5,13 @@ import {
   type AuthenticationResponseJSON,
 } from '@simplewebauthn/server';
 import { Redis } from '@upstash/redis';
-import { UpstashRedisAdapter } from '@auth/upstash-redis-adapter';
-import { getCustomerByEmail, getCustomerFresh } from '@/lib/odoo/customers';
+import { getCustomerByEmail } from '@/lib/odoo/customers';
+import { issueAuthTicket, issueRecoveryToken, type AuthSubject } from '@/lib/auth-tickets';
 
 const redis = new Redis({
   url: process.env.UPSTASH_REDIS_REST_URL!,
   token: process.env.UPSTASH_REDIS_REST_TOKEN!,
 });
-
-const adapter = UpstashRedisAdapter(redis);
 
 const rpID = process.env.NEXTAUTH_URL?.includes('localhost')
   ? 'localhost'
@@ -88,72 +86,40 @@ export async function POST(request: NextRequest) {
     authenticator.counter = verification.authenticationInfo.newCounter;
     await redis.set(authenticatorsKey, authenticators);
 
-    // Find or create user
-    let user = await adapter.getUserByEmail!(email);
-
-    if (!user) {
-      // Create new user
-      user = await adapter.createUser!({
-        id: crypto.randomUUID(),
-        email,
-        emailVerified: new Date(),
-        name: email.split('@')[0],
-      });
+    // SECURITY 2026-07-02: passkey assertion verified server-side. Instead of
+    // minting a session directly (the JWT strategy ignores adapter sessions),
+    // hand back a single-use auth ticket + rotating recovery token — exactly the
+    // contract otp/verify uses. The client feeds the ticket to the NextAuth
+    // `email` Credentials provider via signIn(). The ticket carries the
+    // authoritative identity; a passkey alone can no longer forge a session.
+    const cleanEmail = String(email).trim().toLowerCase();
+    const customer = await getCustomerByEmail(cleanEmail);
+    if (!customer) {
+      console.warn('[WebAuthn Auth] No customer for passkey email:', cleanEmail);
+      return NextResponse.json(
+        { error: 'No account found for this email' },
+        { status: 404 }
+      );
+    }
+    const partnerId = Number(customer.contact_id);
+    if (!Number.isInteger(partnerId) || partnerId <= 0) {
+      return NextResponse.json({ error: 'Invalid account' }, { status: 400 });
     }
 
-    // Fetch customer data
-    try {
-      const customerBasic = await getCustomerByEmail(email);
+    const subject: AuthSubject = { method: 'email', email: cleanEmail, partnerId };
+    const ticket = await issueAuthTicket(subject);
+    const recoveryToken = await issueRecoveryToken(subject);
 
-      if (customerBasic) {
-        const customerFull = await getCustomerFresh(customerBasic.contact_id);
-        const customer = customerFull || customerBasic;
-
-        // Update user with API data
-        if (user && user.id) {
-          const updatedUser = {
-            ...user,
-            odooPartnerId: customer.contact_id,
-            priceListId: customer.pricebook_id || customer.price_list_id || '',
-            currencyCode: customer.currency_code || 'IQD',
-            name: customer.contact_name,
-          };
-
-          const userKey = `user:${user.id}`;
-          await redis.set(userKey, updatedUser);
-          const emailKey = `user:email:${email}`;
-          await redis.set(emailKey, user.id);
-
-          user = updatedUser as typeof user;
-        }
-
-        console.log('[WebAuthn Auth] Customer data fetched:', {
-          contactId: customer.contact_id,
-          priceListId: customer.pricebook_id || customer.price_list_id,
-        });
-      }
-    } catch (error) {
-      console.error('[WebAuthn Auth] Error fetching customer data:', error);
-    }
-
-    // Create session
-    const session = await adapter.createSession!({
-      userId: user.id,
-      sessionToken: crypto.randomUUID(),
-      expires: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000), // 365 days
-    });
-
-    console.log('[WebAuthn Auth] Session created for:', email);
+    console.log('[WebAuthn Auth] ✅ Passkey verified, ticket issued for:', cleanEmail);
 
     return NextResponse.json({
       success: true,
       verified: true,
-      sessionToken: session.sessionToken,
-      user: {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-      },
+      ticket,
+      recoveryToken,
+      method: 'email',
+      email: cleanEmail,
+      partnerId,
     });
   } catch (error) {
     console.error('[WebAuthn Auth Verify] Error:', error);
