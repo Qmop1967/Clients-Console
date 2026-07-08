@@ -3,88 +3,68 @@ import {
   verifyRegistrationResponse,
   type VerifyRegistrationResponseOpts,
 } from '@simplewebauthn/server';
-import { Redis } from '@upstash/redis';
 import type { RegistrationResponseJSON } from '@simplewebauthn/types';
+import { auth } from '@/lib/auth/auth';
+import { consumeWebAuthnChallenge } from '@/lib/auth-tickets';
+import { getPartnerPasskeys, savePartnerPasskeys, type PasskeyRecord } from '@/lib/odoo/passkeys';
 
-const redis = new Redis({
-  url: process.env.UPSTASH_REDIS_REST_URL!,
-  token: process.env.UPSTASH_REDIS_REST_TOKEN!,
-});
-
-const rpID = process.env.NEXTAUTH_URL?.includes('localhost')
-  ? 'localhost'
-  : 'tsh.sale';
+const rpID = process.env.NEXTAUTH_URL?.includes('localhost') ? 'localhost' : 'tsh.sale';
 const origin = process.env.NEXTAUTH_URL || 'https://www.tsh.sale';
 
 export async function POST(request: NextRequest) {
   try {
-    const { email, credential } = await request.json();
-
-    if (!email || !credential) {
-      return NextResponse.json(
-        { error: 'Email and credential are required' },
-        { status: 400 }
-      );
+    const session = await auth();
+    const partnerId = Number(session?.user?.odooPartnerId || session?.user?.id || 0);
+    if (!session?.user || !Number.isInteger(partnerId) || partnerId <= 0) {
+      return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
     }
 
-    // Get expected challenge
-    const challengeKey = `webauthn:challenge:${email}`;
-    const expectedChallenge = await redis.get<string>(challengeKey);
-
-    if (!expectedChallenge) {
-      return NextResponse.json(
-        { error: 'Challenge expired or not found' },
-        { status: 400 }
-      );
+    const { response, challengeToken, deviceName } = await request.json();
+    if (!response || !challengeToken) {
+      return NextResponse.json({ error: 'response and challengeToken are required' }, { status: 400 });
     }
 
-    // Verify registration
+    const consumed = consumeWebAuthnChallenge(challengeToken, 'wa-reg');
+    if (!consumed) {
+      return NextResponse.json({ error: 'Challenge expired or invalid' }, { status: 400 });
+    }
+    // The ceremony must belong to the same partner that is logged in.
+    if (consumed.partnerId !== partnerId) {
+      return NextResponse.json({ error: 'forbidden' }, { status: 403 });
+    }
+
     const opts: VerifyRegistrationResponseOpts = {
-      response: credential as RegistrationResponseJSON,
-      expectedChallenge,
+      response: response as RegistrationResponseJSON,
+      expectedChallenge: consumed.challenge,
       expectedOrigin: origin,
       expectedRPID: rpID,
     };
 
     const verification = await verifyRegistrationResponse(opts);
-
     if (!verification.verified || !verification.registrationInfo) {
-      return NextResponse.json(
-        { error: 'Verification failed' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'Verification failed' }, { status: 400 });
     }
 
-    // Delete challenge
-    await redis.del(challengeKey);
-
-    // Store authenticator
-    const { credential: credentialData } = verification.registrationInfo;
-    const authenticator = {
-      credentialID: Buffer.from(credentialData.id).toString('base64'),
-      credentialPublicKey: Buffer.from(credentialData.publicKey).toString('base64'),
-      counter: credentialData.counter,
-      transports: credential.response.transports || [],
+    const { credential } = verification.registrationInfo;
+    const newRecord: PasskeyRecord = {
+      id: credential.id,
+      publicKey: Buffer.from(credential.publicKey).toString('base64url'),
+      counter: credential.counter,
+      transports: (response as RegistrationResponseJSON).response?.transports || [],
+      deviceName: typeof deviceName === 'string' && deviceName.trim() ? deviceName.trim() : undefined,
       createdAt: new Date().toISOString(),
     };
 
-    // Add to user's authenticators
-    const authenticatorsKey = `webauthn:authenticators:${email}`;
-    const existingAuthenticators = (await redis.get<Array<any>>(authenticatorsKey)) || [];
-    existingAuthenticators.push(authenticator);
-    await redis.set(authenticatorsKey, existingAuthenticators);
+    // Full-replace store → read, dedupe by id, append, write back.
+    const existing = await getPartnerPasskeys(partnerId);
+    const deduped = existing.filter((p) => p.id !== newRecord.id);
+    deduped.push(newRecord);
+    await savePartnerPasskeys(partnerId, deduped);
 
-    console.log('[WebAuthn Register] Authenticator registered for:', email);
-
-    return NextResponse.json({
-      success: true,
-      verified: true,
-    });
+    console.log('[WebAuthn Register] Passkey stored for partner:', partnerId);
+    return NextResponse.json({ success: true, verified: true });
   } catch (error) {
     console.error('[WebAuthn Register Verify] Error:', error);
-    return NextResponse.json(
-      { error: 'Failed to verify registration' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'store_unavailable' }, { status: 503 });
   }
 }

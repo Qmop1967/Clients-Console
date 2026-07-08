@@ -111,14 +111,14 @@ export default function LoginPage() {
         setMethod("email");
         return;
       }
-      const options = await optRes.json();
+      const { options, challengeToken } = await optRes.json();
 
       const assertion = await startAuthentication({ optionsJSON: options });
 
       const verifyRes = await fetch("/api/auth/webauthn/auth-verify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: pkEmail, credential: assertion }),
+        body: JSON.stringify({ email: pkEmail, response: assertion, challengeToken }),
       });
       const data = await verifyRes.json();
       if (!verifyRes.ok || !data?.ticket) {

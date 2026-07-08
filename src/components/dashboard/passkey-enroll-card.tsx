@@ -77,17 +77,16 @@ export function PasskeyEnrollCard({ email }: { email?: string | null }) {
       const optRes = await fetch("/api/auth/webauthn/register-options", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: cleanEmail }),
       });
       if (!optRes.ok) throw new Error("options_failed");
-      const options = await optRes.json();
+      const { options, challengeToken } = await optRes.json();
 
       const credential = await startRegistration({ optionsJSON: options });
 
       const verifyRes = await fetch("/api/auth/webauthn/register-verify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: cleanEmail, credential }),
+        body: JSON.stringify({ response: credential, challengeToken }),
       });
       const data = await verifyRes.json();
       if (!verifyRes.ok || !data?.verified) throw new Error("verify_failed");

@@ -39,8 +39,11 @@ const SECRET = process.env.NEXTAUTH_SECRET || process.env.AUTH_SECRET || '';
 
 const TICKET_TTL_S = 180;                 // 3 minutes to complete signIn
 const RECOVERY_TTL_S = 30 * 24 * 60 * 60; // 30 days
+const WA_CHALLENGE_TTL_S = 300;           // 5 minutes to complete a WebAuthn ceremony
 const TICKET_PURPOSE = 'ticket';
 const RECOVERY_PURPOSE = 'recovery';
+const WA_REG_PURPOSE = 'wa-reg';
+const WA_AUTH_PURPOSE = 'wa-auth';
 
 // In-memory single-use guard for auth tickets (jti -> expiry seconds).
 // Authoritative under single-process (pm2 fork); see header note.
@@ -60,10 +63,11 @@ export interface AuthSubject {
 }
 
 interface Payload extends AuthSubject {
-  p: string;   // purpose
-  iat: number; // issued-at (s)
-  exp: number; // expiry (s)
-  jti: string; // nonce (uniqueness)
+  p: string;         // purpose
+  iat: number;       // issued-at (s)
+  exp: number;       // expiry (s)
+  jti: string;       // nonce (uniqueness)
+  challenge?: string; // WebAuthn ceremony challenge (wa-reg / wa-auth only)
 }
 
 function b64url(buf: Buffer): string {
@@ -168,4 +172,61 @@ export async function rotateRecoveryToken(
   const subject = subjectOf(payload);
   const newToken = await issueRecoveryToken(subject);
   return { subject, newToken };
+}
+
+// ---- WebAuthn challenges (stateless, single-use, 5-min TTL) ----
+//
+// Same HMAC model as auth tickets: the challenge the RP must see on verify is
+// embedded in a signed token instead of a server-side store. Unforgeable
+// without NEXTAUTH_SECRET, so a client cannot swap in a challenge of its own.
+// Single-use via the shared jti guard — one token completes at most one
+// ceremony (same single-process assumption as the tickets above).
+
+export type WebAuthnChallengePurpose = 'wa-reg' | 'wa-auth';
+
+export interface WebAuthnChallengeSubject {
+  partnerId: number;
+  email: string;
+}
+
+/** Issue a signed, single-use challenge token binding a ceremony to a partner. */
+export function issueWebAuthnChallenge(
+  purpose: WebAuthnChallengePurpose,
+  subject: WebAuthnChallengeSubject,
+  challenge: string
+): string {
+  const now = Math.floor(Date.now() / 1000);
+  const payload: Payload = {
+    method: 'email',
+    partnerId: subject.partnerId,
+    email: subject.email,
+    challenge,
+    p: purpose === 'wa-reg' ? WA_REG_PURPOSE : WA_AUTH_PURPOSE,
+    iat: now,
+    exp: now + WA_CHALLENGE_TTL_S,
+    jti: b64url(randomBytes(9)),
+  };
+  const payloadB64 = b64url(Buffer.from(JSON.stringify(payload)));
+  return `${payloadB64}.${sign(payloadB64)}`;
+}
+
+/**
+ * Verify signature + expiry + purpose and burn the token (single-use).
+ * Returns the bound identity and the expected challenge, or null if invalid.
+ */
+export function consumeWebAuthnChallenge(
+  token: string | undefined | null,
+  purpose: WebAuthnChallengePurpose
+): { partnerId: number; email: string; challenge: string } | null {
+  const payload = decodePayload(token, purpose === 'wa-reg' ? WA_REG_PURPOSE : WA_AUTH_PURPOSE);
+  if (!payload) return null;
+  if (!payload.partnerId || !payload.email || !payload.challenge) return null;
+  const now = Math.floor(Date.now() / 1000);
+  sweepConsumed(now);
+  if (consumedJti.has(payload.jti)) {
+    console.warn('[WebAuthn] challenge rejected: already consumed');
+    return null;
+  }
+  consumedJti.set(payload.jti, payload.exp);
+  return { partnerId: payload.partnerId, email: payload.email, challenge: payload.challenge };
 }

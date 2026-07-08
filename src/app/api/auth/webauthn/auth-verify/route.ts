@@ -2,115 +2,85 @@ import { NextRequest, NextResponse } from 'next/server';
 import {
   verifyAuthenticationResponse,
   type VerifyAuthenticationResponseOpts,
-  type AuthenticationResponseJSON,
 } from '@simplewebauthn/server';
-import { Redis } from '@upstash/redis';
-import { getCustomerByEmail } from '@/lib/odoo/customers';
-import { issueAuthTicket, issueRecoveryToken, type AuthSubject } from '@/lib/auth-tickets';
+import type { AuthenticationResponseJSON, AuthenticatorTransportFuture } from '@simplewebauthn/types';
+import {
+  issueAuthTicket,
+  issueRecoveryToken,
+  consumeWebAuthnChallenge,
+  type AuthSubject,
+} from '@/lib/auth-tickets';
+import { getPartnerPasskeys, savePartnerPasskeys } from '@/lib/odoo/passkeys';
 
-const redis = new Redis({
-  url: process.env.UPSTASH_REDIS_REST_URL!,
-  token: process.env.UPSTASH_REDIS_REST_TOKEN!,
-});
-
-const rpID = process.env.NEXTAUTH_URL?.includes('localhost')
-  ? 'localhost'
-  : 'tsh.sale';
+const rpID = process.env.NEXTAUTH_URL?.includes('localhost') ? 'localhost' : 'tsh.sale';
 const origin = process.env.NEXTAUTH_URL || 'https://www.tsh.sale';
 
 export async function POST(request: NextRequest) {
   try {
-    const { email, credential } = await request.json();
-
-    if (!email || !credential) {
+    const { email, response, challengeToken } = await request.json();
+    if (!email || !response || !challengeToken) {
       return NextResponse.json(
-        { error: 'Email and credential are required' },
+        { error: 'email, response and challengeToken are required' },
         { status: 400 }
       );
     }
+    const cleanEmail = String(email).trim().toLowerCase();
 
-    // Get expected challenge
-    const challengeKey = `webauthn:auth-challenge:${email}`;
-    const expectedChallenge = await redis.get<string>(challengeKey);
+    const consumed = consumeWebAuthnChallenge(challengeToken, 'wa-auth');
+    if (!consumed) {
+      return NextResponse.json({ error: 'Challenge expired or invalid' }, { status: 401 });
+    }
+    // The token binds the ceremony to an email; the client must present the same.
+    if (consumed.email !== cleanEmail) {
+      return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+    }
+    const partnerId = consumed.partnerId;
 
-    if (!expectedChallenge) {
-      return NextResponse.json(
-        { error: 'Challenge expired or not found' },
-        { status: 400 }
-      );
+    const records = await getPartnerPasskeys(partnerId);
+    const record = records.find((p) => p.id === (response as AuthenticationResponseJSON).id);
+    if (!record) {
+      return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
     }
 
-    // Get user's authenticators
-    const authenticatorsKey = `webauthn:authenticators:${email}`;
-    const authenticators = (await redis.get<Array<any>>(authenticatorsKey)) || [];
-
-    // Find the authenticator
-    const credentialIDBase64 = Buffer.from(credential.id, 'base64url').toString('base64');
-    const authenticator = authenticators.find(
-      (auth: any) => auth.credentialID === credentialIDBase64
-    );
-
-    if (!authenticator) {
-      return NextResponse.json(
-        { error: 'Authenticator not found' },
-        { status: 404 }
-      );
-    }
-
-    // Verify authentication
     const opts: VerifyAuthenticationResponseOpts = {
-      response: credential as AuthenticationResponseJSON,
-      expectedChallenge,
+      response: response as AuthenticationResponseJSON,
+      expectedChallenge: consumed.challenge,
       expectedOrigin: origin,
       expectedRPID: rpID,
       credential: {
-        id: authenticator.credentialID, // Base64 encoded string
-        publicKey: Uint8Array.from(Buffer.from(authenticator.credentialPublicKey, 'base64')),
-        counter: authenticator.counter,
+        id: record.id,
+        publicKey: new Uint8Array(Buffer.from(record.publicKey, 'base64url')),
+        counter: record.counter,
+        transports: record.transports as AuthenticatorTransportFuture[] | undefined,
       },
     };
 
     const verification = await verifyAuthenticationResponse(opts);
-
     if (!verification.verified) {
-      return NextResponse.json(
-        { error: 'Authentication failed' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
     }
 
-    // Delete challenge
-    await redis.del(challengeKey);
-
-    // Update authenticator counter
-    authenticator.counter = verification.authenticationInfo.newCounter;
-    await redis.set(authenticatorsKey, authenticators);
-
-    // SECURITY 2026-07-02: passkey assertion verified server-side. Instead of
-    // minting a session directly (the JWT strategy ignores adapter sessions),
-    // hand back a single-use auth ticket + rotating recovery token — exactly the
-    // contract otp/verify uses. The client feeds the ticket to the NextAuth
-    // `email` Credentials provider via signIn(). The ticket carries the
-    // authoritative identity; a passkey alone can no longer forge a session.
-    const cleanEmail = String(email).trim().toLowerCase();
-    const customer = await getCustomerByEmail(cleanEmail);
-    if (!customer) {
-      console.warn('[WebAuthn Auth] No customer for passkey email:', cleanEmail);
-      return NextResponse.json(
-        { error: 'No account found for this email' },
-        { status: 404 }
-      );
-    }
-    const partnerId = Number(customer.contact_id);
-    if (!Number.isInteger(partnerId) || partnerId <= 0) {
-      return NextResponse.json({ error: 'Invalid account' }, { status: 400 });
+    // Cloned-authenticator detection: a real counter must strictly advance.
+    // Authenticators that never increment always report 0 — allow that case.
+    const newCounter = verification.authenticationInfo.newCounter;
+    if (newCounter > 0 && newCounter <= record.counter) {
+      console.warn('[WebAuthn Auth] counter regression — possible cloned authenticator', { partnerId });
+      return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
     }
 
+    record.counter = newCounter;
+    record.lastUsedAt = new Date().toISOString();
+    await savePartnerPasskeys(partnerId, records);
+
+    // SECURITY 2026-07-02: passkey assertion verified server-side. Hand back a
+    // single-use auth ticket + rotating recovery token — the exact contract
+    // otp/verify uses. The client feeds the ticket to the NextAuth `email`
+    // Credentials provider via signIn(). A passkey alone can't forge a session.
     const subject: AuthSubject = { method: 'email', email: cleanEmail, partnerId };
     const ticket = await issueAuthTicket(subject);
     const recoveryToken = await issueRecoveryToken(subject);
 
-    console.log('[WebAuthn Auth] ✅ Passkey verified, ticket issued for:', cleanEmail);
+    console.log('[WebAuthn Auth] ✅ Passkey verified, ticket issued for partner:', partnerId);
 
     return NextResponse.json({
       success: true,
@@ -123,9 +93,6 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error('[WebAuthn Auth Verify] Error:', error);
-    return NextResponse.json(
-      { error: 'Failed to verify authentication' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'store_unavailable' }, { status: 503 });
   }
 }
