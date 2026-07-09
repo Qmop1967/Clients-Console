@@ -1,11 +1,12 @@
 import { Suspense } from "react";
-import { getTranslations } from "next-intl/server";
+import { getTranslations, getLocale } from "next-intl/server";
 import { ShopContainer } from "@/components/products/shop-container";
 import { ProductsSkeleton } from "@/components/products/products-skeleton";
 import { LCPImagePreload } from "@/components/products/lcp-image-preload";
 import { getProductsWithPricesCached as getProductsWithPrices, getProductImageUrl, getCategoriesCached as getCategories, getDirectImageUrls } from "@/lib/odoo/products";
 import { auth } from "@/lib/auth/auth";
 import { PRICE_LIST_IDS } from "@/lib/odoo/pricelists";
+import { localeToOdooLang } from "@/i18n/config";
 
 // PERSONALIZED PRICING: Page is dynamic for logged-in users to show their assigned prices
 // Public visitors still get Consumer prices
@@ -35,15 +36,15 @@ export async function generateMetadata() {
  *
  * @param priceListId - Customer's price list ID (from session) or undefined for Consumer
  */
-async function fetchShopData(priceListId?: string) {
+async function fetchShopData(priceListId?: string, lang?: string) {
   try {
     // Determine which price list to use
     const effectivePriceListId = priceListId || PRICE_LIST_IDS.CONSUMER;
 
     // Fetch products with appropriate prices and categories in parallel
     const [productResult, categories] = await Promise.all([
-      getProductsWithPrices(effectivePriceListId),
-      getCategories()
+      getProductsWithPrices(effectivePriceListId, lang),
+      getCategories(lang)
     ]);
 
     const { products: allProducts, currency } = productResult;
@@ -133,7 +134,9 @@ async function ShopLoader() {
     console.log(`[ShopLoader] Session priceListId: ${priceListId || 'Consumer (not logged in)'}`);
   }
 
-  const { products, categories, currencyCode, lcpImageUrl, error } = await fetchShopData(priceListId);
+  // i18n: fetch catalog in the visitor's language (en → en_US, else → ar_001)
+  const odooLang = localeToOdooLang(await getLocale());
+  const { products, categories, currencyCode, lcpImageUrl, error } = await fetchShopData(priceListId, odooLang);
 
   // Error State
   if (error && products.length === 0) {

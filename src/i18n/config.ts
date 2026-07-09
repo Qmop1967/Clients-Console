@@ -38,3 +38,12 @@ export default getRequestConfig(async ({ requestLocale }) => {
     messages: (await import(`../messages/${locale}.json`)).default,
   };
 });
+
+// ============================================
+// Odoo data-language mapping (added 2026-07-09)
+// Odoo has ONLY en_US + ar_001 installed. Kurdish/Turkmen UI locales
+// fall back to Arabic data (closest available for Iraqi customers).
+// ============================================
+export function localeToOdooLang(locale: string): 'en_US' | 'ar_001' {
+  return locale === 'en' ? 'en_US' : 'ar_001';
+}

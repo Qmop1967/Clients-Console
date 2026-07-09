@@ -9,6 +9,7 @@ import { auth } from "@/lib/auth/auth";
 import { Link } from "@/i18n/navigation";
 import { Button } from "@/components/ui/button";
 import { AlertCircle, RefreshCw } from "lucide-react";
+import { localeToOdooLang } from "@/i18n/config";
 
 // PERFORMANCE: Use ISR with 2-minute revalidation instead of force-dynamic
 // Auth check still runs on each request, but product data is cached
@@ -20,10 +21,10 @@ interface ProductPageProps {
 }
 
 export async function generateMetadata({ params }: ProductPageProps) {
-  const { id } = await params;
+  const { locale, id } = await params;
 
   try {
-    const product = await getProductByIdStrictCached(id);
+    const product = await getProductByIdStrictCached(id, localeToOdooLang(locale));
     if (!product) {
       return { title: "Product Not Found" };
     }
@@ -64,14 +65,14 @@ type FetchResult = {
   error: "not_found" | "rate_limited" | "error";
 };
 
-async function fetchProductData(productId: string, priceListId?: string): Promise<FetchResult> {
+async function fetchProductData(productId: string, priceListId?: string, lang?: string): Promise<FetchResult> {
   try {
     // PERFORMANCE: Run all API calls in parallel to reduce TTFB
     // This prevents 503 errors on RSC prefetch by reducing function execution time
     const effectivePriceListId = priceListId || PRICE_LIST_IDS.CONSUMER;
 
     const [product, stockResult, priceList] = await Promise.all([
-      getProductByIdStrictCached(productId),
+      getProductByIdStrictCached(productId, lang),
       getUnifiedStock(productId, {
         fetchOnMiss: true,
         context: 'product-detail',
@@ -160,7 +161,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
     }
   }
 
-  const result = await fetchProductData(id, priceListId);
+  const result = await fetchProductData(id, priceListId, localeToOdooLang(locale));
 
   if (!result.success) {
     if (result.error === "not_found") {

@@ -23,5 +23,7 @@ export function hasLocalizedName(
 ): boolean {
   if (locale === "en") return false;
   const key = locale as LocalizedKey;
-  return Boolean(product.localized_names?.[key]);
+  // Guard: with lang-aware fetching, product.name may itself be the Arabic
+  // native translation — identical strings mean no distinct subtitle to show.
+  return Boolean(product.localized_names?.[key]) && product.localized_names?.[key] !== product.name;
 }

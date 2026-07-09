@@ -42,8 +42,8 @@ export async function odooRead<T = Record<string, unknown>>(model: string, ids: 
   return gw('/api/odoo/call', { model, method: 'read', args: [ids], kwargs: context ? { fields, context } : { fields } });
 }
 
-export async function odooSearchRead<T = Record<string, unknown>>(model: string, domain: unknown[] = [], fields: string[] = [], options: { offset?: number; limit?: number; order?: string } = {}): Promise<T[]> {
-  return gw('/api/odoo/search_read', { model, domain, fields, limit: options.limit, offset: options.offset, order: options.order });
+export async function odooSearchRead<T = Record<string, unknown>>(model: string, domain: unknown[] = [], fields: string[] = [], options: { offset?: number; limit?: number; order?: string; lang?: string } = {}): Promise<T[]> {
+  return gw('/api/odoo/search_read', { model, domain, fields, limit: options.limit, offset: options.offset, order: options.order, lang: options.lang });
 }
 
 // Auth/login customer lookups — tagged with x-tsh-auth-lookup so the gateway exempts them

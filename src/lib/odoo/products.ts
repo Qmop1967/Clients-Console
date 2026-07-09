@@ -155,8 +155,9 @@ export async function getProducts(options: {
   categoryId?: number;
   sortBy?: string;
   sortOrder?: 'asc' | 'desc';
+  lang?: string;
 } = {}): Promise<PaginatedResponse<Product>> {
-  const { page = 1, perPage = 50, categoryId, sortBy = 'name', sortOrder = 'asc' } = options;
+  const { page = 1, perPage = 50, categoryId, sortBy = 'name', sortOrder = 'asc', lang } = options;
 
   try {
     const warehouseProductIds = await getWarehouseProductIds();
@@ -183,6 +184,7 @@ export async function getProducts(options: {
         offset,
         limit: perPage,
         order,
+        lang,
       }),
       odooCount('product.product', domain),
     ]);
@@ -210,7 +212,7 @@ export async function getProducts(options: {
 /**
  * Get all products (no pagination limit)
  */
-export async function getAllProducts(): Promise<Product[]> {
+export async function getAllProducts(lang?: string): Promise<Product[]> {
   try {
     const warehouseProductIds = await getWarehouseProductIds();
     const domain: unknown[] = [
@@ -226,7 +228,7 @@ export async function getAllProducts(): Promise<Product[]> {
 
     const products = await odooSearchRead<OdooProduct>(
       'product.product', domain, PRODUCT_LIST_FIELDS,
-      { order: 'write_date DESC, id DESC', limit: 0 }
+      { order: 'write_date DESC, id DESC', limit: 0, lang }
     );
 
     {
@@ -290,7 +292,8 @@ export const getProductByIdStrictCached = cache(
 export async function searchProducts(
   query: string,
   page = 1,
-  perPage = 50
+  perPage = 50,
+  lang?: string
 ): Promise<PaginatedResponse<Product>> {
   try {
     const warehouseProductIds = await getWarehouseProductIds();
@@ -313,6 +316,7 @@ export async function searchProducts(
         offset,
         limit: perPage,
         order: 'write_date DESC, id DESC',
+        lang,
       }),
       odooCount('product.product', domain),
     ]);
@@ -340,13 +344,13 @@ export async function searchProducts(
 /**
  * Get product categories
  */
-export async function getCategories(): Promise<Category[]> {
+export async function getCategories(lang?: string): Promise<Category[]> {
   try {
     const categories = await odooSearchRead<OdooCategoryType>(
       'product.category',
       [], // all categories
       ['id', 'name', 'complete_name', 'parent_id', 'child_id', 'product_count'],
-      { order: 'write_date DESC, id DESC' }
+      { order: 'write_date DESC, id DESC', lang }
     );
 
     return categories.map(odooCategoryToCategory);
@@ -362,10 +366,11 @@ export async function getCategories(): Promise<Category[]> {
 export async function getProductsByCategory(
   categoryId: number | string,
   page = 1,
-  perPage = 50
+  perPage = 50,
+  lang?: string
 ): Promise<PaginatedResponse<Product>> {
   const numCatId = typeof categoryId === 'string' ? parseInt(categoryId, 10) : categoryId;
-  return getProducts({ page, perPage, categoryId: numCatId });
+  return getProducts({ page, perPage, categoryId: numCatId, lang });
 }
 
 /**
@@ -429,7 +434,7 @@ export async function getDirectImageUrls(itemIds: string[]): Promise<Map<string,
  * Get products with prices from customer's pricelist
  * Replaces the legacy getProductsWithPrices function
  */
-export async function getProductsWithPrices(pricelistId: string): Promise<{
+export async function getProductsWithPrices(pricelistId: string, lang?: string): Promise<{
   products: (Product & { display_price: number; in_price_list: boolean })[];
   currency: string;
 }> {
@@ -439,7 +444,7 @@ export async function getProductsWithPrices(pricelistId: string): Promise<{
 
     // Fetch products, pricelist info, and stock in parallel
     const [allProducts, pricelist, stockMap] = await Promise.all([
-      getAllProducts(),
+      getAllProducts(lang),
       getPricelistById(parseInt(pricelistId, 10)),
       getAllStock(),
     ]);
@@ -481,12 +486,12 @@ export async function getProductsWithPrices(pricelistId: string): Promise<{
 /**
  * Get products with consumer (public) prices
  */
-export async function getProductsWithConsumerPrices(): Promise<{
+export async function getProductsWithConsumerPrices(lang?: string): Promise<{
   products: (Product & { display_price: number; in_price_list: boolean })[];
   currency: string;
 }> {
   // Use the default pricelist (list_price)
-  const allProducts = await getAllProducts();
+  const allProducts = await getAllProducts(lang);
   const { getAllStock } = await import('./stock');
   const stockMap = await getAllStock();
 
@@ -516,12 +521,13 @@ export const getProductsMetadataSafe = getAllProducts;
 // NOTE: stock can be up to `revalidate` seconds stale on browse pages (acceptable; cart re-validates).
 // ============================================
 export const getProductsWithPricesCached = unstable_cache(
-  (pricelistId: string) => getProductsWithPrices(pricelistId),
-  ['sf-products-with-prices-v1'],
+  // lang is a cache-key argument: en_US and ar_001 catalogs cache separately.
+  (pricelistId: string, lang?: string) => getProductsWithPrices(pricelistId, lang),
+  ['sf-products-with-prices-v2'],
   { revalidate: 60, tags: ['products'] }
 );
 export const getCategoriesCached = unstable_cache(
-  () => getCategories(),
-  ['sf-categories-v1'],
+  (lang?: string) => getCategories(lang),
+  ['sf-categories-v2'],
   { revalidate: 300, tags: ['categories'] }
 );
