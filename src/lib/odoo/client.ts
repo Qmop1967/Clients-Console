@@ -93,6 +93,27 @@ export function getOdooImageUrl(productId: number, size: '128x128' | '256x256' |
 }
 
 /**
+ * Resolve a product's image source: the real Odoo image when it has one, otherwise a
+ * deterministic colorful SVG placeholder served by the gateway (?ph=1).
+ *
+ * CONTRACT: version 0 / undefined => no image_1920 => use placeholder. This keeps the
+ * decision in ONE place so call sites don't each re-implement the "null src => gray box"
+ * fallback. Always pass product_product.id (pp_id) — never tmpl_id (BAN-IMG-CLI-1).
+ *
+ * @param productId product_product.id (pp_id)
+ * @param size      requested image size
+ * @param version   gateway image_version (epoch s); 0/undefined => placeholder
+ */
+export function getProductImageOrPlaceholderUrl(
+  productId: number,
+  size: '128x128' | '256x256' | '512x512' | '1920x1920' = '256x256',
+  version?: number,
+): string {
+  if (version && version > 0) return getOdooImageUrl(productId, size, version);
+  return `/api/images/${productId}?ph=1&size=${size}`;
+}
+
+/**
  * Batched image-version lookup via the GATEWAY (which reads ir.attachment; the client may not).
  * GET /api/products/image-versions?ids=... -> { versions: { variantId: epochSeconds } }.
  * version 0 / absent => no image_1920 => placeholder. Non-fatal on error (returns {}).
