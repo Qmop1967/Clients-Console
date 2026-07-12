@@ -7,6 +7,8 @@ interface StripCategory {
   category_id: string;
   name: string;
   is_active: boolean;
+  /** In-stock products behind this chip. Set by ShopContainer. */
+  count?: number;
 }
 
 /**
@@ -50,6 +52,17 @@ export function CategoryStrip({
           className={chip(selectedCategory === c.category_id)}
         >
           {c.name}
+          {typeof c.count === "number" && c.count > 0 && (
+            <span
+              dir="ltr"
+              className={cn(
+                "ms-1.5 text-[11px] font-normal tabular-nums",
+                selectedCategory === c.category_id ? "text-white/70" : "text-muted-foreground"
+              )}
+            >
+              {c.count}
+            </span>
+          )}
         </button>
       ))}
     </div>

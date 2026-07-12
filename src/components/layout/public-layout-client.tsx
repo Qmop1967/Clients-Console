@@ -23,7 +23,10 @@ export function PublicLayoutClient({ children, locale, footer }: PublicLayoutCli
     // Replace the locale in the pathname
     const segments = pathname.split("/");
     segments[1] = newLocale;
-    router.push(segments.join("/"));
+    // Keep the customer's filters (category / search / sort / page) across a language
+    // switch — dropping the query string used to silently reset the whole catalog view.
+    const query = typeof window !== "undefined" ? window.location.search : "";
+    router.push(segments.join("/") + query);
   };
 
   const user = session?.user

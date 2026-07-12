@@ -76,6 +76,7 @@ interface PublicCategory {
   name: string;
   description?: string;
   is_active: boolean;
+  count?: number;
 }
 
 interface PublicProductsContentProps {

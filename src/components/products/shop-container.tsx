@@ -29,6 +29,7 @@ interface PublicCategory {
   name: string;
   description?: string;
   is_active: boolean;
+  count?: number;
 }
 
 interface ShopContainerProps {
@@ -73,6 +74,26 @@ function ShopContainerInner({
     return products.filter((p) => p.category_id === selectedCategory);
   }, [products, selectedCategory]);
 
+  // BUGFIX (dead-end chips): the server hands us EVERY product.category row from Odoo,
+  // so the strip was advertising categories a customer can never buy from — internal
+  // Odoo roots (All / Saleable / Expenses / Deliveries), parent categories whose
+  // products actually live in their children, and categories whose stock ran out.
+  // Tapping any of those showed "no products" — the same empty screen as the stale-page
+  // bug. Derive the strip from the in-stock products we are actually rendering: a chip
+  // exists only if it has something behind it, and it comes back on its own when stock
+  // lands. Ordered by depth of stock (best merchandising first).
+  const visibleCategories = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const p of products) {
+      if (!p.category_id) continue;
+      counts.set(p.category_id, (counts.get(p.category_id) ?? 0) + 1);
+    }
+    return categories
+      .filter((c) => counts.has(c.category_id))
+      .map((c) => ({ ...c, count: counts.get(c.category_id) ?? 0 }))
+      .sort((a, b) => (b.count ?? 0) - (a.count ?? 0));
+  }, [products, categories]);
+
   const getCategoryName = useCallback(
     (categoryId: string) => {
       const category = categories.find((c) => c.category_id === categoryId);
@@ -107,7 +128,7 @@ function ShopContainerInner({
     <PublicProductsContent
       products={filteredProducts}
       allProducts={products}
-      categories={categories}
+      categories={visibleCategories}
       currencyCode={currencyCode}
       selectedCategory={selectedCategory}
       selectedCategoryName={selectedCategory ? getCategoryName(selectedCategory) : null}
