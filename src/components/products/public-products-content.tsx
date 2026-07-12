@@ -411,6 +411,17 @@ export function PublicProductsContent({
   const [currentPage, setCurrentPage] = useState(pageFromUrl);
   const [sortBy, setSortBy] = useState<SortOption>(sortFromUrl);
 
+  // BUGFIX (sticky pagination): switching category is a SOFT navigation — this
+  // component never unmounts, so `currentPage` survived. Landing on page 2 of a
+  // category that only has 1 page sliced past the end and rendered an EMPTY grid.
+  // Reset during render (React's "adjust state when a prop changes" pattern) so the
+  // stale page never paints, not even for a single frame.
+  const [prevCategory, setPrevCategory] = useState(selectedCategory);
+  if (prevCategory !== selectedCategory) {
+    setPrevCategory(selectedCategory);
+    setCurrentPage(1);
+  }
+
   // Use deferred value for search to keep input responsive (improves INP)
   const deferredSearchQuery = useDeferredValue(searchQuery);
   const isSearching = searchQuery !== deferredSearchQuery;
@@ -520,16 +531,31 @@ export function PublicProductsContent({
   }, [allProducts]);
 
   // Pagination calculations
-  const totalPages = Math.ceil(filteredProducts.length / PRODUCTS_PER_PAGE);
-  const startIndex = (currentPage - 1) * PRODUCTS_PER_PAGE;
+  // SAFETY NET: clamp the page into range so we can NEVER slice past the end of the
+  // list. Covers every remaining path to an empty grid: a shared/bookmarked
+  // ?page=99, a search that narrows the results, a sort change, or stock dropping
+  // to 0 on revalidate. Out-of-range simply shows page 1.
+  const totalPages = Math.max(1, Math.ceil(filteredProducts.length / PRODUCTS_PER_PAGE));
+  const safePage = Math.min(Math.max(currentPage, 1), totalPages);
+  const startIndex = (safePage - 1) * PRODUCTS_PER_PAGE;
   const endIndex = startIndex + PRODUCTS_PER_PAGE;
   const paginatedProducts = filteredProducts.slice(startIndex, endIndex);
+
+  // Keep state (and therefore the URL) honest whenever the page had to be clamped.
+  useEffect(() => {
+    if (currentPage !== safePage) setCurrentPage(safePage);
+  }, [currentPage, safePage]);
 
   // Pagination handlers
   const goToPage = (page: number) => {
     setCurrentPage(page);
-    // Scroll to top of products
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    // Land on the grid, not back up on the hero. #all-products already has scroll-mt-4.
+    const anchor = document.getElementById("all-products");
+    if (anchor) {
+      anchor.scrollIntoView({ behavior: "smooth", block: "start" });
+    } else {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
   };
 
   return (
@@ -614,8 +640,23 @@ export function PublicProductsContent({
       {/* Products Section */}
       <div id="all-products" className="scroll-mt-4" />
       {filteredProducts.length === 0 ? (
-        <div className="py-12 text-center text-muted-foreground">
-          {t("noProducts")}
+        <div className="py-12 flex flex-col items-center gap-4 text-center">
+          <p className="text-muted-foreground">{t("noProducts")}</p>
+          {/* Never a dead end: always offer the way back to the full catalog. */}
+          {(selectedCategory || searchQuery) && (
+            <Button
+              variant="outline"
+              className="btn-press"
+              onClick={() => {
+                setSearchQuery("");
+                setCurrentPage(1);
+                onClearCategory?.();
+              }}
+            >
+              <X className="h-4 w-4 me-1.5" />
+              {t("clearFilter")}
+            </Button>
+          )}
         </div>
       ) : (
         <>
@@ -631,7 +672,7 @@ export function PublicProductsContent({
 
             {/* Pagination Above Products */}
             <NumberedPagination
-              currentPage={currentPage}
+              currentPage={safePage}
               totalPages={totalPages}
               onPageChange={goToPage}
             />
@@ -645,14 +686,14 @@ export function PublicProductsContent({
                 product={product}
                 currencyCode={currencyCode}
                 locale={locale}
-                priority={currentPage === 1 && index < PRIORITY_PRODUCTS_COUNT}
+                priority={safePage === 1 && index < PRIORITY_PRODUCTS_COUNT}
               />
             ))}
           </div>
 
           {/* Pagination BELOW products */}
           <NumberedPagination
-            currentPage={currentPage}
+            currentPage={safePage}
             totalPages={totalPages}
             onPageChange={goToPage}
             className="mt-8"

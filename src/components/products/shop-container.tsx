@@ -82,13 +82,16 @@ function ShopContainerInner({
   );
 
   // Select a category (from the strip)
+  // BUGFIX: keep search/sort, but ALWAYS drop `page`. A new category must start at
+  // page 1 — a stale ?page=2 made any 1-page category render as an empty grid.
   const handleCategorySelect = useCallback(
     (categoryId: string) => {
-      const params = new URLSearchParams();
+      const params = new URLSearchParams(searchParams.toString());
       params.set("category", categoryId);
+      params.delete("page");
       router.push(`${pathname}?${params.toString()}`, { scroll: false });
     },
-    [pathname, router]
+    [searchParams, pathname, router]
   );
 
   // Clear the active category filter
