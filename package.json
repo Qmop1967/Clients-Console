@@ -4,7 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "flock -w 1800 /var/lock/tsh-build.lock npm run build:locked",
+    "build:locked": "next build",
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
