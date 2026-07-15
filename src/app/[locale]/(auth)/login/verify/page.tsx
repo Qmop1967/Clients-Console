@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { signIn } from "next-auth/react";
+import { signIn, useSession } from "next-auth/react";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -24,6 +24,23 @@ export default function VerifyOTPPage() {
   const [verified, setVerified] = useState(false);
   const [devOtp, setDevOtp] = useState("");
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
+
+  // AUTH GUARD 2026-07-15 (see login/page.tsx): never show an OTP form to an
+  // already-authenticated user (stale tab / back button / bookmarked verify).
+  const { status: sessionStatus } = useSession();
+  const postLoginTarget = () => {
+    try {
+      const cb = new URLSearchParams(window.location.search).get("callbackUrl") || "";
+      if (cb.startsWith("/") && !cb.startsWith("//")) return cb;
+    } catch { /* ignore */ }
+    return `/${locale}/dashboard`;
+  };
+  useEffect(() => {
+    if (sessionStatus !== "authenticated" || loading || verified) return;
+    router.replace(postLoginTarget());
+    router.refresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionStatus, loading, verified]);
 
   useEffect(() => {
     const storedPhone = sessionStorage.getItem("otp_phone");
@@ -209,7 +226,7 @@ export default function VerifyOTPPage() {
       sessionStorage.removeItem("dev_otp");
 
       setTimeout(() => {
-        router.push(`/${locale}/dashboard`);
+        router.push(postLoginTarget());
         router.refresh();
       }, 500);
     } catch {

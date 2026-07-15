@@ -37,10 +37,14 @@ export default function middleware(request: NextRequest) {
   const proto = request.headers.get('x-forwarded-proto') || 'https';
   const baseUrl = `${proto}://${host}`;
 
-  // Root path -> redirect to login
+  // Root path -> shop. next.config redirects already cover /, /ar, /en —
+  // this branch fires for the remaining locales (/ckb, /kmr, /tm).
+  // 2026-07-15: was '/login'; forcing users with a VALID session onto the
+  // login form was a root cause of the "asked to log in every time" complaint.
+  // The cookie check below still sends truly-unauthenticated users to /login.
   if (pathname === '/' || /^\/[a-z]{2,3}\/?$/.test(pathname)) {
     const locale = pathname.split('/')[1] || defaultLocale;
-    return NextResponse.redirect(new URL('/' + locale + '/login', baseUrl));
+    return NextResponse.redirect(new URL('/' + locale + '/shop', baseUrl));
   }
 
   // Public share pages (product /p/:id, category /c/:id) — no auth, for WhatsApp/social sharing

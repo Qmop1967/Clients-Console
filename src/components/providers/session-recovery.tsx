@@ -133,7 +133,21 @@ export function SessionRecovery() {
         }
 
         console.log("[SessionRecovery] Session restored successfully");
-        window.location.reload();
+        // UX 2026-07-15: a blind reload on the login screen re-renders the OTP
+        // form for a user whose session was JUST restored — the exact "why am I
+        // asked to log in again?!" complaint. Navigate into the app instead.
+        const path = window.location.pathname;
+        if (/\/login(\/|$)/.test(path)) {
+          const loc = path.split("/")[1] || "ar";
+          let target = `/${loc}/dashboard`;
+          try {
+            const cb = new URLSearchParams(window.location.search).get("callbackUrl") || "";
+            if (cb.startsWith("/") && !cb.startsWith("//")) target = cb;
+          } catch { /* ignore */ }
+          window.location.href = target;
+        } else {
+          window.location.reload();
+        }
       } catch (err) {
         console.error("[SessionRecovery] Error:", err);
         localStorage.removeItem(RECOVERY_KEY);

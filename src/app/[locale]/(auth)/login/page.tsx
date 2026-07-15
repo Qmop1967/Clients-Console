@@ -9,7 +9,7 @@ import { Phone, Mail, Loader2, Store, ChevronLeft, Shield, Fingerprint, X } from
 import Link from "next/link";
 import { useLocale } from "next-intl";
 import { useRouter } from "next/navigation";
-import { signIn } from "next-auth/react";
+import { signIn, useSession } from "next-auth/react";
 import { auth, RecaptchaVerifier, signInWithPhoneNumber } from "@/lib/firebase";
 import type { ConfirmationResult } from "@/lib/firebase";
 import {
@@ -24,6 +24,25 @@ export default function LoginPage() {
   const locale = useLocale();
   const router = useRouter();
   const isAr = locale === "ar";
+
+  // AUTH GUARD 2026-07-15: an already-authenticated visitor must NEVER see the
+  // login form. Root cause of the recurring "asked to log in every time"
+  // complaint: sessions were valid for 365 days, but this page ignored them —
+  // bookmarks/history autocomplete pointing at /login showed the OTP form and
+  // customers re-authenticated for nothing.
+  const { status: sessionStatus } = useSession();
+  const postLoginTarget = useCallback(() => {
+    try {
+      const cb = new URLSearchParams(window.location.search).get("callbackUrl") || "";
+      if (cb.startsWith("/") && !cb.startsWith("//")) return cb;
+    } catch { /* ignore */ }
+    return `/${locale}/dashboard`;
+  }, [locale]);
+  useEffect(() => {
+    if (sessionStatus !== "authenticated") return;
+    router.replace(postLoginTarget());
+    router.refresh();
+  }, [sessionStatus, postLoginTarget, router]);
 
   // Default to email while WhatsApp OTP is offline (until official WhatsApp Business API).
   // Revert to "phone" once WhatsApp is restored; the health poll below still auto-adapts.
@@ -147,7 +166,7 @@ export default function LoginPage() {
         localStorage.removeItem("tsh_login_prefill");
       } catch { /* non-critical */ }
 
-      router.push(`/${locale}/dashboard`);
+      router.push(postLoginTarget());
       router.refresh();
     } catch (err: unknown) {
       // User cancelled the biometric prompt, or the authenticator errored.
@@ -361,7 +380,7 @@ export default function LoginPage() {
         return;
       }
 
-      router.push(`/${locale}/dashboard`);
+      router.push(postLoginTarget());
       router.refresh();
     } catch (err: unknown) {
       const fbErr = err as { code?: string };
@@ -440,7 +459,7 @@ export default function LoginPage() {
       sessionStorage.setItem("otp_method", method);
       if (data.devOtp) sessionStorage.setItem("dev_otp", data.devOtp);
       if (data.fallback) sessionStorage.setItem("otp_fallback", "true");
-      router.push(`/${locale}/login/verify`);
+      router.push(`/${locale}/login/verify${window.location.search || ""}`);
     } catch {
       setError(isAr ? "حدث خطأ بالاتصال، حاول مرة أخرى" : "Connection error, please try again");
     } finally {
