@@ -853,6 +853,7 @@
   },
   "consignments": {
     "title": "العُهدة",
+    "viewDocument": "عرض السند",
     "empty": "لا توجد عهدات",
     "emptyDesc": "ليس لديك أي عهدات نشطة حالياً.",
     "number": "عهدة #",

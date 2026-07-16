@@ -7,10 +7,12 @@ import { Link } from "@/i18n/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Package, ShoppingCart, RotateCcw, MessageSquare, Clock, CheckCircle2, XCircle, AlertTriangle, Wallet, FileText, PackageCheck, Boxes } from "lucide-react";
+import { ArrowLeft, ShoppingCart, RotateCcw, MessageSquare, Clock, CheckCircle2, XCircle, AlertTriangle, Wallet, FileText, PackageCheck, Boxes } from "lucide-react";
 import { ReportSaleForm } from "./report-sale-form";
 import { RequestReturnForm } from "./request-return-form";
 import { AddNoteForm } from "./add-note-form";
+import { ProductImageSmall } from "@/components/products";
+import { getOdooImageUrl } from "@/lib/odoo/client";
 
 interface Line {
   id: number;
@@ -26,6 +28,7 @@ interface Line {
   x_invoice_unit_price: number;
   pending_reported_qty: number;
   reportable_qty: number;
+  image_version?: number;
 }
 
 interface SaleReport {
@@ -160,6 +163,14 @@ export function ConsignmentDetail({ consignment, consignmentId }: Props) {
             )}
           </div>
         </div>
+        <Button
+          variant="outline"
+          size="sm"
+          className="shrink-0 whitespace-nowrap"
+          onClick={() => window.open(`/api/consignments/${consignmentId}/document`, "_blank")}
+        >
+          <FileText className="h-4 w-4 me-1" /> {t("viewDocument")}
+        </Button>
       </div>
 
       {/* Financial summary */}
@@ -233,14 +244,18 @@ export function ConsignmentDetail({ consignment, consignmentId }: Props) {
           <div className="divide-y">
             {c.lines.map((line) => (
               <div key={line.id} className="p-4">
-                <div className="flex items-start justify-between">
+                <div className="flex items-start gap-3">
+                  <ProductImageSmall
+                    src={line.image_version ? getOdooImageUrl(line.x_product_id, "128x128", line.image_version) : null}
+                    alt={line.product_name}
+                    className="h-14 w-14 rounded-lg flex-shrink-0"
+                  />
                   <div className="min-w-0 flex-1">
                     <p className="font-medium text-sm truncate">{line.product_name}</p>
                     {line.product_code && (
                       <p className="text-xs text-muted-foreground">{line.product_code}</p>
                     )}
                   </div>
-                  <Package className="h-4 w-4 text-muted-foreground/50 ms-2 mt-0.5 flex-shrink-0" />
                 </div>
 
                 {/* Price row: your cost + suggested retail */}
