@@ -7,7 +7,7 @@ import { Link } from "@/i18n/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, ShoppingCart, RotateCcw, MessageSquare, Clock, CheckCircle2, XCircle, AlertTriangle, Wallet, FileText, PackageCheck, Boxes } from "lucide-react";
+import { ArrowLeft, ShoppingCart, RotateCcw, MessageSquare, Clock, CheckCircle2, XCircle, AlertTriangle, Wallet, FileText, Printer, PackageCheck, Boxes } from "lucide-react";
 import { ReportSaleForm } from "./report-sale-form";
 import { RequestReturnForm } from "./request-return-form";
 import { AddNoteForm } from "./add-note-form";
@@ -163,6 +163,14 @@ export function ConsignmentDetail({ consignment, consignmentId }: Props) {
             )}
           </div>
         </div>
+        <Button
+          variant="outline"
+          size="sm"
+          className="shrink-0 whitespace-nowrap"
+          onClick={() => window.open(`/api/consignments/${consignmentId}/document/print`, "_blank")}
+        >
+          <Printer className="h-4 w-4 me-1" /> {t("printDocument")}
+        </Button>
         <Button
           variant="outline"
           size="sm"

@@ -854,6 +854,7 @@
   "consignments": {
     "title": "My Consignments",
     "viewDocument": "View Document",
+    "printDocument": "Print",
     "empty": "No consignments found",
     "emptyDesc": "You don't have any active consignments yet.",
     "number": "Consignment #",
