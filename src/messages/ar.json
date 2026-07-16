@@ -945,6 +945,13 @@
     "eventDelivered": "تم التسليم",
     "eventSold": "بيع",
     "eventReplenished": "تعويض مُسلّم",
-    "reportStateInvoiced": "مفوتر"
+    "reportStateInvoiced": "مفوتر",
+    "willBeCharged": "يُضاف إلى رصيدك عند الموافقة",
+    "sellAll": "بيع الكل",
+    "underReview": "قيد المراجعة",
+    "errorInvalidQty": "الكمية غير صحيحة.",
+    "errorPricing": "تعذّر قبول البلاغ بسبب خطأ في التسعير. يرجى التواصل معنا.",
+    "errorNotActive": "لا يمكن الإبلاغ إلا على عهدة نشطة.",
+    "errorLineNotFound": "المنتج غير موجود في هذه العهدة."
   }
 }

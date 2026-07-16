@@ -90,6 +90,7 @@ export function ConsignmentDetail({ consignment, consignmentId }: Props) {
   const t = useTranslations("consignments");
   const router = useRouter();
   const [activeForm, setActiveForm] = useState<"sale" | "return" | "note" | null>(null);
+  const [saleLineId, setSaleLineId] = useState<number | null>(null);
 
   const c = consignment;
   // Currency ALWAYS derives from the consignment record itself (87=IQD design default),
@@ -108,8 +109,19 @@ export function ConsignmentDetail({ consignment, consignmentId }: Props) {
     remaining_value: c.lines.reduce((a, l) => a + num(l.x_qty_remaining) * num(l.x_invoice_unit_price), 0),
   };
 
+  const pendingValue = c.lines.reduce((a, l) => a + num(l.pending_reported_qty) * num(l.x_invoice_unit_price), 0);
+
+  const openSaleForm = (lineId: number | null) => {
+    setSaleLineId(lineId);
+    setActiveForm("sale");
+    setTimeout(() => {
+      document.getElementById("csgn-forms")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 60);
+  };
+
   const handleSuccess = () => {
     setActiveForm(null);
+    setSaleLineId(null);
     router.refresh();
   };
 
@@ -194,6 +206,9 @@ export function ConsignmentDetail({ consignment, consignmentId }: Props) {
           <p className="text-[10px] text-primary leading-tight">{t("totalCharged")}</p>
           <p className="text-sm font-bold mt-0.5 text-primary tabular-nums">{fmt(fin.charged_value)}</p>
           <p className="text-[9px] text-primary/70">{cur}</p>
+          {pendingValue > 0 && (
+            <p className="text-[9px] text-amber-600 dark:text-amber-400 mt-0.5 tabular-nums">+{fmt(pendingValue)} {t("underReview")}</p>
+          )}
         </div>
         <div className="rounded-xl border bg-card p-3 text-center">
           <Boxes className="h-4 w-4 mx-auto mb-1 text-muted-foreground" />
@@ -206,7 +221,7 @@ export function ConsignmentDetail({ consignment, consignmentId }: Props) {
       {/* Action buttons */}
       {canAct && (
         <div className="flex gap-2">
-          <Button size="sm" className="flex-1" onClick={() => setActiveForm("sale")}>
+          <Button size="sm" className="flex-1" onClick={() => openSaleForm(null)}>
             <ShoppingCart className="h-4 w-4 me-1" /> {t("reportSale")}
           </Button>
           <Button size="sm" variant="outline" className="flex-1" onClick={() => setActiveForm("return")}>
@@ -219,12 +234,16 @@ export function ConsignmentDetail({ consignment, consignmentId }: Props) {
       )}
 
       {/* Forms */}
+      <div id="csgn-forms" className="scroll-mt-4 empty:hidden space-y-4">
       {activeForm === "sale" && (
         <ReportSaleForm
           consignmentId={consignmentId}
           lines={c.lines.filter(l => Number(l.reportable_qty) > 0)}
+          currency={cur}
+          fmt={fmt}
+          initialLineId={saleLineId}
           onSuccess={handleSuccess}
-          onCancel={() => setActiveForm(null)}
+          onCancel={() => { setActiveForm(null); setSaleLineId(null); }}
         />
       )}
       {activeForm === "return" && (
@@ -242,6 +261,7 @@ export function ConsignmentDetail({ consignment, consignmentId }: Props) {
           onCancel={() => setActiveForm(null)}
         />
       )}
+      </div>
 
       {/* Product lines */}
       <Card>
@@ -312,9 +332,14 @@ export function ConsignmentDetail({ consignment, consignmentId }: Props) {
                   </div>
                 )}
                 {Number(line.reportable_qty) > 0 && canAct && (
-                  <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-1">
-                    {t("qtyReportable")}: {Number(line.reportable_qty).toLocaleString("en-US")}
-                  </p>
+                  <div className="flex items-center justify-between gap-2 mt-2">
+                    <p className="text-xs text-emerald-600 dark:text-emerald-400">
+                      {t("qtyReportable")}: {Number(line.reportable_qty).toLocaleString("en-US")}
+                    </p>
+                    <Button size="sm" variant="outline" className="h-7 px-2.5 text-xs shrink-0" onClick={() => openSaleForm(line.id)}>
+                      <ShoppingCart className="h-3.5 w-3.5 me-1" /> {t("reportSale")}
+                    </Button>
+                  </div>
                 )}
               </div>
             ))}

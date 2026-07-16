@@ -13,7 +13,9 @@ export async function POST(
     const { id } = await params;
     const body = await req.json();
 
-    // Never send sell_price from client — admin sets it
+    // Qty-only contract: the client never sets prices. sell_price=0 tells the
+    // gateway to value the report at the line's frozen invoice price (the exact
+    // amount the approval invoice will charge).
     const payload = {
       consignment_line_id: body.consignment_line_id,
       product_id: body.product_id,

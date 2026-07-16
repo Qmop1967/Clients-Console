@@ -945,6 +945,13 @@
     "eventDelivered": "Delivered",
     "eventSold": "Sold",
     "eventReplenished": "Replenished",
-    "reportStateInvoiced": "Invoiced"
+    "reportStateInvoiced": "Invoiced",
+    "willBeCharged": "Added to your balance on approval",
+    "sellAll": "Sell all",
+    "underReview": "under review",
+    "errorInvalidQty": "Invalid quantity.",
+    "errorPricing": "Report rejected due to a pricing error. Please contact us.",
+    "errorNotActive": "Reports are only allowed on an active consignment.",
+    "errorLineNotFound": "Product not found in this consignment."
   }
 }
