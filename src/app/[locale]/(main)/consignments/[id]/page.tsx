@@ -2,6 +2,7 @@ import { getTranslations } from "next-intl/server";
 import { auth } from "@/lib/auth/auth";
 import { redirect, notFound } from "next/navigation";
 import { ConsignmentDetail } from "@/components/consignments/consignment-detail";
+import { getImageVersions } from "@/lib/odoo/client";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -40,6 +41,14 @@ export default async function ConsignmentDetailPage({
           const { x_cost, x_margin, x_cogs, ...safe } = l; // keep x_invoice_unit_price — customer's own purchase price
           return safe;
         });
+        // Attach image_version per line (x_product_id is pp_id — product_product.id).
+        // Batched gateway lookup of ir.attachment write_date; missing => box-icon fallback.
+        const ppIds = data.lines.map((l: any) => Number(l.x_product_id)).filter(Boolean);
+        const versions = await getImageVersions(ppIds);
+        data.lines = data.lines.map((l: any) => ({
+          ...l,
+          image_version: versions.get(Number(l.x_product_id)),
+        }));
       }
     }
   } catch (e) {
