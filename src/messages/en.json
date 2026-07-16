@@ -88,6 +88,13 @@
     "passkeyEnrollDone": "Passkey sign-in enabled",
     "passkeyEnrollError": "Couldn't enable it. Please try again."
   },
+  "account": {
+    "customerNo": "Customer",
+    "verified": "Verified Account",
+    "priceTier": "Price Tier",
+    "priceTierValue": "Wholesale Trader",
+    "currency": "Currency"
+  },
   "nav": {
     "dashboard": "Dashboard",
     "products": "Products",
@@ -173,10 +180,15 @@
       "priceDesc": "Price (High to Low)",
       "stockDesc": "Stock (High to Low)"
     },
-    "heroTitle": "Welcome to TSH Shop, Sir",
+    "heroTitle": "Welcome to TSH Store",
     "heroBadge": "Updated daily",
     "heroGreeting": "Welcome, {name}",
     "heroSubtitle": "The newest arrivals and your best prices — something new every day",
+    "heroVerified": "Verified Account",
+    "heroCustomerNo": "Customer No.",
+    "heroPriceTier": "Price Tier",
+    "heroPriceTierValue": "Wholesale Trader",
+    "heroCurrency": "Currency",
     "newArrivals": "New Arrivals",
     "viewAll": "View all",
     "newBadge": "New",
@@ -659,7 +671,7 @@
       "sendMessage": "Send message",
       "inputPlaceholder": "Type your message here...",
       "inputHint": "Type in Iraqi dialect or English",
-      "welcome": "Hello, Sir! 👋\nI'm your TSH AI assistant. How can I help you today?",
+      "welcome": "Welcome! 👋\nI'm the TSH smart assistant. How can I help you today?",
       "loadingResponse": "Thinking, Sir...",
       "errorMessage": "Sorry, Sir, something went wrong. Please try again. 🙏",
       "offlineMessage": "AI assistant is currently unavailable, Sir. Please try again later.",

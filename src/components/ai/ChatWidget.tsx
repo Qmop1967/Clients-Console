@@ -115,7 +115,7 @@ export function ChatWidget() {
         {
           id: 'welcome',
           role: 'assistant',
-          content: 'هلا وغلا! 👋\nأنا المساعد الذكي حق TSH. شلون أساعدك اليوم؟',
+          content: 'أهلاً وسهلاً بكم! 👋\nأنا مساعد TSH الذكي، كيف يمكنني مساعدتكم اليوم؟',
           timestamp: Date.now(),
           quickReplies: [
             { label: 'ابي محول سريع', value: 'ابي محول سريع' },
