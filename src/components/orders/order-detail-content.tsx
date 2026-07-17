@@ -30,6 +30,7 @@ import {
   ExternalLink,
   MapPin,
   Clock,
+  Handshake,
 } from "lucide-react";
 import type { SalesOrder, ShipmentPackage, Shipment } from "@/types";
 import {
@@ -359,29 +360,41 @@ export function OrderDetailContent({
         {/* Quotation Approval */}
         {isDraft && !approved && !isCancelled && (
           <Card className="border-amber-300 bg-amber-50/50 dark:bg-amber-900/10">
-            <CardContent className="p-4 flex items-center justify-between gap-4">
+            <CardContent className="p-4 flex flex-col gap-3">
               <div className="flex items-center gap-3">
                 <div className="p-2 rounded-full bg-amber-100 dark:bg-amber-900/30">
                   <FileText className="h-5 w-5 text-amber-600" />
                 </div>
                 <div>
                   <p className="font-medium text-amber-800 dark:text-amber-300">عرض سعر</p>
-                  <p className="text-sm text-muted-foreground">هذا عرض سعر بانتظار موافقتك</p>
+                  <p className="text-sm text-muted-foreground">هذا عرض سعر بانتظار موافقتك — وافق مباشرة أو افتح غرفة التفاوض للاعتراض على الأسعار أو تعديل البنود</p>
                 </div>
               </div>
-              <Button
-                variant="default"
-                onClick={handleApproveQuotation}
-                disabled={approveLoading}
-                className="bg-green-600 hover:bg-green-700 text-white gap-2"
-              >
-                {approveLoading ? (
-                  <span className="animate-spin">⏳</span>
-                ) : (
-                  <CheckCircle2 className="h-4 w-4" />
-                )}
-                موافقة على عرض السعر
-              </Button>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <Button
+                  variant="default"
+                  onClick={handleApproveQuotation}
+                  disabled={approveLoading}
+                  className="flex-1 bg-green-600 hover:bg-green-700 text-white gap-2"
+                >
+                  {approveLoading ? (
+                    <span className="animate-spin">⏳</span>
+                  ) : (
+                    <CheckCircle2 className="h-4 w-4" />
+                  )}
+                  موافقة على عرض السعر
+                </Button>
+                <Button
+                  asChild
+                  variant="outline"
+                  className="flex-1 border-amber-400 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/30 gap-2"
+                >
+                  <Link href={`/quotations/${order.salesorder_id}/negotiate`}>
+                    <Handshake className="h-4 w-4" />
+                    التفاوض على العرض
+                  </Link>
+                </Button>
+              </div>
             </CardContent>
           </Card>
         )}

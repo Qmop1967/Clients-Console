@@ -30,6 +30,7 @@ import {
   Bell,
   Settings,
   Boxes,
+  Handshake,
 } from "lucide-react";
 import { signOut } from "next-auth/react";
 import { cn } from "@/lib/utils/cn";
@@ -71,6 +72,7 @@ export function MenuDrawer({
       label: t("sectionMain"),
       items: [
         { key: "orders", href: "/orders", icon: ShoppingBag, color: "text-blue-500" },
+        { key: "quotations", href: "/quotations", icon: Handshake, color: "text-emerald-400" },
         { key: "shop", href: "/shop", icon: Package, color: "text-emerald-500" },
         { key: "stockCheck", href: "/stock", icon: Search, color: "text-cyan-500" },
         { key: "consignments", href: "/consignments", icon: Boxes, color: "text-yellow-500" },
