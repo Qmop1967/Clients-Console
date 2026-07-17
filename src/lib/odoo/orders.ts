@@ -7,7 +7,8 @@
 
 import { odooSearchRead, odooRead, odooCreate, odooCount, odooWrite } from './client';
 import type { OdooSaleOrder, OdooSaleOrderLine } from './types';
-import type { SalesOrder, LineItem, ShipmentPackage, Shipment, PaginatedResponse } from '@/types';
+import type { SalesOrder, LineItem, ShipmentPackage, Shipment, Invoice, PaginatedResponse } from '@/types';
+import { getOrderInvoices } from './invoices';
 
 // ============================================
 // Fields
@@ -64,6 +65,7 @@ function formatOrder(o: OdooSaleOrder, lines: OdooSaleOrderLine[] = []): SalesOr
     exchange_rate: 1,
     notes: (o.note || undefined) as string | undefined,
     line_items: lines.filter(l => l.product_uom_qty > 0).map(formatLineItem),
+    invoice_ids: Array.isArray(o.invoice_ids) ? o.invoice_ids : [],
     created_time: o.create_date,
     last_modified_time: o.write_date,
   };
@@ -351,9 +353,17 @@ export async function getOrderSummaryStats(customerId: string): Promise<OrderSum
 export async function getOrderWithDetails(
   orderId: string,
   customerId: string
-): Promise<{ order: SalesOrder | null; packages: ShipmentPackage[]; shipments: Shipment[] }> {
+): Promise<{ order: SalesOrder | null; packages: ShipmentPackage[]; shipments: Shipment[]; invoices: Invoice[] }> {
   const order = await getOrder(orderId, customerId);
-  if (!order) return { order: null, packages: [], shipments: [] };
+  if (!order) return { order: null, packages: [], shipments: [], invoices: [] };
+
+  // Posted customer invoices linked to this order (light fetch — no lines)
+  let invoices: Invoice[] = [];
+  try {
+    invoices = await getOrderInvoices(order.invoice_ids || [], customerId);
+  } catch (e) {
+    console.error('[getOrderWithDetails] Failed to fetch invoices:', e);
+  }
 
   // Fetch real pickings from Odoo
   let shipments: Shipment[] = [];
@@ -403,7 +413,7 @@ export async function getOrderWithDetails(
     console.error('[getOrderWithDetails] Failed to fetch pickings:', e);
   }
 
-  return { order, packages: [], shipments };
+  return { order, packages: [], shipments, invoices };
 }
 
 // Status mapping for UI

@@ -326,3 +326,27 @@ export const INVOICE_STATUS_MAP: Record<string, { label: string; color: string }
   paid: { label: 'Paid', color: 'green' },
   void: { label: 'Void', color: 'gray' },
 };
+
+
+/**
+ * Get posted customer invoices linked to a sale order (light fetch — no lines/payments)
+ */
+export async function getOrderInvoices(
+  invoiceIds: number[],
+  customerId: string
+): Promise<Invoice[]> {
+  try {
+    if (!Array.isArray(invoiceIds) || invoiceIds.length === 0) return [];
+    const partnerId = parseInt(customerId, 10);
+    const invoices = await odooSearchRead<OdooInvoice>('account.move', [
+      ['id', 'in', invoiceIds],
+      ['move_type', '=', 'out_invoice'],
+      ['state', '=', 'posted'],
+      ['partner_id', '=', partnerId],
+    ], INVOICE_FIELDS, { order: 'invoice_date desc, id desc' });
+    return invoices.map((inv) => formatInvoice(inv));
+  } catch (error) {
+    console.error('[Odoo Invoices] Error fetching order invoices:', error);
+    return [];
+  }
+}

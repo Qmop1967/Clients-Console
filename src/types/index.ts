@@ -153,6 +153,7 @@ export interface SalesOrder {
   notes?: string;
   terms?: string;
   line_items: LineItem[];
+  invoice_ids?: number[];
   packages?: ShipmentPackage[];
   shipments?: Shipment[];
   created_time: string;

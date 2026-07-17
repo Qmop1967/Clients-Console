@@ -31,7 +31,7 @@ export default async function OrderDetailPage({
   const customerId = session.user.odooPartnerId || "";
 
   // Fetch order with packages and shipments in parallel
-  const { order, packages, shipments } = await getOrderWithDetails(id, customerId);
+  const { order, packages, shipments, invoices } = await getOrderWithDetails(id, customerId);
 
   if (!order) {
     notFound();
@@ -42,6 +42,7 @@ export default async function OrderDetailPage({
       order={order}
       packages={packages}
       shipments={shipments}
+      invoices={invoices}
       currencyCode={session.user.currencyCode || "IQD"}
     />
   );

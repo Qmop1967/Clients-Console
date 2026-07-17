@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { useTranslations } from "next-intl";
+import { Fragment, useState } from "react";
+import { useTranslations, useLocale } from "next-intl";
 import Image from "next/image";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -32,7 +32,7 @@ import {
   Clock,
   Handshake,
 } from "lucide-react";
-import type { SalesOrder, ShipmentPackage, Shipment } from "@/types";
+import type { SalesOrder, ShipmentPackage, Shipment, Invoice } from "@/types";
 import {
   ReceiptStatusBadge,
   ReceiptProgressBar,
@@ -46,6 +46,7 @@ interface OrderDetailContentProps {
   order: SalesOrder;
   packages: ShipmentPackage[];
   shipments: Shipment[];
+  invoices?: Invoice[];
   currencyCode: string;
 }
 
@@ -53,9 +54,12 @@ export function OrderDetailContent({
   order,
   packages,
   shipments,
+  invoices = [],
   currencyCode,
 }: OrderDetailContentProps) {
   const t = useTranslations("orders");
+  const tInv = useTranslations("invoices");
+  const locale = useLocale();
   const { toast } = useToast();
   const [packagesDialogOpen, setPackagesDialogOpen] = useState(false);
   const [shipmentsDialogOpen, setShipmentsDialogOpen] = useState(false);
@@ -139,8 +143,69 @@ export function OrderDetailContent({
     return statusOrder[statusLower] ?? -1;
   };
 
-  const currentStatusIndex = getStatusIndex(order.status);
+  const baseStatusIndex = getStatusIndex(order.status);
+  // Derive real progress from shipments/invoices (Odoo state alone stays 'confirmed')
+  const currentStatusIndex = (() => {
+    let idx = baseStatusIndex;
+    if (idx < 0) return idx;
+    if (invoices.length > 0) idx = Math.max(idx, 3);
+    else if (shipments.some((s) => s.status === "delivered")) idx = Math.max(idx, 2);
+    else if (
+      shipments.length > 0 &&
+      shipments.every((s) => ["ready", "ship", "deliver"].includes(s.fulfillment_stage || ""))
+    ) idx = Math.max(idx, 1);
+    return idx;
+  })();
   const isCancelled = order.status?.toLowerCase() === "cancelled";
+
+  const dateLocale = locale === "ar" ? "ar-IQ-u-nu-latn" : "en-US";
+  const formatDate = (d?: string, style: "long" | "short" = "short") => {
+    if (!d) return "";
+    const datePart = d.split(" ")[0];
+    const dt = new Date(`${datePart}T00:00:00`);
+    if (isNaN(dt.getTime())) return datePart;
+    return style === "long"
+      ? dt.toLocaleDateString(dateLocale, { weekday: "long", day: "numeric", month: "long", year: "numeric" })
+      : dt.toLocaleDateString(dateLocale, { day: "numeric", month: "long" });
+  };
+
+  const totalPieces = order.line_items?.reduce((sum, li) => sum + (li.quantity || 0), 0) || 0;
+
+  // Real timestamps per step (only shown when the step is completed and data exists)
+  const stepDates: (string | null)[] = [
+    order.date || null,
+    null,
+    shipments.find((s) => s.delivery_date)?.delivery_date || null,
+    invoices[0]?.date || null,
+  ];
+
+  const FULFILLMENT_STAGES = [
+    { key: "collect", label: t("stageCollect") },
+    { key: "pack", label: t("stagePack") },
+    { key: "ready", label: t("stageReady") },
+    { key: "ship", label: t("stageShip") },
+    { key: "deliver", label: t("stageDeliver") },
+  ];
+
+  const getShipmentBadge = (s: Shipment): { label: string; cls: string } => {
+    if (s.status === "delivered") return { label: t("shipDelivered"), cls: "bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/30" };
+    if (s.status === "cancelled") return { label: t("shipCancelled"), cls: "bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/30" };
+    switch (s.fulfillment_stage) {
+      case "collect": return { label: t("shipCollecting"), cls: "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30" };
+      case "pack": return { label: t("shipPacking"), cls: "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/30" };
+      case "ready": return { label: t("shipReady"), cls: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30" };
+      case "ship": return { label: t("shipInTransit"), cls: "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/30" };
+      case "deliver": return { label: t("shipDelivering"), cls: "bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border-cyan-500/30" };
+      default: return { label: t("shipPreparing"), cls: "bg-muted text-muted-foreground border-border" };
+    }
+  };
+
+  const getInvoiceStatusCls = (status: string) => {
+    if (status === "paid") return "bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/30";
+    if (status === "partially_paid") return "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30";
+    if (status === "overdue") return "bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/30";
+    return "bg-muted text-muted-foreground border-border";
+  };
 
   const getStatusInfo = (status: string) => {
     const statusLower = status?.toLowerCase() || "draft";
@@ -251,34 +316,46 @@ export function OrderDetailContent({
   const receiptTimeline = getReceiptTimeline();
 
   return (
-    <div className="container mx-auto px-4 py-6 max-w-4xl">
+    <div className="container mx-auto px-4 lg:px-6 py-6 max-w-[1500px]">
       <div className="space-y-6">
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-4 min-w-0">
             <Link href="/orders">
               <Button variant="ghost" size="icon" className="shrink-0">
-                <ArrowLeft className="h-5 w-5" />
+                <ArrowLeft className="h-5 w-5 rtl:rotate-180" />
               </Button>
             </Link>
-            <div className="flex items-center gap-3">
-              <div className={`p-3 rounded-xl ${statusInfo.bgColor} dark:bg-opacity-20`}>
+            <div className="flex items-center gap-3 min-w-0">
+              <div className={`p-3 rounded-xl ${statusInfo.bgColor} dark:bg-opacity-20 shrink-0`}>
                 <FileText className={`h-5 w-5 ${statusInfo.color}`} />
               </div>
-              <div>
-                <h1 className="text-xl sm:text-2xl font-bold">
-                  {order.salesorder_number}
+              <div className="min-w-0">
+                <h1 className="text-xl sm:text-2xl font-bold flex items-center gap-3 flex-wrap">
+                  <span dir="ltr">{order.salesorder_number}</span>
+                  <Badge variant={statusInfo.variant} className="text-xs sm:text-sm px-3 py-1">
+                    {statusInfo.label}
+                  </Badge>
                 </h1>
-                <p className="text-sm text-muted-foreground flex items-center gap-1">
+                <p className="text-sm text-muted-foreground flex items-center gap-1.5 flex-wrap">
                   <Calendar className="h-3.5 w-3.5" />
-                  {order.date}
+                  <span>{formatDate(order.date, "long")}</span>
+                  {(order.line_items?.length || 0) > 0 && (
+                    <span className="hidden sm:inline">· {t("productsMeta", { count: order.line_items.length })}</span>
+                  )}
+                  {shipments.length > 0 && (
+                    <span className="hidden sm:inline">· {t("shipmentsMeta", { count: shipments.length })}</span>
+                  )}
                 </p>
               </div>
             </div>
           </div>
-          <Badge variant={statusInfo.variant} className="text-sm px-4 py-1.5 self-start sm:self-auto">
-            {statusInfo.label}
-          </Badge>
+          <Link href={`/orders/${order.salesorder_id}/track`} className="shrink-0 self-start sm:self-auto">
+            <Button className="gap-2">
+              <MapPin className="h-4 w-4" />
+              {t("trackOrder")}
+            </Button>
+          </Link>
         </div>
 
         {/* Interactive Status Timeline */}
@@ -328,6 +405,11 @@ export function OrderDetailContent({
                       }`}>
                         {step.label}
                       </span>
+                      {isCompleted && stepDates[index] && (
+                        <span className="text-[10px] text-muted-foreground mt-0.5">
+                          {formatDate(stepDates[index] || undefined)}
+                        </span>
+                      )}
                       {isClickable && (
                         <span className="text-[10px] text-primary mt-0.5">
                           {index === 1 ? `${packages.length} ${t("packages")}` : `${shipments.length} ${t("shipment")}`}
@@ -411,7 +493,7 @@ export function OrderDetailContent({
         )}
 
         {/* Summary Cards */}
-        <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-4 grid-cols-2 lg:hidden">
           <Card className="bg-gradient-to-br from-blue-50 to-blue-100/50 dark:from-blue-900/20 dark:to-blue-800/10 border-blue-200/50">
             <CardContent className="p-4">
               <div className="flex items-center gap-2 text-blue-600 dark:text-blue-400 mb-2">
@@ -463,29 +545,21 @@ export function OrderDetailContent({
           )}
         </div>
 
-        {/* Customer Info */}
-        {order.customer_name && (
-          <Card>
-            <CardContent className="p-4 flex items-center gap-4">
-              <div className="p-3 rounded-full bg-muted">
-                <User className="h-5 w-5 text-muted-foreground" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">{t("customer")}</p>
-                <p className="font-semibold">{order.customer_name}</p>
-              </div>
-            </CardContent>
-          </Card>
-        )}
+        {/* Desktop: two-column layout — main content + sticky summary aside */}
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start">
+        <div className="space-y-6 min-w-0">
 
         {/* Line Items with Images */}
         {order.line_items && order.line_items.length > 0 && (
           <Card>
             <CardHeader className="pb-4">
               <div className="flex items-center justify-between">
-                <CardTitle className="flex items-center gap-2 text-lg">
+                <CardTitle className="flex items-center gap-2 text-lg flex-wrap">
                   <Package className="h-5 w-5" />
                   {t("orderDetails")}
+                  <span className="text-xs font-normal text-muted-foreground hidden lg:inline">
+                    {t("productsMeta", { count: order.line_items.length })} · {t("piecesMeta", { count: totalPieces })}
+                  </span>
                 </CardTitle>
                 {receiptTrackingEnabled && receiptTimeline.length > 0 && (
                   <Button variant="outline" size="sm" onClick={openTimelineModal}>
@@ -504,7 +578,104 @@ export function OrderDetailContent({
                   </p>
                 </div>
               )}
-              <div className="space-y-0 divide-y">
+              {/* Desktop table */}
+              <div className="hidden lg:block overflow-x-auto -mx-6 px-6">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b text-muted-foreground">
+                      <th className="text-start font-medium py-2.5 pe-4">{t("colProduct")}</th>
+                      <th className="text-start font-medium py-2.5 px-4 whitespace-nowrap">{t("colUnitPrice")}</th>
+                      <th className="text-start font-medium py-2.5 px-4">{t("colQty")}</th>
+                      <th className="text-end font-medium py-2.5 ps-4 whitespace-nowrap">{t("colTotal")}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {order.line_items.map((item, index) => {
+                      const dQuantityReceived = item.cf_quantity_received || 0;
+                      const dIsFullyReceived = dQuantityReceived >= item.quantity;
+                      const itemTitle = item.name || item.item_name || item.description || `Item #${index + 1}`;
+                      return (
+                        <Fragment key={`d-${item.line_item_id || index}`}>
+                        <tr className="border-b last:border-0 hover:bg-muted/40 transition-colors">
+                          <td className="py-3 pe-4">
+                            <div className="flex items-center gap-3 min-w-0">
+                              <div className="w-11 h-11 rounded-lg bg-muted shrink-0 overflow-hidden relative">
+                                {!imageErrors[item.item_id] ? (
+                                  <Image
+                                    src={getItemImageUrl(item.item_id)}
+                                    alt={item.item_name || "Product"}
+                                    fill
+                                    className="object-cover"
+                                    onError={() => handleImageError(item.item_id)}
+                                    sizes="44px"
+                                  />
+                                ) : (
+                                  <div className="w-full h-full flex items-center justify-center">
+                                    <Box className="h-5 w-5 text-muted-foreground" />
+                                  </div>
+                                )}
+                              </div>
+                              <div className="min-w-0">
+                                {item.item_id ? (
+                                  <Link href={`/shop/${item.item_id}`} className="font-medium hover:text-primary hover:underline block truncate max-w-[520px]" dir="auto">
+                                    {itemTitle}
+                                  </Link>
+                                ) : (
+                                  <p className="font-medium truncate max-w-[520px]" dir="auto">{itemTitle}</p>
+                                )}
+                                {(item.discount ?? 0) > 0 && (
+                                  <Badge variant="outline" className="mt-1 text-[10px] text-green-600 border-green-200 bg-green-50 dark:bg-green-900/20">
+                                    -{item.discount}% {t("discount")}
+                                  </Badge>
+                                )}
+                              </div>
+                            </div>
+                          </td>
+                          <td className="py-3 px-4 whitespace-nowrap text-muted-foreground">
+                            <span dir="ltr">{formatCurrency(item.rate, currency)}</span>
+                          </td>
+                          <td className="py-3 px-4 whitespace-nowrap">
+                            <Badge variant="secondary" className="font-normal">×{item.quantity}</Badge>
+                          </td>
+                          <td className="py-3 ps-4 whitespace-nowrap text-end font-bold">
+                            <span dir="ltr">{formatCurrency(item.item_total, currency)}</span>
+                          </td>
+                        </tr>
+                        {receiptTrackingEnabled && (
+                          <tr className="border-b last:border-0">
+                            <td colSpan={4} className="pb-3 pt-0 ps-14">
+                              <div className="flex items-center gap-3 flex-wrap">
+                                <ReceiptStatusBadge
+                                  quantityOrdered={item.quantity}
+                                  quantityReceived={dQuantityReceived}
+                                  size="sm"
+                                />
+                                <div className="flex-1 min-w-[160px] max-w-xs">
+                                  <ReceiptProgressBar
+                                    quantityOrdered={item.quantity}
+                                    quantityReceived={dQuantityReceived}
+                                    showLabel={false}
+                                  />
+                                </div>
+                                {!dIsFullyReceived && (
+                                  <Button size="sm" variant="outline" onClick={() => openReceiptModal(item)} className="text-xs">
+                                    <CheckCircle2 className="h-3 w-3 ltr:mr-1 rtl:ml-1" />
+                                    {t("receipt.markAsReceived")}
+                                  </Button>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                        </Fragment>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Mobile cards */}
+              <div className="space-y-0 divide-y lg:hidden">
                 {order.line_items.map((item, index) => {
                   const quantityReceived = item.cf_quantity_received || 0;
                   const isFullyReceived = quantityReceived >= item.quantity;
@@ -541,14 +712,14 @@ export function OrderDetailContent({
                           {item.sku && (
                             <p className="text-xs text-muted-foreground">SKU: {item.sku}</p>
                           )}
-                          {item.description && (item.name || item.item_name) && (
+                          {item.description && item.description !== item.name && item.description !== item.item_name && (
                             <p className="text-sm text-muted-foreground line-clamp-1">{item.description}</p>
                           )}
                           <div className="flex items-center gap-2 mt-1">
                             <Badge variant="secondary" className="text-xs font-normal">
                               {item.quantity} × {formatCurrency(item.rate, currency)}
                             </Badge>
-                            {item.discount && item.discount > 0 && (
+                            {(item.discount ?? 0) > 0 && (
                               <Badge variant="outline" className="text-xs text-green-600 border-green-200 bg-green-50">
                                 -{item.discount}% {t("discount")}
                               </Badge>
@@ -595,35 +766,68 @@ export function OrderDetailContent({
                 })}
               </div>
 
-              {/* Totals */}
-              <div className="mt-6 pt-4 border-t space-y-3">
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">{t("subtotal")}</span>
-                  <span>{formatCurrency(order.sub_total || order.total, currency)}</span>
-                </div>
-                {order.tax_total > 0 && (
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">{t("tax")}</span>
-                    <span>{formatCurrency(order.tax_total, currency)}</span>
-                  </div>
-                )}
-                {order.discount > 0 && (
-                  <div className="flex justify-between text-sm text-green-600">
-                    <span>{t("discount")}</span>
-                    <span>-{formatCurrency(order.discount, currency)}</span>
-                  </div>
-                )}
-                {order.shipping_charge > 0 && (
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">{t("shipping")}</span>
-                    <span>{formatCurrency(order.shipping_charge, currency)}</span>
-                  </div>
-                )}
-                <Separator />
-                <div className="flex justify-between text-lg font-bold pt-1">
-                  <span>{t("total")}</span>
-                  <span className="text-primary">{formatCurrency(order.total, currency)}</span>
-                </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Shipments — inline panel */}
+        {shipments.length > 0 && (
+          <Card>
+            <CardHeader className="pb-4">
+              <div className="flex items-center justify-between">
+                <CardTitle className="flex items-center gap-2 text-lg flex-wrap">
+                  <Truck className="h-5 w-5" />
+                  {t("shipmentTitle")}
+                  <span className="text-xs font-normal text-muted-foreground">
+                    {t("shipmentsMeta", { count: shipments.length })}
+                  </span>
+                </CardTitle>
+                <Button variant="outline" size="sm" onClick={() => setShipmentsDialogOpen(true)}>
+                  {t("viewDetails")}
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="pt-0">
+              <div className="space-y-0 divide-y">
+                {shipments.map((shipment) => {
+                  const badge = getShipmentBadge(shipment);
+                  const stageIdx = FULFILLMENT_STAGES.findIndex((st) => st.key === shipment.fulfillment_stage);
+                  return (
+                    <div key={shipment.shipment_id} className="py-3.5 first:pt-0 last:pb-0 flex flex-col sm:flex-row sm:items-center gap-3">
+                      <div className="flex items-center gap-3 flex-1 min-w-0">
+                        <div className="p-2.5 rounded-lg bg-muted shrink-0">
+                          <Truck className="h-4 w-4 text-muted-foreground" />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-semibold text-sm" dir="ltr">{shipment.shipment_number}</span>
+                            <Badge variant="outline" className={`text-[11px] ${badge.cls}`}>{badge.label}</Badge>
+                          </div>
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            {(shipment.package_count_actual || shipment.package_count || 0) > 0 && (
+                              <span>{shipment.package_count_actual || shipment.package_count} {t("carton")} · </span>
+                            )}
+                            <span>{t("carrier")}: {shipment.carrier_name || shipment.carrier || t("notSpecified")}</span>
+                          </p>
+                        </div>
+                      </div>
+                      {shipment.fulfillment_stage && (
+                        <div className="flex items-center gap-1 w-full sm:w-56 shrink-0">
+                          {FULFILLMENT_STAGES.map((st, i) => {
+                            const done = stageIdx >= 0 && i <= stageIdx;
+                            const cur = i === stageIdx;
+                            return (
+                              <div key={st.key} className="flex-1 flex flex-col items-center gap-0.5">
+                                <div className={`w-full h-1 rounded-full ${done ? (cur ? "bg-primary" : "bg-green-500") : "bg-muted"}`} />
+                                <span className={`text-[9px] ${done ? (cur ? "text-primary font-semibold" : "text-green-600 dark:text-green-400") : "text-muted-foreground"}`}>{st.label}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </CardContent>
           </Card>
@@ -641,20 +845,135 @@ export function OrderDetailContent({
           </Card>
         )}
 
-        {/* Actions */}
-        <div className="flex flex-wrap gap-3 pt-2">
-          <Link href="/orders">
-            <Button variant="outline" className="gap-2">
-              <ArrowLeft className="h-4 w-4" />
-              {t("backToOrders")}
-            </Button>
-          </Link>
-          <Link href="/shop">
-            <Button className="gap-2">
-              <ShoppingBag className="h-4 w-4" />
-              {t("continueShopping")}
-            </Button>
-          </Link>
+        </div>
+
+        {/* Aside — sticky summary column */}
+        <div className="space-y-6 lg:sticky lg:top-6">
+
+          {/* Financial summary */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <FileText className="h-4 w-4" />
+                {t("financialSummary")}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-0 space-y-3">
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">{t("subtotal")}</span>
+                <span dir="ltr">{formatCurrency(order.sub_total || order.total, currency)}</span>
+              </div>
+              {order.tax_total > 0 && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">{t("tax")}</span>
+                  <span dir="ltr">{formatCurrency(order.tax_total, currency)}</span>
+                </div>
+              )}
+              {order.discount > 0 && (
+                <div className="flex justify-between text-sm text-green-600">
+                  <span>{t("discount")}</span>
+                  <span dir="ltr">-{formatCurrency(order.discount, currency)}</span>
+                </div>
+              )}
+              {order.shipping_charge > 0 && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">{t("shipping")}</span>
+                  <span dir="ltr">{formatCurrency(order.shipping_charge, currency)}</span>
+                </div>
+              )}
+              <Separator />
+              <div className="flex justify-between text-lg font-bold pt-1">
+                <span>{t("total")}</span>
+                <span className="text-primary" dir="ltr">{formatCurrency(order.total, currency)}</span>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Invoices */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <FileText className="h-4 w-4" />
+                {tInv("title")}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-0">
+              {invoices.length > 0 ? (
+                <div className="space-y-2">
+                  {invoices.map((inv) => (
+                    <Link
+                      key={inv.invoice_id}
+                      href={`/invoices/${inv.invoice_id}`}
+                      className="flex items-center gap-3 p-3 rounded-lg border hover:bg-muted/50 transition-colors"
+                    >
+                      <div className="p-2 rounded-lg bg-muted shrink-0">
+                        <FileText className="h-4 w-4 text-muted-foreground" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold truncate" dir="ltr">{inv.invoice_number}</p>
+                        <p className="text-xs text-muted-foreground">{formatDate(inv.date)}</p>
+                      </div>
+                      <div className="text-end shrink-0">
+                        <p className="text-sm font-bold" dir="ltr">{formatCurrency(inv.total, inv.currency_code)}</p>
+                        <Badge variant="outline" className={`mt-0.5 text-[10px] ${getInvoiceStatusCls(inv.status)}`}>
+                          {tInv(`invoiceStatus.${inv.status}`)}
+                        </Badge>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              ) : (
+                <div className="flex items-center gap-3 p-3 rounded-lg border border-dashed text-sm text-muted-foreground">
+                  <Clock className="h-4 w-4 shrink-0" />
+                  {t("noInvoiceYet")}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Customer Info */}
+          {order.customer_name && (
+            <Card>
+              <CardContent className="p-4 flex items-center gap-4">
+                <div className="p-3 rounded-full bg-muted">
+                  <User className="h-5 w-5 text-muted-foreground" />
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">{t("customer")}</p>
+                  <p className="font-semibold">{order.customer_name}</p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Quick actions */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">{t("quickActions")}</CardTitle>
+            </CardHeader>
+            <CardContent className="pt-0 space-y-2">
+              <Link href={`/orders/${order.salesorder_id}/track`} className="block">
+                <Button className="w-full gap-2 justify-center">
+                  <MapPin className="h-4 w-4" />
+                  {t("trackOrder")}
+                </Button>
+              </Link>
+              <Link href="/shop" className="block">
+                <Button variant="outline" className="w-full gap-2 justify-center">
+                  <ShoppingBag className="h-4 w-4" />
+                  {t("continueShopping")}
+                </Button>
+              </Link>
+              <Link href="/orders" className="block">
+                <Button variant="ghost" className="w-full gap-2 justify-center text-muted-foreground">
+                  <ArrowLeft className="h-4 w-4 rtl:rotate-180" />
+                  {t("backToOrders")}
+                </Button>
+              </Link>
+            </CardContent>
+          </Card>
+
+        </div>
         </div>
       </div>
 
