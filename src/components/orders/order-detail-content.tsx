@@ -171,6 +171,17 @@ export function OrderDetailContent({
 
   const totalPieces = order.line_items?.reduce((sum, li) => sum + (li.quantity || 0), 0) || 0;
 
+  // Clean product title: prefer the product display name; split the [sku] prefix into its own chip
+  const cleanItem = (
+    item: { item_name?: string; name?: string; description?: string },
+    index: number
+  ): { sku: string | null; title: string } => {
+    const base = (item.item_name || item.name || item.description || `Item #${index + 1}`).trim();
+    const m = base.match(/^\[([^\]]+)\]\s*(.*)$/);
+    if (m && m[2]) return { sku: m[1], title: m[2] };
+    return { sku: null, title: base };
+  };
+
   // Real timestamps per step (only shown when the step is completed and data exists)
   const stepDates: (string | null)[] = [
     order.date || null,
@@ -188,22 +199,22 @@ export function OrderDetailContent({
   ];
 
   const getShipmentBadge = (s: Shipment): { label: string; cls: string } => {
-    if (s.status === "delivered") return { label: t("shipDelivered"), cls: "bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/30" };
-    if (s.status === "cancelled") return { label: t("shipCancelled"), cls: "bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/30" };
+    if (s.status === "delivered") return { label: t("shipDelivered"), cls: "bg-green-500/10 text-green-400 border-green-500/30" };
+    if (s.status === "cancelled") return { label: t("shipCancelled"), cls: "bg-red-500/10 text-red-400 border-red-500/30" };
     switch (s.fulfillment_stage) {
-      case "collect": return { label: t("shipCollecting"), cls: "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30" };
-      case "pack": return { label: t("shipPacking"), cls: "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/30" };
-      case "ready": return { label: t("shipReady"), cls: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30" };
-      case "ship": return { label: t("shipInTransit"), cls: "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/30" };
-      case "deliver": return { label: t("shipDelivering"), cls: "bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border-cyan-500/30" };
+      case "collect": return { label: t("shipCollecting"), cls: "bg-amber-500/10 text-amber-400 border-amber-500/30" };
+      case "pack": return { label: t("shipPacking"), cls: "bg-blue-500/10 text-blue-400 border-blue-500/30" };
+      case "ready": return { label: t("shipReady"), cls: "bg-emerald-500/10 text-emerald-400 border-emerald-500/30" };
+      case "ship": return { label: t("shipInTransit"), cls: "bg-indigo-500/10 text-indigo-400 border-indigo-500/30" };
+      case "deliver": return { label: t("shipDelivering"), cls: "bg-cyan-500/10 text-cyan-400 border-cyan-500/30" };
       default: return { label: t("shipPreparing"), cls: "bg-muted text-muted-foreground border-border" };
     }
   };
 
   const getInvoiceStatusCls = (status: string) => {
-    if (status === "paid") return "bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/30";
-    if (status === "partially_paid") return "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30";
-    if (status === "overdue") return "bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/30";
+    if (status === "paid") return "bg-green-500/10 text-green-400 border-green-500/30";
+    if (status === "partially_paid") return "bg-amber-500/10 text-amber-400 border-amber-500/30";
+    if (status === "overdue") return "bg-red-500/10 text-red-400 border-red-500/30";
     return "bg-muted text-muted-foreground border-border";
   };
 
@@ -215,15 +226,15 @@ export function OrderDetailContent({
       color: string;
       bgColor: string;
     }> = {
-      draft: { label: t("orderStatus.draft"), variant: "outline", color: "text-gray-600", bgColor: "bg-gray-100" },
-      pending: { label: t("orderStatus.draft"), variant: "outline", color: "text-amber-600", bgColor: "bg-amber-50" },
-      confirmed: { label: t("orderStatus.confirmed"), variant: "secondary", color: "text-blue-600", bgColor: "bg-blue-50" },
-      open: { label: t("orderStatus.confirmed"), variant: "secondary", color: "text-blue-600", bgColor: "bg-blue-50" },
-      packed: { label: t("orderStatus.packed"), variant: "secondary", color: "text-purple-600", bgColor: "bg-purple-50" },
-      shipped: { label: t("orderStatus.shipped"), variant: "secondary", color: "text-indigo-600", bgColor: "bg-indigo-50" },
-      delivered: { label: t("orderStatus.delivered"), variant: "default", color: "text-green-600", bgColor: "bg-green-50" },
-      invoiced: { label: t("orderStatus.invoiced"), variant: "default", color: "text-emerald-600", bgColor: "bg-emerald-50" },
-      cancelled: { label: t("orderStatus.cancelled"), variant: "destructive", color: "text-red-600", bgColor: "bg-red-50" },
+      draft: { label: t("orderStatus.draft"), variant: "outline", color: "text-gray-300", bgColor: "bg-gray-500/15" },
+      pending: { label: t("orderStatus.draft"), variant: "outline", color: "text-amber-400", bgColor: "bg-amber-500/15" },
+      confirmed: { label: t("orderStatus.confirmed"), variant: "secondary", color: "text-blue-400", bgColor: "bg-blue-500/15" },
+      open: { label: t("orderStatus.confirmed"), variant: "secondary", color: "text-blue-400", bgColor: "bg-blue-500/15" },
+      packed: { label: t("orderStatus.packed"), variant: "secondary", color: "text-purple-400", bgColor: "bg-purple-500/15" },
+      shipped: { label: t("orderStatus.shipped"), variant: "secondary", color: "text-indigo-400", bgColor: "bg-indigo-500/15" },
+      delivered: { label: t("orderStatus.delivered"), variant: "default", color: "text-green-400", bgColor: "bg-green-500/15" },
+      invoiced: { label: t("orderStatus.invoiced"), variant: "default", color: "text-emerald-400", bgColor: "bg-emerald-500/15" },
+      cancelled: { label: t("orderStatus.cancelled"), variant: "destructive", color: "text-red-400", bgColor: "bg-red-500/15" },
     };
     return statusMap[statusLower] || statusMap.draft;
   };
@@ -316,7 +327,7 @@ export function OrderDetailContent({
   const receiptTimeline = getReceiptTimeline();
 
   return (
-    <div className="container mx-auto px-4 lg:px-6 py-6 max-w-[1500px]">
+    <div className="container mx-auto px-4 lg:px-6 py-6 max-w-[1840px]">
       <div className="space-y-6">
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -327,7 +338,7 @@ export function OrderDetailContent({
               </Button>
             </Link>
             <div className="flex items-center gap-3 min-w-0">
-              <div className={`p-3 rounded-xl ${statusInfo.bgColor} dark:bg-opacity-20 shrink-0`}>
+              <div className={`p-3 rounded-xl ${statusInfo.bgColor} shrink-0`}>
                 <FileText className={`h-5 w-5 ${statusInfo.color}`} />
               </div>
               <div className="min-w-0">
@@ -441,14 +452,14 @@ export function OrderDetailContent({
 
         {/* Quotation Approval */}
         {isDraft && !approved && !isCancelled && (
-          <Card className="border-amber-300 bg-amber-50/50 dark:bg-amber-900/10">
+          <Card className="border-amber-500/30 bg-amber-500/[0.07]">
             <CardContent className="p-4 flex flex-col gap-3">
               <div className="flex items-center gap-3">
-                <div className="p-2 rounded-full bg-amber-100 dark:bg-amber-900/30">
+                <div className="p-2 rounded-full bg-amber-500/15">
                   <FileText className="h-5 w-5 text-amber-600" />
                 </div>
                 <div>
-                  <p className="font-medium text-amber-800 dark:text-amber-300">عرض سعر</p>
+                  <p className="font-medium text-amber-300">عرض سعر</p>
                   <p className="text-sm text-muted-foreground">هذا عرض سعر بانتظار موافقتك — وافق مباشرة أو افتح غرفة التفاوض للاعتراض على الأسعار أو تعديل البنود</p>
                 </div>
               </div>
@@ -469,7 +480,7 @@ export function OrderDetailContent({
                 <Button
                   asChild
                   variant="outline"
-                  className="flex-1 border-amber-400 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/30 gap-2"
+                  className="flex-1 border-amber-500/40 text-amber-300 hover:bg-amber-500/10 gap-2"
                 >
                   <Link href={`/quotations/${order.salesorder_id}/negotiate`}>
                     <Handshake className="h-4 w-4" />
@@ -482,21 +493,21 @@ export function OrderDetailContent({
         )}
 
         {approved && (
-          <Card className="border-green-300 bg-green-50/50 dark:bg-green-900/10">
+          <Card className="border-green-500/30 bg-green-500/[0.07]">
             <CardContent className="p-4 flex items-center gap-3">
-              <div className="p-2 rounded-full bg-green-100 dark:bg-green-900/30">
+              <div className="p-2 rounded-full bg-green-500/15">
                 <CheckCircle2 className="h-5 w-5 text-green-600" />
               </div>
-              <p className="font-medium text-green-800 dark:text-green-300">تمت الموافقة على عرض السعر</p>
+              <p className="font-medium text-green-300">تمت الموافقة على عرض السعر</p>
             </CardContent>
           </Card>
         )}
 
         {/* Summary Cards */}
         <div className="grid gap-4 grid-cols-2 lg:hidden">
-          <Card className="bg-gradient-to-br from-blue-50 to-blue-100/50 dark:from-blue-900/20 dark:to-blue-800/10 border-blue-200/50">
+          <Card className="bg-blue-500/[0.08] border-blue-500/20">
             <CardContent className="p-4">
-              <div className="flex items-center gap-2 text-blue-600 dark:text-blue-400 mb-2">
+              <div className="flex items-center gap-2 text-blue-400 mb-2">
                 <ShoppingBag className="h-4 w-4" />
                 <span className="text-xs font-medium uppercase tracking-wide">{t("total")}</span>
               </div>
@@ -504,9 +515,9 @@ export function OrderDetailContent({
             </CardContent>
           </Card>
 
-          <Card className="bg-gradient-to-br from-purple-50 to-purple-100/50 dark:from-purple-900/20 dark:to-purple-800/10 border-purple-200/50">
+          <Card className="bg-purple-500/[0.08] border-purple-500/20">
             <CardContent className="p-4">
-              <div className="flex items-center gap-2 text-purple-600 dark:text-purple-400 mb-2">
+              <div className="flex items-center gap-2 text-purple-400 mb-2">
                 <Package className="h-4 w-4" />
                 <span className="text-xs font-medium uppercase tracking-wide">{t("items")}</span>
               </div>
@@ -516,11 +527,11 @@ export function OrderDetailContent({
 
           {packages.length > 0 && (
             <Card
-              className="bg-gradient-to-br from-amber-50 to-amber-100/50 dark:from-amber-900/20 dark:to-amber-800/10 border-amber-200/50 cursor-pointer hover:shadow-md transition-shadow"
+              className="bg-amber-500/[0.08] border-amber-500/20 cursor-pointer hover:shadow-md transition-shadow"
               onClick={() => setPackagesDialogOpen(true)}
             >
               <CardContent className="p-4">
-                <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400 mb-2">
+                <div className="flex items-center gap-2 text-amber-400 mb-2">
                   <PackageCheck className="h-4 w-4" />
                   <span className="text-xs font-medium uppercase tracking-wide">{t("packages")}</span>
                 </div>
@@ -531,11 +542,11 @@ export function OrderDetailContent({
 
           {shipments.length > 0 && (
             <Card
-              className="bg-gradient-to-br from-green-50 to-green-100/50 dark:from-green-900/20 dark:to-green-800/10 border-green-200/50 cursor-pointer hover:shadow-md transition-shadow"
+              className="bg-green-500/[0.08] border-green-500/20 cursor-pointer hover:shadow-md transition-shadow"
               onClick={() => setShipmentsDialogOpen(true)}
             >
               <CardContent className="p-4">
-                <div className="flex items-center gap-2 text-green-600 dark:text-green-400 mb-2">
+                <div className="flex items-center gap-2 text-green-400 mb-2">
                   <Truck className="h-4 w-4" />
                   <span className="text-xs font-medium uppercase tracking-wide">{t("shipment")}</span>
                 </div>
@@ -571,8 +582,8 @@ export function OrderDetailContent({
             </CardHeader>
             <CardContent className="pt-0">
               {receiptTrackingEnabled && (
-                <div className="mb-4 p-3 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200">
-                  <p className="text-sm text-blue-700 dark:text-blue-400 flex items-center gap-2">
+                <div className="mb-4 p-3 rounded-lg bg-blue-500/10 border border-blue-500/30">
+                  <p className="text-sm text-blue-300 flex items-center gap-2">
                     <Clock className="h-4 w-4" />
                     {t("receipt.title")}
                   </p>
@@ -580,34 +591,40 @@ export function OrderDetailContent({
               )}
               {/* Desktop table */}
               <div className="hidden lg:block overflow-x-auto -mx-6 px-6">
-                <table className="w-full text-sm">
+                <table className="w-full text-sm table-fixed">
+                  <colgroup>
+                    <col />
+                    <col className="w-[120px]" />
+                    <col className="w-[84px]" />
+                    <col className="w-[150px]" />
+                  </colgroup>
                   <thead>
                     <tr className="border-b text-muted-foreground">
                       <th className="text-start font-medium py-2.5 pe-4">{t("colProduct")}</th>
-                      <th className="text-start font-medium py-2.5 px-4 whitespace-nowrap">{t("colUnitPrice")}</th>
-                      <th className="text-start font-medium py-2.5 px-4">{t("colQty")}</th>
-                      <th className="text-end font-medium py-2.5 ps-4 whitespace-nowrap">{t("colTotal")}</th>
+                      <th className="text-start font-medium py-2.5 px-2 whitespace-nowrap">{t("colUnitPrice")}</th>
+                      <th className="text-start font-medium py-2.5 px-2">{t("colQty")}</th>
+                      <th className="text-end font-medium py-2.5 ps-2 whitespace-nowrap">{t("colTotal")}</th>
                     </tr>
                   </thead>
                   <tbody>
                     {order.line_items.map((item, index) => {
                       const dQuantityReceived = item.cf_quantity_received || 0;
                       const dIsFullyReceived = dQuantityReceived >= item.quantity;
-                      const itemTitle = item.name || item.item_name || item.description || `Item #${index + 1}`;
+                      const { sku: dSku, title: dTitle } = cleanItem(item, index);
                       return (
                         <Fragment key={`d-${item.line_item_id || index}`}>
                         <tr className="border-b last:border-0 hover:bg-muted/40 transition-colors">
                           <td className="py-3 pe-4">
                             <div className="flex items-center gap-3 min-w-0">
-                              <div className="w-11 h-11 rounded-lg bg-muted shrink-0 overflow-hidden relative">
+                              <div className="w-14 h-14 rounded-lg bg-muted shrink-0 overflow-hidden relative">
                                 {!imageErrors[item.item_id] ? (
                                   <Image
                                     src={getItemImageUrl(item.item_id)}
-                                    alt={item.item_name || "Product"}
+                                    alt={dTitle}
                                     fill
                                     className="object-cover"
                                     onError={() => handleImageError(item.item_id)}
-                                    sizes="44px"
+                                    sizes="56px"
                                   />
                                 ) : (
                                   <div className="w-full h-full flex items-center justify-center">
@@ -617,27 +634,32 @@ export function OrderDetailContent({
                               </div>
                               <div className="min-w-0">
                                 {item.item_id ? (
-                                  <Link href={`/shop/${item.item_id}`} className="font-medium hover:text-primary hover:underline block truncate max-w-[520px]" dir="auto">
-                                    {itemTitle}
+                                  <Link href={`/shop/${item.item_id}`} className="font-medium hover:text-primary hover:underline block truncate" dir="ltr">
+                                    {dTitle}
                                   </Link>
                                 ) : (
-                                  <p className="font-medium truncate max-w-[520px]" dir="auto">{itemTitle}</p>
+                                  <p className="font-medium truncate" dir="ltr">{dTitle}</p>
                                 )}
-                                {(item.discount ?? 0) > 0 && (
-                                  <Badge variant="outline" className="mt-1 text-[10px] text-green-600 border-green-200 bg-green-50 dark:bg-green-900/20">
-                                    -{item.discount}% {t("discount")}
-                                  </Badge>
-                                )}
+                                <div className="flex items-center gap-2 mt-1 flex-wrap">
+                                  {dSku && (
+                                    <span dir="ltr" className="text-[10px] font-mono text-muted-foreground bg-muted/70 border border-border rounded px-1.5 py-px">{dSku}</span>
+                                  )}
+                                  {(item.discount ?? 0) > 0 && (
+                                    <Badge variant="outline" className="text-[10px] text-green-400 border-green-500/30 bg-green-500/10">
+                                      -{item.discount}% {t("discount")}
+                                    </Badge>
+                                  )}
+                                </div>
                               </div>
                             </div>
                           </td>
-                          <td className="py-3 px-4 whitespace-nowrap text-muted-foreground">
+                          <td className="py-3 px-2 whitespace-nowrap text-foreground/80">
                             <span dir="ltr">{formatCurrency(item.rate, currency)}</span>
                           </td>
-                          <td className="py-3 px-4 whitespace-nowrap">
-                            <Badge variant="secondary" className="font-normal">×{item.quantity}</Badge>
+                          <td className="py-3 px-2 whitespace-nowrap">
+                            <Badge variant="secondary" className="font-semibold">×{item.quantity}</Badge>
                           </td>
-                          <td className="py-3 ps-4 whitespace-nowrap text-end font-bold">
+                          <td className="py-3 ps-2 whitespace-nowrap text-end font-bold text-[15px]">
                             <span dir="ltr">{formatCurrency(item.item_total, currency)}</span>
                           </td>
                         </tr>
@@ -679,6 +701,7 @@ export function OrderDetailContent({
                 {order.line_items.map((item, index) => {
                   const quantityReceived = item.cf_quantity_received || 0;
                   const isFullyReceived = quantityReceived >= item.quantity;
+                  const { sku: mSku, title: mTitle } = cleanItem(item, index);
 
                   return (
                     <div
@@ -706,21 +729,16 @@ export function OrderDetailContent({
 
                         {/* Item Details */}
                         <div className="flex-1 min-w-0">
-                          <p className="font-medium text-sm sm:text-base">
-                            {item.name || item.item_name || item.description || `Item #${index + 1}`}
-                          </p>
-                          {item.sku && (
-                            <p className="text-xs text-muted-foreground">SKU: {item.sku}</p>
-                          )}
-                          {item.description && item.description !== item.name && item.description !== item.item_name && (
-                            <p className="text-sm text-muted-foreground line-clamp-1">{item.description}</p>
+                          <p className="font-medium text-sm sm:text-base truncate" dir="ltr">{mTitle}</p>
+                          {mSku && (
+                            <p className="text-[10px] font-mono text-muted-foreground mt-0.5" dir="ltr">{mSku}</p>
                           )}
                           <div className="flex items-center gap-2 mt-1">
                             <Badge variant="secondary" className="text-xs font-normal">
                               {item.quantity} × {formatCurrency(item.rate, currency)}
                             </Badge>
                             {(item.discount ?? 0) > 0 && (
-                              <Badge variant="outline" className="text-xs text-green-600 border-green-200 bg-green-50">
+                              <Badge variant="outline" className="text-xs text-green-400 border-green-500/30 bg-green-500/10">
                                 -{item.discount}% {t("discount")}
                               </Badge>
                             )}
@@ -819,7 +837,7 @@ export function OrderDetailContent({
                             return (
                               <div key={st.key} className="flex-1 flex flex-col items-center gap-0.5">
                                 <div className={`w-full h-1 rounded-full ${done ? (cur ? "bg-primary" : "bg-green-500") : "bg-muted"}`} />
-                                <span className={`text-[9px] ${done ? (cur ? "text-primary font-semibold" : "text-green-600 dark:text-green-400") : "text-muted-foreground"}`}>{st.label}</span>
+                                <span className={`text-[9px] ${done ? (cur ? "text-primary font-semibold" : "text-green-400") : "text-muted-foreground"}`}>{st.label}</span>
                               </div>
                             );
                           })}
@@ -1033,9 +1051,9 @@ export function OrderDetailContent({
 
                     {/* Carrier Badge if present */}
                     {pkg.carrier && (
-                      <div className="flex items-center gap-2 p-2 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
+                      <div className="flex items-center gap-2 p-2 rounded-lg bg-green-500/10 border border-green-500/30">
                         <Truck className="h-4 w-4 text-green-600" />
-                        <span className="text-sm font-medium text-green-700 dark:text-green-400">{pkg.carrier}</span>
+                        <span className="text-sm font-medium text-green-300">{pkg.carrier}</span>
                       </div>
                     )}
 
@@ -1109,7 +1127,7 @@ export function OrderDetailContent({
                 <CardContent className="p-4 space-y-4">
                   {/* Carrier Info */}
                   <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
-                    <div className="p-2 rounded-full bg-green-100 dark:bg-green-900/30">
+                    <div className="p-2 rounded-full bg-green-500/15">
                       <Truck className="h-4 w-4 text-green-600" />
                     </div>
                     <div>
@@ -1140,8 +1158,8 @@ export function OrderDetailContent({
 
                   {/* Handoff Info */}
                   {shipment.handoff_state === "handed_off" && (
-                    <div className="p-3 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 space-y-2">
-                      <div className="flex items-center gap-2 text-green-700 dark:text-green-400 text-sm font-semibold">
+                    <div className="p-3 rounded-lg bg-green-500/10 border border-green-500/30 space-y-2">
+                      <div className="flex items-center gap-2 text-green-300 text-sm font-semibold">
                         <Truck className="h-4 w-4" />
                         <span>تم التسليم للناقل</span>
                       </div>
@@ -1195,7 +1213,7 @@ export function OrderDetailContent({
                         return (
                           <div key={s.key} className="flex-1 flex flex-col items-center gap-0.5">
                             <div className={`w-full h-1 rounded-full ${done ? "bg-green-500" : "bg-muted"}`} />
-                            <span className={`text-[9px] ${done ? "text-green-600 dark:text-green-400" : "text-muted-foreground"}`}>{s.label}</span>
+                            <span className={`text-[9px] ${done ? "text-green-400" : "text-muted-foreground"}`}>{s.label}</span>
                           </div>
                         );
                       })}

@@ -94,6 +94,13 @@ function nItems(n: number): string {
   return `${n} بنداً`;
 }
 
+function splitSku(raw: string): { sku: string | null; name: string } {
+  const t = (raw || "").trim();
+  const m = t.match(/^\[([^\]]+)\]\s*(.*)$/);
+  if (m && m[2]) return { sku: m[1], name: m[2] };
+  return { sku: null, name: t };
+}
+
 type ConfirmState = { type: "delete"; line: Line } | { type: "cancel" } | null;
 
 export default function NegotiationRoom({ orderId, currencyCode }: { orderId: number; currencyCode: string }) {
@@ -385,7 +392,7 @@ export default function NegotiationRoom({ orderId, currencyCode }: { orderId: nu
   }
 
   return (
-    <div className="mx-auto max-w-2xl lg:max-w-[1440px] pb-44 lg:pb-12">
+    <div className="mx-auto max-w-2xl lg:max-w-[1840px] pb-44 lg:pb-12">
       {/* Header */}
       <div className="flex items-center gap-2 mb-3 flex-wrap">
         <button onClick={() => router.back()} className="p-2 -mr-2 rounded-lg hover:bg-white/5 text-gray-400">
@@ -481,44 +488,39 @@ export default function NegotiationRoom({ orderId, currencyCode }: { orderId: nu
                 const isReviewed = l.lineStatus !== "pending";
                 const showActions = canActOnLine && (!isReviewed || expanded[l.id]);
                 const hint = objLine === l.id ? objPctHint(l) : null;
+                const psn = splitSku(l.productName);
                 return (
                   <div key={l.id} className={`rounded-2xl border border-white/10 border-s-[3px] ${ls.border} bg-white/[0.03] p-3`}>
                     <div className="flex items-center gap-3">
-                      <div className="w-11 h-11 rounded-lg bg-white/5 border border-white/10 shrink-0 overflow-hidden relative">
+                      <div className="w-14 h-14 rounded-xl bg-white/5 border border-white/10 shrink-0 overflow-hidden relative">
                         {l.productId && !imgErr[l.id] ? (
-                          <Image src={`/api/images/${l.productId}`} alt={l.productName || "Product"} fill sizes="44px"
+                          <Image src={`/api/images/${l.productId}`} alt={psn.name || "Product"} fill sizes="56px"
                             className="object-cover" onError={() => setImgErr((s) => ({ ...s, [l.id]: true }))} />
                         ) : (
                           <div className="w-full h-full flex items-center justify-center"><Package className="w-5 h-5 text-gray-600" /></div>
                         )}
                       </div>
                       <div className="min-w-0 flex-1">
-                        <p className="text-sm font-semibold text-white truncate" dir="ltr">{l.productName}</p>
-                        <div className="flex items-center gap-2.5 mt-1 text-xs text-gray-400 flex-wrap">
-                          <span dir="ltr">×{l.quantity}</span>
-                          {priceChanged ? (
-                            <>
-                              <span dir="ltr" className="whitespace-nowrap">
-                                <span className="line-through text-gray-500">{fmtMoney(l.originalPrice, cur)}</span>
-                                <span className="mx-1 text-gray-500">→</span>
-                                <span className="text-white font-semibold">{fmtMoney(l.priceUnit, cur)}</span>
-                              </span>
-                              {dropPct > 0 && (
-                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400 whitespace-nowrap" dir="ltr">
-                                  −{dropPct}%
-                                </span>
-                              )}
-                              {dropPct < 0 && (
-                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/15 text-red-400 whitespace-nowrap" dir="ltr">
-                                  +{Math.abs(dropPct)}%
-                                </span>
-                              )}
-                            </>
-                          ) : (
-                            <span dir="ltr" className="text-gray-200">{fmtMoney(l.priceUnit, cur)}</span>
+                        <p className="text-sm font-semibold text-white truncate" dir="ltr">{psn.name}</p>
+                        <div className="flex items-center gap-2 mt-1 flex-wrap">
+                          {psn.sku && (
+                            <span dir="ltr" className="text-[10px] font-mono text-gray-400 bg-white/5 border border-white/10 rounded px-1.5 py-px">{psn.sku}</span>
                           )}
                           {l.customerAdded && <span className="text-[10px] px-1.5 py-0.5 rounded bg-sky-500/15 text-sky-300">أضفته أنت</span>}
+                          {priceChanged && (
+                            <span dir="ltr" className="text-[11px] line-through text-gray-500 whitespace-nowrap">{fmtMoney(l.originalPrice, cur)}</span>
+                          )}
+                          {priceChanged && dropPct > 0 && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400 whitespace-nowrap" dir="ltr">−{dropPct}%</span>
+                          )}
+                          {priceChanged && dropPct < 0 && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/15 text-red-400 whitespace-nowrap" dir="ltr">+{Math.abs(dropPct)}%</span>
+                          )}
                         </div>
+                      </div>
+                      <div className="text-end shrink-0">
+                        <p className="text-[15px] font-extrabold text-white whitespace-nowrap" dir="ltr">{fmtMoney(l.priceUnit, cur)}</p>
+                        <p className="text-[11px] text-gray-400 mt-0.5 whitespace-nowrap" dir="ltr">×{l.quantity}{l.quantity > 1 ? ` = ${fmtMoney(l.priceUnit * l.quantity, cur)}` : ""}</p>
                       </div>
                       <span className={`text-[11px] px-2 py-1 rounded-lg shrink-0 ${ls.cls}`}>{ls.label}</span>
                       {canActOnLine && isReviewed && !expanded[l.id] && (
@@ -684,7 +686,7 @@ export default function NegotiationRoom({ orderId, currencyCode }: { orderId: nu
               <>
                 <h3 className="text-base font-bold text-white mb-1.5">حذف المنتج من العرض؟</h3>
                 <p className="text-sm text-gray-300 leading-7">
-                  سيُحذف <bdi dir="ltr" className="font-semibold text-white">{confirmState.line.productName}</bdi> من عرض السعر.
+                  سيُحذف <bdi dir="ltr" className="font-semibold text-white">{splitSku(confirmState.line.productName).name}</bdi> من عرض السعر.
                 </p>
                 <p className="text-[11px] text-red-300/80 mt-1 mb-4">لا يمكن التراجع — يمكنك إعادة إضافته من زر «إضافة منتج» بسعر القائمة.</p>
               </>
