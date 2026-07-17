@@ -11,7 +11,7 @@ const GATEWAY_URL = process.env.API_GATEWAY_URL || "http://localhost:3010";
 const API_KEY = process.env.API_KEY || "";
 
 async function forward(
-  method: "GET" | "POST",
+  method: "GET" | "POST" | "DELETE",
   orderId: string,
   action: string[] | undefined,
   partnerId: number,
@@ -27,7 +27,7 @@ async function forward(
         "x-api-key": API_KEY,
         "x-partner-id": String(partnerId),
       },
-      ...(method === "POST" ? { body: JSON.stringify(body || {}) } : {}),
+      ...(method !== "GET" ? { body: JSON.stringify(body || {}) } : {}),
       cache: "no-store",
     });
     const data = await resp.json().catch(() => ({ success: false, message: "خطأ في الاستجابة" }));
@@ -65,4 +65,15 @@ export async function POST(
   const { orderId, action } = await params;
   const body = await req.json().catch(() => ({}));
   return forward("POST", orderId, action, partnerId, body);
+}
+
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: Promise<{ orderId: string; action?: string[] }> },
+) {
+  const partnerId = await requirePartner();
+  if (!partnerId) return NextResponse.json({ success: false, message: "غير مصرح" }, { status: 401 });
+  const { orderId, action } = await params;
+  const body = await req.json().catch(() => ({}));
+  return forward("DELETE", orderId, action, partnerId, body);
 }

@@ -26,7 +26,7 @@ interface Round { round: number; actor: string; actorName: string; from: string;
 interface Msg { body: string; author: string; at: string; }
 interface Perms {
   canStart?: boolean; canCommitRound?: boolean; canObject?: boolean; canNote?: boolean;
-  canApproveLine?: boolean; canRequestRemove?: boolean; canAddLine?: boolean;
+  canApproveLine?: boolean; canRequestRemove?: boolean; canRemoveLine?: boolean; canAddLine?: boolean;
   canMessage?: boolean; canCustomerConfirm?: boolean; canCancel?: boolean;
 }
 interface View {
@@ -41,7 +41,7 @@ interface View {
 
 const STATE_UI: Record<string, { label: string; cls: string; hint: string }> = {
   none:              { label: "لم يبدأ التفاوض",        cls: "bg-gray-500/15 text-gray-300 border-gray-500/30", hint: "افتح غرفة التفاوض لمراجعة العرض والردّ عليه." },
-  awaiting_customer: { label: "دورك الآن",              cls: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30", hint: "راجع البنود، اعترض أو علّق أو وافق، ثم أرسل ردّك للمندوب أو أكّد العرض." },
+  awaiting_customer: { label: "دورك الآن",              cls: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30", hint: "راجع البنود — احذف أو اعترض أو أضف؛ تغييراتك تُحفظ تلقائياً. عند الانتهاء أرسل ردّك للمندوب أو أكّد العرض النهائي." },
   awaiting_rep:      { label: "بانتظار المندوب",        cls: "bg-amber-500/15 text-amber-400 border-amber-500/30", hint: "أرسلنا ردّك للمندوب، بانتظار مراجعته." },
   pending_admin:     { label: "بانتظار موافقة الإدارة",  cls: "bg-blue-500/15 text-blue-400 border-blue-500/30", hint: "العرض بسعر دون القائمة — بانتظار موافقة الإدارة." },
   confirmed:         { label: "تم التأكيد ✅",           cls: "bg-emerald-600/20 text-emerald-300 border-emerald-500/40", hint: "تم تأكيد العرض وإقفال التفاوض." },
@@ -129,12 +129,12 @@ export default function NegotiationRoom({ orderId, currencyCode }: { orderId: nu
     return () => clearTimeout(t);
   }, [pq, addOpen]);
 
-  async function act(path: string, body: Record<string, unknown>, key: string, okMsg?: string): Promise<boolean> {
+  async function act(path: string, body: Record<string, unknown>, key: string, okMsg?: string, method: "POST" | "DELETE" = "POST"): Promise<boolean> {
     setBusy(key); setErr("");
     try {
       const rev = view?.order?.x_revision_number ?? 0;
       const r = await fetch(`/api/orders/${orderId}/nego${path}`, {
-        method: "POST",
+        method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ expected_revision_number: rev, ...body }),
       });
@@ -263,9 +263,11 @@ export default function NegotiationRoom({ orderId, currencyCode }: { orderId: nu
                       <button onClick={() => act(`/line/${l.id}/approve`, {}, `appr-${l.id}`, "تم قبول السطر")} disabled={busy === `appr-${l.id}`}
                         className="text-xs px-3 py-1.5 rounded-lg bg-emerald-500/15 text-emerald-300 border border-emerald-500/25 flex items-center gap-1">
                         {busy === `appr-${l.id}` ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />} موافق</button>
-                      <button onClick={() => act(`/line/${l.id}/request-remove`, {}, `rm-${l.id}`, "أُرسل طلب حذف السطر")} disabled={busy === `rm-${l.id}`}
+                      {p.canRemoveLine && (
+                        <button onClick={() => { if (confirm(`حذف «${l.productName}» من العرض؟`)) act(`/line/${l.id}`, { idempotency_key: `delline-${orderId}-${l.id}-${view?.order?.x_revision_number}` }, `rm-${l.id}`, "حُذف المنتج من العرض", "DELETE"); }} disabled={busy === `rm-${l.id}`}
                         className="text-xs px-3 py-1.5 rounded-lg bg-red-500/15 text-red-300 border border-red-500/25 flex items-center gap-1">
-                        {busy === `rm-${l.id}` ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />} طلب حذف</button>
+                        {busy === `rm-${l.id}` ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />} حذف</button>
+                      )}
                     </div>
 
                     {/* Objection inline form */}
