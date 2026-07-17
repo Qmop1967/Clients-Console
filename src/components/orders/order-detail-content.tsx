@@ -110,12 +110,13 @@ export function OrderDetailContent({
   const formatCurrency = (amount: number, currency?: string) => {
     const curr = currency || order.currency_code || currencyCode;
     const decimals = curr === "IQD" ? 0 : 2;
+    const label = curr === "IQD" ? "د.ع" : curr === "USD" ? "$" : curr;
     return (
       new Intl.NumberFormat("en-US", {
         style: "decimal",
         minimumFractionDigits: decimals,
         maximumFractionDigits: decimals,
-      }).format(amount) + ` ${curr}`
+      }).format(amount) + ` ${label}`
     );
   };
 
