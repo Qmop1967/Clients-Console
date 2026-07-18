@@ -33,7 +33,11 @@
     "currency": {
       "iqd": "د.ع",
       "usd": "دولار"
-    }
+    },
+    "brandStore": "المتجر الإلكتروني",
+    "brandCompany": "شركة يد العنكبوت التقنية",
+    "whatsappSales": "واتساب المبيعات",
+    "whatsappPrefill": "مرحباً، لدي استفسار عن منتجاتكم"
   },
   "auth": {
     "login": "تسجيل الدخول",
@@ -238,7 +242,22 @@
     "brand": "العلامة التجارية",
     "minimumOrder": "الحد الأدنى للطلب",
     "technicalSpecs": "المواصفات الفنية",
-    "uses": "الاستخدامات"
+    "uses": "الاستخدامات",
+    "headerSearchPlaceholder": "ابحث باسم المنتج أو رمز SKU أو الفئة…",
+    "searching": "جارِ البحث…",
+    "noSuggestions": "لا توجد نتائج مطابقة",
+    "suggestProducts": "منتجات",
+    "suggestCategories": "فئات",
+    "showAllResults": "عرض كل نتائج «{query}»",
+    "pricesFresh": "الأسعار محدّثة يومياً",
+    "imagePending": "الصورة قيد التجهيز",
+    "copySku": "نسخ رمز المنتج",
+    "perPage": "{count} بالصفحة",
+    "cartonLine": "الكارتون ({qty} قطعة):",
+    "promoAria": "عروض المتجر",
+    "quickReorderHint": "تابع طلباتك وأعد الطلب",
+    "quickStatementHint": "رصيدك وحركاتك",
+    "quickInvoicesHint": "فواتيرك وتفاصيلها"
   },
   "orders": {
     "title": "الطلبات",
@@ -609,7 +628,10 @@
     "allRightsReserved": "جميع الحقوق محفوظة.",
     "contactUs": "اتصل بنا",
     "terms": "شروط الخدمة",
-    "privacy": "سياسة الخصوصية"
+    "privacy": "سياسة الخصوصية",
+    "aboutShort": "تجهيز الحاسبات وملحقاتها وأنظمة المراقبة والشبكات لتجّار العراق — أسعار جملة محدّثة يومياً.",
+    "quickLinks": "روابط سريعة",
+    "legalName": "شركة يد العنكبوت التقنية للتجارة العامة (م.م)"
   },
   "publicSupport": {
     "title": "مركز الدعم",

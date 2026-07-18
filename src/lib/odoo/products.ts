@@ -438,7 +438,7 @@ export async function getDirectImageUrls(itemIds: string[]): Promise<Map<string,
  * Replaces the legacy getProductsWithPrices function
  */
 export async function getProductsWithPrices(pricelistId: string, lang?: string): Promise<{
-  products: (Product & { display_price: number; in_price_list: boolean })[];
+  products: (Product & { display_price: number; in_price_list: boolean; carton_qty?: number })[];
   currency: string;
 }> {
   try {
@@ -466,6 +466,29 @@ export async function getProductsWithPrices(pricelistId: string, lang?: string):
     }
     const priceMap = await getProductPrices(productIds, parseInt(pricelistId, 10), templateIdMap);
 
+    // Carton hint (2026-07-17): product.packaging qty per variant — wholesale
+    // buyers think in cartons. Smallest qty > 1 wins (the "carton", not pallet).
+    // Sparse data is fine: cards render the carton line only when present.
+    const packagingMap = new Map<number, number>();
+    try {
+      const pkgs = await odooSearchRead<{ product_id: [number, string] | number; qty: number }>(
+        'product.packaging',
+        [['product_id', 'in', productIds]],
+        ['product_id', 'qty'],
+        { limit: 0 }
+      );
+      for (const pkg of pkgs) {
+        const pid = Array.isArray(pkg.product_id) ? pkg.product_id[0] : pkg.product_id;
+        const qty = Number(pkg.qty) || 0;
+        if (pid && qty > 1) {
+          const cur = packagingMap.get(pid);
+          if (!cur || qty < cur) packagingMap.set(pid, qty);
+        }
+      }
+    } catch (pkgError) {
+      console.error('[Odoo Products] packaging fetch failed (carton hints skipped):', pkgError);
+    }
+
     const products = allProducts.map(p => {
       const pid = parseInt(p.item_id, 10);
       const price = priceMap.get(pid);
@@ -476,6 +499,7 @@ export async function getProductsWithPrices(pricelistId: string, lang?: string):
         display_price: price ?? p.rate,
         in_price_list: price !== undefined,
         available_stock: stock,
+        carton_qty: packagingMap.get(pid),
       };
     });
 

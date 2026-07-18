@@ -306,11 +306,11 @@ export default function VerifyOTPPage() {
           <div className="relative inline-block">
             <div className="absolute -inset-4 bg-gradient-to-r from-green-500/20 via-emerald-500/20 to-teal-500/20 rounded-full blur-xl opacity-60" />
             <Image
-              src="/images/tsh-logo.jpg"
-              alt="TSH Trading"
+              src="/images/tsh-lockup.webp"
+              alt="TSH — شركة يد العنكبوت التقنية"
               width={120}
-              height={50}
-              className="relative mx-auto rounded-lg"
+              height={84}
+              className="relative mx-auto"
               priority
             />
           </div>

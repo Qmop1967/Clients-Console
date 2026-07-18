@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback, memo } from "react";
+import { useTranslations } from "next-intl";
 import { Package } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 
@@ -13,14 +14,24 @@ interface ProductImageProps {
   sizes?: string;
 }
 
-// Memoized placeholder component for fast render
+// Branded placeholder (2026-07-17): real TSH mark as a faint watermark +
+// "image being prepared" note — a consistent on-brand face for products whose
+// photos aren't ready yet, replacing the anonymous icon box.
 const ImagePlaceholder = memo(function ImagePlaceholder({ className }: { className?: string }) {
+  const t = useTranslations("products");
   return (
-    <div className={cn("flex flex-col items-center justify-center gap-2 bg-gradient-to-br from-muted/40 via-background to-muted/40", className)}>
-      <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-border/50 bg-primary/5">
-        <Package className="h-7 w-7 text-primary/40" strokeWidth={1.5} />
-      </div>
-      <span className="text-[10px] font-semibold tracking-[0.2em] text-muted-foreground/50">TSH</span>
+    <div className={cn("flex flex-col items-center justify-center gap-2.5 bg-gradient-to-br from-muted/50 via-background to-muted/60", className)}>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src="/images/tsh-mark.webp"
+        alt=""
+        aria-hidden="true"
+        loading="lazy"
+        decoding="async"
+        draggable={false}
+        className="w-[46%] max-w-[150px] opacity-25 grayscale-[15%] select-none"
+      />
+      <span className="text-[10px] text-muted-foreground/70">{t("imagePending")}</span>
     </div>
   );
 });

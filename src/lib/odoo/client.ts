@@ -29,6 +29,12 @@ async function gw(path: string, body: any, extraHeaders?: Record<string, string>
   return data.data;
 }
 
+// Generic gateway POST for scoped non-proxy endpoints (e.g. /api/storefront/*).
+// Returns the unwrapped `data` payload; throws on { success: false }.
+export async function gatewayPost<T = unknown>(path: string, body: Record<string, unknown> = {}): Promise<T> {
+  return gw(path, body);
+}
+
 export async function authenticate(): Promise<number> { return 1; } // Auth handled by gateway
 export function getSessionId(): string | null { return null; }
 export function resetSession(): void {}

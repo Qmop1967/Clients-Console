@@ -1,26 +1,25 @@
 "use client";
 
-import Image from "next/image";
 import { cn } from "@/lib/utils/cn";
 
 interface AnimatedLogoProps {
   className?: string;
 }
 
-// PERFORMANCE: Removed animation that caused 2-second delay and re-render during LCP window
-// The animation was hurting Core Web Vitals scores (LCP, INP)
-// Now shows logo immediately for faster perceived performance
+// BRAND FIX 2026-07-17: previously squeezed the FULL 3-line lockup JPG
+// (white background, decorative noise) into a 36×36 box — unreadable blue blob.
+// Now renders the extracted transparent TSH mark (tsh-mark.webp, hi-res 1034×433)
+// at its natural wide aspect. Static <img> keeps the LCP win from the old fix
+// (no animation, no Next/Image optimizer pass).
 export function AnimatedLogo({ className }: AnimatedLogoProps) {
   return (
-    <div className={cn("relative h-9 w-9 overflow-hidden", className)}>
-      {/* TSH Logo - shown immediately for best LCP */}
-      <Image
-        src="/images/tsh-logo.jpg"
-        alt="TSH"
-        fill
-        className="object-contain rounded-lg"
-        priority
-      />
-    </div>
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src="/images/tsh-mark.webp"
+      alt="TSH — شركة يد العنكبوت التقنية"
+      className={cn("h-8 w-auto select-none", className)}
+      draggable={false}
+      decoding="async"
+    />
   );
 }

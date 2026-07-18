@@ -33,7 +33,11 @@
     "currency": {
       "iqd": "IQD",
       "usd": "USD"
-    }
+    },
+    "brandStore": "Online Store",
+    "brandCompany": "Tech Spider Hand Co.",
+    "whatsappSales": "Sales WhatsApp",
+    "whatsappPrefill": "Hello, I have a question about your products"
   },
   "auth": {
     "login": "Login",
@@ -238,7 +242,22 @@
     "brand": "Brand",
     "minimumOrder": "Minimum Order",
     "technicalSpecs": "Technical Specifications",
-    "uses": "Uses"
+    "uses": "Uses",
+    "headerSearchPlaceholder": "Search by product name, SKU, or category…",
+    "searching": "Searching…",
+    "noSuggestions": "No matching results",
+    "suggestProducts": "Products",
+    "suggestCategories": "Categories",
+    "showAllResults": "Show all results for \"{query}\"",
+    "pricesFresh": "Prices updated daily",
+    "imagePending": "Image coming soon",
+    "copySku": "Copy SKU",
+    "perPage": "{count} per page",
+    "cartonLine": "Carton ({qty} pcs):",
+    "promoAria": "Store promotions",
+    "quickReorderHint": "Track orders & reorder",
+    "quickStatementHint": "Balance & transactions",
+    "quickInvoicesHint": "Your invoices in detail"
   },
   "orders": {
     "title": "Orders",
@@ -609,7 +628,10 @@
     "allRightsReserved": "All rights reserved.",
     "contactUs": "Contact Us",
     "terms": "Terms of Service",
-    "privacy": "Privacy Policy"
+    "privacy": "Privacy Policy",
+    "aboutShort": "Computers, accessories, CCTV and networking supply for Iraqi traders — wholesale prices updated daily.",
+    "quickLinks": "Quick Links",
+    "legalName": "Tech Spider Hand General Trading Co. Ltd."
   },
   "publicSupport": {
     "title": "Support Center",

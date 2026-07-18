@@ -74,6 +74,7 @@ export interface Product {
   // Stock fields (optional as they may not be present in all contexts)
   stock_on_hand?: number;
   available_stock?: number;
+  carton_qty?: number; // product.packaging qty (smallest >1) — carton price hint
   actual_available_stock?: number;
   committed_stock?: number;
   warehouse_name?: string;

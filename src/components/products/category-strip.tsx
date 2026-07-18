@@ -56,8 +56,12 @@ export function CategoryStrip({
             <span
               dir="ltr"
               className={cn(
-                "ms-1.5 text-[11px] font-normal tabular-nums",
-                selectedCategory === c.category_id ? "text-white/70" : "text-muted-foreground"
+                // Count as a clear pill badge — visually separated from the name
+                // (was inline text glued to Arabic names: "كيبلات اج دي50").
+                "ms-1.5 inline-flex h-[18px] min-w-[22px] items-center justify-center rounded-full px-1.5 align-middle text-[10.5px] font-semibold tabular-nums",
+                selectedCategory === c.category_id
+                  ? "bg-white/25 text-white"
+                  : "bg-foreground/[0.07] text-muted-foreground"
               )}
             >
               {c.count}

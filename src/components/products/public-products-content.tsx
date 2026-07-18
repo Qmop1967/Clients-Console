@@ -20,13 +20,14 @@ import {
 import { ProductImage } from "./product-image";
 import { useCart } from "@/components/providers/cart-provider";
 import { useCatalogMode } from "@/components/providers/catalog-mode-provider";
-import { Search, ShoppingCart, Check, Eye, ChevronRight, X, SlidersHorizontal, MessageCircle } from "lucide-react";
+import { Search, ShoppingCart, Check, Eye, ChevronRight, X, SlidersHorizontal, MessageCircle, Copy } from "lucide-react";
 import { NumberedPagination } from "@/components/ui/pagination";
 import { cn } from "@/lib/utils/cn";
 import { formatCurrency } from "@/lib/utils/format";
 import { ShopHero } from "./shop-hero";
 import { CategoryStrip } from "./category-strip";
 import { NewArrivalsRail } from "./new-arrivals-rail";
+import { PromoSlider } from "./promo-slider";
 
 // PERF: Lazy load quantity input - not needed for LCP, reduces initial JS bundle
 const WholesaleQuantityInput = dynamic(
@@ -37,8 +38,10 @@ const WholesaleQuantityInput = dynamic(
 // Session storage key for scroll position
 const SCROLL_POSITION_KEY = "shop_scroll_position";
 
-// Pagination configuration - 24 items per page (6 rows of 4 on desktop)
-const PRODUCTS_PER_PAGE = 24;
+// Pagination configuration — default 24 items per page (6 rows of 4 on
+// desktop); wholesale buyers can widen to 48/96 via the per-page selector.
+const PER_PAGE_OPTIONS = [24, 48, 96];
+const DEFAULT_PER_PAGE = 24;
 
 // A product is flagged "New" if created within this window (days).
 const NEW_WINDOW_DAYS = 45;
@@ -68,6 +71,7 @@ interface PublicProduct {
   unit: string;
   inPriceList?: boolean; // Whether item has a price in the Consumer price list
   create_date?: string; // Odoo create_date (New badge / New Arrivals)
+  carton_qty?: number; // product.packaging qty (smallest >1) — carton price hint
 }
 
 // Category type from server
@@ -114,7 +118,27 @@ const ProductCardWithCart = memo(function ProductCardWithCart({
   const { isCatalogMode, showCatalogModal } = useCatalogMode();
   const [quantity, setQuantity] = useState(1);
   const [added, setAdded] = useState(false);
+  const [skuCopied, setSkuCopied] = useState(false);
   const addedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const skuTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Traders paste SKUs into WhatsApp orders all day — one tap beats retyping.
+  const handleCopySku = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (!product.sku) return;
+      try {
+        void navigator.clipboard?.writeText(product.sku);
+        setSkuCopied(true);
+        if (skuTimerRef.current) clearTimeout(skuTimerRef.current);
+        skuTimerRef.current = setTimeout(() => setSkuCopied(false), 1400);
+      } catch {
+        /* clipboard unavailable — silently ignore */
+      }
+    },
+    [product.sku]
+  );
 
   const isInStock = product.available_stock > 0;
   const isLowStock = product.available_stock > 0 && product.available_stock <= 5;
@@ -216,9 +240,26 @@ const ProductCardWithCart = memo(function ProductCardWithCart({
             </h2>
           </Link>
 
-          {/* SKU & Brand */}
-          <div className="flex items-center justify-between text-[11px] sm:text-xs text-muted-foreground">
-            <span className="font-mono truncate max-w-[60%]">{product.sku}</span>
+          {/* SKU (tap-to-copy) & Brand */}
+          <div className="flex items-center justify-between gap-2 text-[11px] sm:text-xs text-muted-foreground">
+            {product.sku ? (
+              <button
+                type="button"
+                onClick={handleCopySku}
+                className="group/sku flex min-w-0 items-center gap-1 native-press"
+                aria-label={t("copySku")}
+                title={t("copySku")}
+              >
+                <span dir="ltr" className="font-mono truncate">{product.sku}</span>
+                {skuCopied ? (
+                  <Check className="h-3 w-3 shrink-0 text-emerald-500" aria-hidden="true" />
+                ) : (
+                  <Copy className="h-3 w-3 shrink-0 opacity-50 transition-opacity group-hover/sku:opacity-100" aria-hidden="true" />
+                )}
+              </button>
+            ) : (
+              <span />
+            )}
             {product.brand && (
               <span className="text-primary font-medium truncate">{product.brand}</span>
             )}
@@ -266,6 +307,19 @@ const ProductCardWithCart = memo(function ProductCardWithCart({
                     : t("outOfStock")}
                 </div>
               </div>
+
+              {/* Carton pricing — wholesale buyers think in cartons, not pieces.
+                  Shown only when Odoo packaging data exists for this product. */}
+              {hasPrice && !!product.carton_qty && product.carton_qty > 1 && (
+                <div className="mt-1.5 inline-flex max-w-full items-center gap-1 rounded-lg border border-dashed border-border/80 bg-secondary/40 px-2 py-0.5 text-[10.5px] sm:text-[11px] text-muted-foreground">
+                  <span className="truncate">
+                    {t("cartonLine", { qty: product.carton_qty })}
+                  </span>
+                  <b className="shrink-0 text-foreground/90" dir="ltr">
+                    {formatCurrency(product.rate * product.carton_qty, currencyCode)}
+                  </b>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -407,10 +461,20 @@ export function PublicProductsContent({
   const pageFromUrl = parseInt(searchParams.get("page") || "1", 10);
   const searchFromUrl = searchParams.get("q") || "";
   const sortFromUrl = (searchParams.get("sort") as SortOption) || "newest";
+  const ppFromUrlRaw = parseInt(searchParams.get("pp") || String(DEFAULT_PER_PAGE), 10);
+  const ppFromUrl = PER_PAGE_OPTIONS.includes(ppFromUrlRaw) ? ppFromUrlRaw : DEFAULT_PER_PAGE;
 
   const [searchQuery, setSearchQuery] = useState(searchFromUrl);
   const [currentPage, setCurrentPage] = useState(pageFromUrl);
   const [sortBy, setSortBy] = useState<SortOption>(sortFromUrl);
+  const [perPage, setPerPage] = useState<number>(ppFromUrl);
+
+  const handlePerPageChange = (value: string) => {
+    const pp = parseInt(value, 10);
+    if (!PER_PAGE_OPTIONS.includes(pp)) return;
+    setPerPage(pp);
+    setCurrentPage(1);
+  };
 
   // BUGFIX (sticky pagination): switching category is a SOFT navigation — this
   // component never unmounts, so `currentPage` survived. Landing on page 2 of a
@@ -465,9 +529,15 @@ export function PublicProductsContent({
       params.delete("sort");
     }
 
+    if (perPage !== DEFAULT_PER_PAGE) {
+      params.set("pp", String(perPage));
+    } else {
+      params.delete("pp");
+    }
+
     const newUrl = params.toString() ? `${pathname}?${params.toString()}` : pathname;
     window.history.replaceState(null, "", newUrl);
-  }, [currentPage, searchQuery, sortBy, pathname, searchParams]);
+  }, [currentPage, searchQuery, sortBy, perPage, pathname, searchParams]);
 
   // Reset to page 1 when search or sort changes
   useEffect(() => {
@@ -536,10 +606,10 @@ export function PublicProductsContent({
   // list. Covers every remaining path to an empty grid: a shared/bookmarked
   // ?page=99, a search that narrows the results, a sort change, or stock dropping
   // to 0 on revalidate. Out-of-range simply shows page 1.
-  const totalPages = Math.max(1, Math.ceil(filteredProducts.length / PRODUCTS_PER_PAGE));
+  const totalPages = Math.max(1, Math.ceil(filteredProducts.length / perPage));
   const safePage = Math.min(Math.max(currentPage, 1), totalPages);
-  const startIndex = (safePage - 1) * PRODUCTS_PER_PAGE;
-  const endIndex = startIndex + PRODUCTS_PER_PAGE;
+  const startIndex = (safePage - 1) * perPage;
+  const endIndex = startIndex + perPage;
   const paginatedProducts = filteredProducts.slice(startIndex, endIndex);
 
   // Keep state (and therefore the URL) honest whenever the page had to be clamped.
@@ -561,7 +631,7 @@ export function PublicProductsContent({
 
   return (
     <div className="space-y-6">
-      {/* Merchandising header — hero + category strip + new arrivals */}
+      {/* Merchandising header — hero + category strip + promos + new arrivals */}
       <ShopHero />
 
       <CategoryStrip
@@ -570,6 +640,11 @@ export function PublicProductsContent({
         onSelect={onCategorySelect}
         onClear={onClearCategory}
       />
+
+      {/* Admin-managed promo band lives in the space the old hero wasted.
+          Hidden while searching/filtering — merchandising must never push
+          results further away. */}
+      {!deferredSearchQuery && !selectedCategory && <PromoSlider />}
 
       {!deferredSearchQuery && !selectedCategory && newArrivals.length > 0 && (
         <NewArrivalsRail products={newArrivals} currencyCode={currencyCode} />
@@ -594,7 +669,7 @@ export function PublicProductsContent({
             />
           </div>
 
-          {/* Sort Dropdown */}
+          {/* Sort + per-page */}
           <div className="flex items-center gap-2">
             <SlidersHorizontal className="h-4 w-4 text-muted-foreground hidden sm:block" aria-hidden="true" />
             <Select value={sortBy} onValueChange={(value) => setSortBy(value as SortOption)}>
@@ -608,6 +683,19 @@ export function PublicProductsContent({
                 <SelectItem value="price-asc">{t("sortOptions.priceAsc")}</SelectItem>
                 <SelectItem value="price-desc">{t("sortOptions.priceDesc")}</SelectItem>
                 <SelectItem value="stock-desc">{t("sortOptions.stockDesc")}</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Select value={String(perPage)} onValueChange={handlePerPageChange}>
+              <SelectTrigger className="w-[110px] shrink-0" aria-label={t("perPage", { count: perPage })}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {PER_PAGE_OPTIONS.map((pp) => (
+                  <SelectItem key={pp} value={String(pp)}>
+                    {t("perPage", { count: pp })}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
