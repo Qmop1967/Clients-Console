@@ -206,22 +206,7 @@ const nextConfig: NextConfig = {
   // Redirects
   async redirects() {
     return [
-      {
-        source: "/",
-        destination: "/ar/shop",
-        permanent: false,
-      },
-      {
-        source: "/en",
-        destination: "/en/shop",
-        permanent: false,
-      },
-      {
-        source: "/ar",
-        destination: "/ar/shop",
-        permanent: false,
-      },
-    ];
+      ];
   },
 };
 

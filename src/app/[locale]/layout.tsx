@@ -57,11 +57,12 @@ const ibmPlexSansArabic = IBM_Plex_Sans_Arabic({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://tsh.sale"),
   title: {
-    default: "TSH Clients",
-    template: "%s | TSH",
+    default: "Tech Spider Hand Ltd Company — Wholesale IT Hardware & Security Systems, Baghdad",
+    template: "%s | Tech Spider Hand Ltd Company",
   },
-  description: "TSH Wholesale & Retail Clients Portal - Order Management, Invoices, and Account Services",
+  description: "Tech Spider Hand Ltd Company (TSH) is a registered wholesale distributor in Baghdad, Iraq, supplying computer hardware and components, CCTV and security systems, networking products, power supplies, and printers with consumables to dealers and trade partners across Iraq.",
   keywords: ["TSH", "wholesale", "retail", "orders", "invoices", "Iraq", "IQD"],
   authors: [{ name: "TSH" }],
   creator: "TSH",

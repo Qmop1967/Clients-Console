@@ -1,0 +1,39 @@
+# Tech Spider Hand Ltd Company — tsh.sale
+User-agent: *
+Allow: /$
+Allow: /ar
+Allow: /en
+Allow: /ar/about
+Allow: /en/about
+Allow: /ar/catalog
+Allow: /en/catalog
+Allow: /ar/contact-us
+Allow: /en/contact-us
+Allow: /ar/privacy
+Allow: /en/privacy
+Allow: /ar/terms
+Allow: /en/terms
+
+# Partner-only areas — trade accounts, contractual pricing, statements
+Disallow: /api/
+Disallow: /admin
+Disallow: /*/shop
+Disallow: /*/cart
+Disallow: /*/login
+Disallow: /*/dashboard
+Disallow: /*/orders
+Disallow: /*/invoices
+Disallow: /*/payments
+Disallow: /*/credit-notes
+Disallow: /*/quotations
+Disallow: /*/consignments
+Disallow: /*/account-statement
+Disallow: /*/profile
+Disallow: /*/settings
+Disallow: /*/returns
+Disallow: /*/deliveries
+Disallow: /*/packages
+Disallow: /*/stock
+Disallow: /*/notifications
+
+Sitemap: https://tsh.sale/sitemap.xml

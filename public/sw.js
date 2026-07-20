@@ -18,7 +18,7 @@
  * static asset delivery and lets iOS treat the install as a real PWA.
  */
 
-const CACHE_VERSION = 'v-shop-upgrade-20260718-1';
+const CACHE_VERSION = 'v-public-pages-20260720-1';
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 
