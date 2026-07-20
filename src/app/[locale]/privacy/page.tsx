@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { MarketingShell } from "@/components/marketing/marketing-chrome";
+import { LegalPage } from "@/components/marketing/legal-layout";
 import { COMPANY, toMarketingLocale } from "@/lib/marketing/company";
 
 interface Props { params: Promise<{ locale: string }> }
@@ -41,31 +41,15 @@ const EN = [
   { h: "Changes to this policy", p: ["We may update this policy as our services or legal requirements change. The last updated date is shown at the top of this page."] },
 ];
 
-export default async function PrivacyPage({ params }: Props) {
+export default async function Page({ params }: Props) {
   const { locale } = await params;
   const isAr = toMarketingLocale(locale) === "ar";
-  const sections = isAr ? AR : EN;
-
   return (
-    <MarketingShell locale={locale}>
-      <h1 className="font-display text-3xl font-bold text-foreground sm:text-4xl">
-        {isAr ? "سياسة الخصوصية" : "Privacy policy"}
-      </h1>
-      <p className="mt-3 text-sm text-muted-foreground">
-        {isAr ? "آخر تحديث: " : "Last updated: "}<span dir="ltr">{UPDATED}</span>
-      </p>
-      <div className="mt-10 max-w-3xl space-y-9">
-        {sections.map((s) => (
-          <section key={s.h} aria-labelledby={s.h}>
-            <h2 id={s.h} className="font-display text-xl font-bold text-foreground">{s.h}</h2>
-            <div className="mt-3 space-y-2.5">
-              {s.p.map((line) => (
-                <p key={line} className="leading-relaxed text-muted-foreground">{line}</p>
-              ))}
-            </div>
-          </section>
-        ))}
-      </div>
-    </MarketingShell>
+    <LegalPage
+      locale={locale}
+      title={isAr ? "سياسة الخصوصية" : "Privacy policy"}
+      updated={UPDATED}
+      sections={isAr ? AR : EN}
+    />
   );
 }

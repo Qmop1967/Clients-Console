@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowLeft, ArrowRight, Building2, PackageSearch, ShieldCheck, Truck } from "lucide-react";
+import { ArrowLeft, ArrowRight, Building2, Lock, PackageSearch, ShieldCheck, Truck } from "lucide-react";
 import { MarketingShell } from "@/components/marketing/marketing-chrome";
 import { CATEGORIES, COMPANY, TOTAL_SKUS, toMarketingLocale } from "@/lib/marketing/company";
 
@@ -34,6 +34,15 @@ export default async function HomePage({ params }: Props) {
   const isAr = toMarketingLocale(locale) === "ar";
   const Arrow = isAr ? ArrowLeft : ArrowRight;
 
+  // Verified figures: SKUs + departments from product_template; customers from
+  // res_partner (customer_rank > 0), rounded down. No estimates.
+  const FACTS = [
+    { ar: "أصناف فعّالة", en: "Active SKUs", valueAr: TOTAL_SKUS.toLocaleString("en-US"), valueEn: TOTAL_SKUS.toLocaleString("en-US"), ltr: true },
+    { ar: "أقسام رئيسية", en: "Departments", valueAr: "8", valueEn: "8", ltr: true },
+    { ar: "عملاء تجاريون", en: "Trade customers", valueAr: "+2,000", valueEn: "2,000+", ltr: true },
+    { ar: "المقرّ", en: "Head office", valueAr: "بغداد", valueEn: "Baghdad", ltr: false },
+  ];
+
   const pillars = [
     { icon: Building2,
       ar: { t: "شركة مسجّلة", d: "مسجّلة رسمياً في بغداد بموجب قانون الشركات العراقي رقم 21 لسنة 1997، بمقرّ ومكتب ثابت." },
@@ -51,53 +60,66 @@ export default async function HomePage({ params }: Props) {
 
   return (
     <MarketingShell locale={locale}>
-      {/* Hero — states plainly who we are and what we do */}
+      {/* Hero — two columns. In RTL a max-w text block strands ~384px of dead space on
+          the left; the facts panel occupies it with real figures instead of padding. */}
       <section className="border-b border-border/60 pb-12">
-        <p className="text-sm font-semibold uppercase tracking-[0.18em] text-gold" dir="ltr">
-          Baghdad, Iraq &middot; Est. wholesale distribution
-        </p>
-        <h1 className="mt-4 max-w-4xl font-display text-3xl font-bold leading-tight text-foreground sm:text-4xl lg:text-5xl">
-          {isAr ? COMPANY.legalNameAr : COMPANY.legalNameEn}
-        </h1>
-        <p className="mt-5 max-w-3xl text-lg leading-relaxed text-muted-foreground">
-          {isAr
-            ? "نحن موزّع جملة لمنتجات الحاسبات ومكوّناتها، وكاميرات المراقبة وأنظمة الأمان، ومنتجات الشبكات، ومصادر الطاقة، والطابعات ومستلزماتها. نخدم الوكلاء وتجار الجملة والمكاتب الفنية في عموم العراق من مقرّنا في بغداد."
-            : "We are a wholesale distributor of computer hardware and components, CCTV and security systems, networking products, power supplies, and printers with their consumables. We supply dealers, wholesalers and technical offices across Iraq from our base in Baghdad."}
-        </p>
-        <div className="mt-8 flex flex-wrap gap-3">
-          <Link
-            href={`/${locale}/catalog`}
-            className="inline-flex items-center gap-2 rounded-lg bg-gold px-5 py-3 text-sm font-semibold text-white transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold"
-          >
-            {isAr ? "استعرض أقسام المنتجات" : "Browse product departments"}
-            <Arrow className="size-4" aria-hidden />
-          </Link>
-          <Link
-            href={`/${locale}/contact-us`}
-            className="inline-flex items-center gap-2 rounded-lg border border-border px-5 py-3 text-sm font-semibold text-foreground transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold"
-          >
-            {isAr ? "تواصل معنا" : "Contact us"}
-          </Link>
+        <div className="grid items-center gap-10 lg:grid-cols-[1fr_minmax(0,21rem)]">
+          <div>
+            <p className="text-sm font-semibold uppercase tracking-[0.18em] text-gold" dir="ltr">
+              Baghdad, Iraq &middot; Wholesale distribution
+            </p>
+            <h1 className="mt-4 font-display text-3xl font-bold leading-tight text-foreground sm:text-4xl lg:text-5xl">
+              {isAr ? COMPANY.legalNameAr : COMPANY.legalNameEn}
+            </h1>
+            <p className="mt-5 text-lg leading-relaxed text-muted-foreground">
+              {isAr
+                ? "نحن موزّع جملة لمنتجات الحاسبات ومكوّناتها، وكاميرات المراقبة وأنظمة الأمان، ومنتجات الشبكات، ومصادر الطاقة، والطابعات ومستلزماتها. نخدم الوكلاء وتجار الجملة والمكاتب الفنية في عموم العراق من مقرّنا في بغداد."
+                : "We are a wholesale distributor of computer hardware and components, CCTV and security systems, networking products, power supplies, and printers with their consumables. We supply dealers, wholesalers and technical offices across Iraq from our base in Baghdad."}
+            </p>
+            <div className="mt-8 flex flex-wrap gap-3">
+              <Link
+                href={`/${locale}/catalog`}
+                className="inline-flex min-h-12 items-center gap-2 rounded-lg bg-gold px-5 text-sm font-semibold text-white transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold"
+              >
+                {isAr ? "استعرض أقسام المنتجات" : "Browse product departments"}
+                <Arrow className="size-4" aria-hidden />
+              </Link>
+              <Link
+                href={`/${locale}/contact-us`}
+                className="inline-flex min-h-12 items-center rounded-lg border border-border px-5 text-sm font-semibold text-foreground transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold"
+              >
+                {isAr ? "تواصل معنا" : "Contact us"}
+              </Link>
+            </div>
+          </div>
+
+          <dl className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-border bg-border lg:grid-cols-1">
+            {FACTS.map((f) => (
+              <div key={f.en} className="bg-card px-5 py-4">
+                <dt className="text-xs uppercase tracking-wide text-muted-foreground">{isAr ? f.ar : f.en}</dt>
+                <dd className="mt-1 font-display text-2xl font-bold text-foreground" dir={f.ltr ? "ltr" : undefined}>
+                  {isAr ? f.valueAr : f.valueEn}
+                </dd>
+              </div>
+            ))}
+          </dl>
         </div>
       </section>
 
       {/* Signature: the real catalog, by department, with real counts */}
       <section className="py-14" aria-labelledby="departments">
-        <div className="flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <h2 id="departments" className="font-display text-2xl font-bold text-foreground sm:text-3xl">
-              {isAr ? "ماذا نوزّع" : "What we distribute"}
-            </h2>
-            <p className="mt-2 text-muted-foreground">
-              {isAr
-                ? "ثمانية أقسام رئيسية. الأعداد أدناه هي أصناف فعّالة في مخزوننا."
-                : "Eight departments. The figures below are active SKUs in our live inventory."}
-            </p>
-          </div>
-          <p className="text-sm text-muted-foreground">
-            {isAr ? "الأسعار متاحة للشركاء المسجّلين بعد تسجيل الدخول." : "Pricing is available to registered partners after login."}
-          </p>
-        </div>
+        <h2 id="departments" className="font-display text-2xl font-bold text-foreground sm:text-3xl">
+          {isAr ? "ماذا نوزّع" : "What we distribute"}
+        </h2>
+        <p className="mt-2 max-w-3xl text-muted-foreground">
+          {isAr
+            ? "ثمانية أقسام رئيسية. الأعداد أدناه هي أصناف فعّالة في مخزوننا."
+            : "Eight departments. The figures below are active SKUs in our live inventory."}
+        </p>
+        <p className="mt-4 inline-flex items-center gap-2 rounded-full border border-border bg-muted/40 px-3.5 py-1.5 text-sm text-muted-foreground">
+          <Lock className="size-3.5 text-gold" aria-hidden />
+          {isAr ? "الأسعار متاحة للشركاء المسجّلين بعد تسجيل الدخول." : "Pricing is available to registered partners after login."}
+        </p>
 
         <ul className="mt-8 grid gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-2 lg:grid-cols-4">
           {CATEGORIES.map((c) => (
@@ -108,7 +130,7 @@ export default async function HomePage({ params }: Props) {
                   {c.count.toLocaleString("en-US")}
                 </span>
               </div>
-              <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{isAr ? c.arDesc : c.enDesc}</p>
+              <p className="mt-2 text-[15px] leading-relaxed text-muted-foreground">{isAr ? c.arDesc : c.enDesc}</p>
             </li>
           ))}
         </ul>
@@ -129,7 +151,7 @@ export default async function HomePage({ params }: Props) {
                 </span>
                 <div>
                   <h3 className="font-semibold text-foreground">{copy.t}</h3>
-                  <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">{copy.d}</p>
+                  <p className="mt-1.5 text-[15px] leading-relaxed text-muted-foreground">{copy.d}</p>
                 </div>
               </div>
             );
@@ -149,7 +171,7 @@ export default async function HomePage({ params }: Props) {
         </p>
         <p className="mt-4 text-sm text-muted-foreground">
           {isAr ? "تريد أن تصبح شريكاً؟ " : "Want to become a partner? "}
-          <Link href={`/${locale}/contact-us`} className="font-semibold text-gold underline underline-offset-4">
+          <Link href={`/${locale}/contact-us`} className="inline-flex min-h-11 items-center font-semibold text-gold underline underline-offset-4">
             {isAr ? "تواصل مع فريق المبيعات" : "Talk to our sales team"}
           </Link>
         </p>

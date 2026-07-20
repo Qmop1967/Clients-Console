@@ -1,6 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
-import { Mail, MapPin, Phone } from "lucide-react";
+import { Mail, MapPin, Menu, Phone, X } from "lucide-react";
 import { COMPANY, toMarketingLocale } from "@/lib/marketing/company";
 
 /**
@@ -67,46 +67,66 @@ const NAV = [
 
 export function MarketingHeader({ locale }: { locale: string }) {
   const isAr = toMarketingLocale(locale) === "ar";
+  const name = isAr ? COMPANY.legalNameAr : COMPANY.legalNameEn;
+
   return (
-    <header className="sticky top-0 z-40 border-b border-border/60 bg-background/85 backdrop-blur supports-[backdrop-filter]:bg-background/70">
-      <div className="mx-auto flex max-w-6xl items-center gap-4 px-4 py-3">
-        <Link href={`/${locale}`} className="shrink-0" aria-label={isAr ? COMPANY.legalNameAr : COMPANY.legalNameEn}>
-          <Image
-            src="/images/tsh-lockup.webp"
-            alt={isAr ? COMPANY.legalNameAr : COMPANY.legalNameEn}
-            width={132}
-            height={44}
-            priority
-            className="h-9 w-auto"
-          />
+    <header className="sticky top-0 z-40 border-b border-border/60 bg-background/90 backdrop-blur supports-[backdrop-filter]:bg-background/75">
+      <div className="relative mx-auto flex max-w-7xl items-center gap-3 px-4 py-2">
+        <Link href={`/${locale}`} className="shrink-0 py-1" aria-label={name}>
+          <Image src="/images/tsh-lockup.webp" alt={name} width={132} height={44} priority className="h-10 w-auto" />
         </Link>
 
-        <nav className="flex flex-1 flex-wrap items-center gap-x-5 gap-y-1 text-sm">
+        {/* Desktop nav — natural width, hugs the logo. No flex-1: it used to stretch
+            to 894px and open a dead gap in the middle of the header. */}
+        <nav className="hidden items-center gap-x-1 md:flex">
           {NAV.map((item) => (
             <Link
               key={item.href}
               href={`/${locale}${item.href}`}
-              className="text-muted-foreground transition-colors hover:text-foreground focus-visible:text-foreground focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-gold"
+              className="rounded-md px-3 py-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold"
             >
               {isAr ? item.ar : item.en}
             </Link>
           ))}
         </nav>
 
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="ms-auto flex shrink-0 items-center gap-1.5">
           <Link
             href={`/${locale === "ar" ? "en" : "ar"}`}
-            className="rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
             hrefLang={locale === "ar" ? "en" : "ar"}
+            className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg px-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold"
           >
-            {locale === "ar" ? "EN" : "عربي"}
+            {locale === "ar" ? "EN" : "ع"}
           </Link>
+
           <Link
             href={`/${locale}/login`}
-            className="rounded-lg bg-gold px-3.5 py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold"
+            className="inline-flex min-h-11 items-center rounded-lg bg-gold px-4 text-sm font-semibold text-white transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold"
           >
             {isAr ? "دخول الشركاء" : "Partner login"}
           </Link>
+
+          {/* Mobile menu — <details> keeps every public page server-rendered (no client JS). */}
+          <details className="group md:hidden">
+            <summary
+              className="inline-flex size-11 cursor-pointer list-none items-center justify-center rounded-lg border border-border text-foreground [&::-webkit-details-marker]:hidden"
+              aria-label={isAr ? "القائمة" : "Menu"}
+            >
+              <Menu className="size-5 group-open:hidden" aria-hidden />
+              <X className="hidden size-5 group-open:block" aria-hidden />
+            </summary>
+            <nav className="absolute inset-x-0 top-full hidden border-b border-border bg-background px-4 pb-3 shadow-lg group-open:block">
+              {NAV.map((item) => (
+                <Link
+                  key={item.href}
+                  href={`/${locale}${item.href}`}
+                  className="flex min-h-12 items-center border-b border-border/50 text-[15px] text-foreground last:border-0"
+                >
+                  {isAr ? item.ar : item.en}
+                </Link>
+              ))}
+            </nav>
+          </details>
         </div>
       </div>
     </header>
@@ -119,7 +139,7 @@ export function MarketingFooter({ locale }: { locale: string }) {
 
   return (
     <footer className="mt-20 border-t border-border/60 bg-muted/30">
-      <div className="mx-auto grid max-w-6xl gap-10 px-4 py-12 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="mx-auto grid max-w-7xl gap-10 px-4 py-12 sm:grid-cols-2 lg:grid-cols-3">
         <div>
           <h2 className="font-display text-lg font-semibold text-foreground">
             {isAr ? COMPANY.legalNameAr : COMPANY.legalNameEn}
@@ -146,13 +166,13 @@ export function MarketingFooter({ locale }: { locale: string }) {
           </p>
           <p className="flex items-center gap-2">
             <Phone className="size-4 shrink-0 text-gold" aria-hidden />
-            <a href={`tel:${COMPANY.phone}`} className="hover:text-foreground" dir="ltr">
+            <a href={`tel:${COMPANY.phone}`} className="inline-flex min-h-11 items-center hover:text-foreground" dir="ltr">
               {COMPANY.phoneDisplay}
             </a>
           </p>
           <p className="flex items-center gap-2">
             <Mail className="size-4 shrink-0 text-gold" aria-hidden />
-            <a href={`mailto:${COMPANY.email}`} className="hover:text-foreground">
+            <a href={`mailto:${COMPANY.email}`} className="inline-flex min-h-11 items-center hover:text-foreground">
               <PlainEmail />
             </a>
           </p>
@@ -168,7 +188,7 @@ export function MarketingFooter({ locale }: { locale: string }) {
             { href: "/privacy", ar: "سياسة الخصوصية", en: "Privacy policy" },
             { href: "/terms", ar: "الشروط والأحكام", en: "Terms of service" },
           ].map((l) => (
-            <Link key={l.href} href={`/${locale}${l.href}`} className="block text-muted-foreground hover:text-foreground">
+            <Link key={l.href} href={`/${locale}${l.href}`} className="flex min-h-11 items-center text-muted-foreground hover:text-foreground">
               {isAr ? l.ar : l.en}
             </Link>
           ))}
@@ -190,7 +210,7 @@ export function MarketingShell({ locale, children }: { locale: string; children:
     <div className="min-h-screen bg-background">
       <OrganizationJsonLd locale={locale} />
       <MarketingHeader locale={locale} />
-      <main className="mx-auto max-w-6xl px-4 py-12">{children}</main>
+      <main className="mx-auto max-w-7xl px-4 py-10 sm:py-12">{children}</main>
       <MarketingFooter locale={locale} />
     </div>
   );

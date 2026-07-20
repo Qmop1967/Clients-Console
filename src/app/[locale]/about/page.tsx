@@ -36,7 +36,10 @@ export default async function AboutPage({ params }: Props) {
         {isAr ? "من نحن" : "About us"}
       </h1>
 
-      <div className="mt-6 max-w-3xl space-y-4 text-lg leading-relaxed text-muted-foreground">
+      {/* Intro + coverage side by side: the chips occupy the left space that an
+          RTL max-w prose column leaves empty. */}
+      <div className="mt-6 grid gap-10 lg:grid-cols-[1fr_minmax(0,20rem)]">
+        <div className="space-y-4 text-lg leading-relaxed text-muted-foreground">
         <p>
           {isAr
             ? `${COMPANY.legalNameAr} شركة عراقية مسجّلة، مقرّها بغداد، تعمل في استيراد وتوزيع أجهزة ومستلزمات تقنية المعلومات وأنظمة المراقبة بالجملة داخل العراق.`
@@ -52,6 +55,21 @@ export default async function AboutPage({ params }: Props) {
             ? "نعمل بالبضاعة الأصلية فقط، ونحتفظ بفواتير المورّدين لكل شحنة نستوردها. الضمان يُنفّذ عبر قسم ما بعد البيع لدينا."
             : "We trade in genuine goods only and retain supplier invoices for every shipment we import. Warranty is handled by our own after-sales department."}
         </p>
+      </div>
+
+        <aside className="self-start rounded-xl border border-border bg-muted/30 p-5" aria-labelledby="depts">
+          <h2 id="depts" className="font-display text-lg font-bold text-foreground">
+            {isAr ? "أقسامنا" : "Our departments"}
+          </h2>
+          <ul className="mt-4 space-y-1">
+            {CATEGORIES.map((c) => (
+              <li key={c.key} className="flex min-h-10 items-center justify-between gap-3 border-b border-border/50 text-[15px] text-foreground last:border-0">
+                <span>{isAr ? c.ar : c.en}</span>
+                <span className="shrink-0 text-sm font-semibold text-gold" dir="ltr">{c.count.toLocaleString("en-US")}</span>
+              </li>
+            ))}
+          </ul>
+        </aside>
       </div>
 
       <section className="mt-12" aria-labelledby="identity">
@@ -71,20 +89,6 @@ export default async function AboutPage({ params }: Props) {
             ? "شهادة تسجيل الشركة وتسجيل غرفة تجارة بغداد والتسجيل الضريبي متاحة عند الطلب للجهات الرسمية والشركاء."
             : "Company registration certificate, Baghdad Chamber of Commerce registration and tax registration are available on request to authorities and partners."}
         </p>
-      </section>
-
-      <section className="mt-12" aria-labelledby="depts">
-        <h2 id="depts" className="font-display text-2xl font-bold text-foreground">
-          {isAr ? "أقسامنا" : "Our departments"}
-        </h2>
-        <ul className="mt-5 flex flex-wrap gap-2">
-          {CATEGORIES.map((c) => (
-            <li key={c.key} className="rounded-full border border-border bg-card px-4 py-1.5 text-sm text-foreground">
-              {isAr ? c.ar : c.en}
-              <span className="ms-2 text-muted-foreground" dir="ltr">{c.count.toLocaleString("en-US")}</span>
-            </li>
-          ))}
-        </ul>
       </section>
 
       <section className="mt-12 rounded-xl border border-border bg-muted/40 p-6" aria-labelledby="compliance">
