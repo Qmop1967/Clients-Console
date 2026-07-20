@@ -24,6 +24,7 @@ export default async function AboutPage({ params }: Props) {
     { ar: "الاسم القانوني (عربي)", en: "Legal name (Arabic)", v: COMPANY.legalNameAr, ltr: false },
     { ar: "الاسم القانوني (إنجليزي)", en: "Legal name (English)", v: COMPANY.legalNameEn, ltr: true },
     { ar: "الاسم التجاري", en: "Trading name", v: COMPANY.brand, ltr: true },
+    { ar: "الاسم المختصر المسجّل", en: "Registered short name", v: COMPANY.registeredShortName, ltr: true },
     { ar: "التأسيس", en: "Incorporation", v: isAr ? COMPANY.incorporationAr : COMPANY.incorporation, ltr: !isAr },
     { ar: "النشاط", en: "Business activity", v: isAr ? "توزيع جملة لأجهزة ومستلزمات تقنية المعلومات وأنظمة المراقبة" : "Wholesale distribution of IT hardware and security systems", ltr: false },
     { ar: "المقرّ", en: "Head office", v: `${isAr ? COMPANY.streetAr : COMPANY.streetEn} — ${isAr ? COMPANY.cityAr : COMPANY.cityEn}`, ltr: false },
