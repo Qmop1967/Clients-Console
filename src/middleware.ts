@@ -23,6 +23,28 @@ const publicPaths = ['/login', '/api', '/admin'];
 // leak deeper routes.
 const PUBLIC_MARKETING = new Set(['about', 'catalog', 'contact-us', 'privacy', 'terms']);
 
+// BROWSER_LOCALE_DETECT_2026_07_22: pick the landing locale for the bare domain.
+// Order: saved NEXT_LOCALE cookie (manual choice persists) -> Accept-Language
+// primary subtags in browser preference order (ku->ckb, tk->tm aliases for Iraqi
+// Kurdish/Turkmen) -> defaultLocale. Crawlers sending no header keep landing on
+// /ar, so Meta-review behaviour is unchanged.
+const LOCALE_ALIASES: Record<string, string> = { ku: 'ckb', tk: 'tm' };
+
+function detectLocale(request: NextRequest): string {
+  const known = locales as readonly string[];
+  const saved = request.cookies.get('NEXT_LOCALE')?.value;
+  if (saved && known.includes(saved)) return saved;
+  const header = request.headers.get('accept-language') || '';
+  for (const part of header.split(',')) {
+    const tag = part.split(';')[0].trim().toLowerCase();
+    if (!tag || tag === '*') continue;
+    const primary = tag.split('-')[0];
+    const candidate = LOCALE_ALIASES[primary] ?? primary;
+    if (known.includes(candidate)) return candidate;
+  }
+  return defaultLocale;
+}
+
 function isPublicPath(pathname: string): boolean {
   // Check if the path includes any public path segment
   return publicPaths.some(path => pathname.includes(path));
@@ -53,9 +75,9 @@ export default function middleware(request: NextRequest) {
                      request.cookies.get('authjs.session-token') ||
                      request.cookies.get('__Secure-authjs.session-token');
 
-  // Bare domain -> default locale, so tsh.sale resolves to a real page.
+  // Bare domain -> best-match locale: NEXT_LOCALE cookie -> Accept-Language -> ar.
   if (pathname === '/') {
-    return NextResponse.redirect(new URL('/' + defaultLocale, baseUrl));
+    return NextResponse.redirect(new URL('/' + detectLocale(request), baseUrl));
   }
 
   // /[locale] root.
