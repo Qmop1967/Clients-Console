@@ -25,6 +25,14 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       description: isAr
         ? "موزّع جملة لمنتجات تقنية المعلومات وأنظمة المراقبة في بغداد، العراق."
         : "Wholesale IT hardware and security systems distributor in Baghdad, Iraq.",
+      images: [
+        {
+          url: `${COMPANY.website}/images/tsh-lockup.webp`,
+          width: 560,
+          height: 394,
+          alt: isAr ? COMPANY.legalNameAr : COMPANY.legalNameEn,
+        },
+      ],
     },
   };
 }
