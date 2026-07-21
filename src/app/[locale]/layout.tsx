@@ -58,6 +58,7 @@ const ibmPlexSansArabic = IBM_Plex_Sans_Arabic({
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://tsh.sale"),
+  facebook: { appId: "1011012291804587" },
   title: {
     default: "Tech Spider Hand Ltd Company — Wholesale IT Hardware & Security Systems, Baghdad",
     template: "%s | Tech Spider Hand Ltd Company",
