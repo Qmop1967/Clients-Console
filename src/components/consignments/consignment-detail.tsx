@@ -1,14 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { Link } from "@/i18n/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, ShoppingCart, RotateCcw, MessageSquare, Clock, CheckCircle2, XCircle, AlertTriangle, Wallet, FileText, Printer, PackageCheck, Boxes } from "lucide-react";
+import { ArrowLeft, ShoppingCart, RotateCcw, MessageSquare, Clock, CheckCircle2, XCircle, AlertTriangle, Wallet, FileText, Printer, PackageCheck, Boxes, RefreshCw } from "lucide-react";
 import { ReportSaleForm } from "./report-sale-form";
+import { SellOneButton } from "./sell-one-button";
 import { RequestReturnForm } from "./request-return-form";
 import { AddNoteForm } from "./add-note-form";
 import { ProductImageSmall } from "@/components/products";
@@ -91,6 +92,30 @@ export function ConsignmentDetail({ consignment, consignmentId }: Props) {
   const router = useRouter();
   const [activeForm, setActiveForm] = useState<"sale" | "return" | "note" | null>(null);
   const [saleLineId, setSaleLineId] = useState<number | null>(null);
+  const [optimisticSold, setOptimisticSold] = useState<Record<number, number>>({});
+  const [lineToast, setLineToast] = useState<string | null>(null);
+  const [topupBusy, setTopupBusy] = useState<number | null>(null);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const showLineToast = (m: string) => {
+    setLineToast(m);
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = setTimeout(() => setLineToast(null), 3500);
+  };
+  const bumpOptimistic = (lineId: number, d: number) =>
+    setOptimisticSold(prev => ({ ...prev, [lineId]: Math.max(0, (prev[lineId] || 0) + d) }));
+  const requestTopup = async (line: Line) => {
+    if (topupBusy) return;
+    setTopupBusy(line.id);
+    try {
+      const res = await fetch(`/api/consignments/${consignmentId}/request-topup`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ product_id: line.x_product_id, note: "" }),
+      });
+      showLineToast(res.ok ? t("topupSent") : t("errorGeneric"));
+    } catch { showLineToast(t("errorGeneric")); }
+    finally { setTopupBusy(null); }
+  };
 
   const c = consignment;
   // Currency ALWAYS derives from the consignment record itself (87=IQD design default),
@@ -270,7 +295,9 @@ export function ConsignmentDetail({ consignment, consignmentId }: Props) {
         </CardHeader>
         <CardContent className="p-0">
           <div className="divide-y">
-            {c.lines.map((line) => (
+            {c.lines.map((line) => {
+              const opt = optimisticSold[line.id] || 0;
+              return (
               <div key={line.id} className="p-4">
                 <div className="flex items-start gap-3">
                   <ProductImageSmall
@@ -313,15 +340,15 @@ export function ConsignmentDetail({ consignment, consignmentId }: Props) {
                   </div>
                   <div className="rounded-md bg-primary/5 p-2 border border-primary/20">
                     <p className="text-[10px] text-primary">{t("qtyRemaining")}</p>
-                    <p className="font-bold text-sm text-primary">{Number(line.x_qty_remaining).toLocaleString("en-US")}</p>
+                    <p className="font-bold text-sm text-primary">{Math.max(0, Number(line.x_qty_remaining) - opt).toLocaleString("en-US")}</p>
                   </div>
                 </div>
 
-                {(Number(line.pending_reported_qty) > 0 || Number(line.x_qty_returned) > 0) && (
+                {(Number(line.pending_reported_qty) + opt > 0 || Number(line.x_qty_returned) > 0) && (
                   <div className="flex gap-3 mt-2 text-xs">
-                    {Number(line.pending_reported_qty) > 0 && (
+                    {Number(line.pending_reported_qty) + opt > 0 && (
                       <span className="text-amber-600 dark:text-amber-400">
-                        {t("qtyPending")}: {Number(line.pending_reported_qty).toLocaleString("en-US")}
+                        {t("qtyPending")}: {(Number(line.pending_reported_qty) + opt).toLocaleString("en-US")}
                       </span>
                     )}
                     {Number(line.x_qty_returned) > 0 && (
@@ -331,18 +358,45 @@ export function ConsignmentDetail({ consignment, consignmentId }: Props) {
                     )}
                   </div>
                 )}
-                {Number(line.reportable_qty) > 0 && canAct && (
-                  <div className="flex items-center justify-between gap-2 mt-2">
-                    <p className="text-xs text-emerald-600 dark:text-emerald-400">
-                      {t("qtyReportable")}: {Number(line.reportable_qty).toLocaleString("en-US")}
-                    </p>
-                    <Button size="sm" variant="outline" className="h-7 px-2.5 text-xs shrink-0" onClick={() => openSaleForm(line.id)}>
-                      <ShoppingCart className="h-3.5 w-3.5 me-1" /> {t("reportSale")}
-                    </Button>
+                {canAct && (
+                  <div className="mt-2.5 space-y-1.5">
+                    {Number(line.reportable_qty) - opt > 0 && (
+                      <p className="text-xs text-emerald-600 dark:text-emerald-400">
+                        {t("qtyReportable")}: {Math.max(0, Number(line.reportable_qty) - opt).toLocaleString("en-US")}
+                      </p>
+                    )}
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      {Number(line.reportable_qty) - opt > 0 && (
+                        <SellOneButton
+                          consignmentId={consignmentId}
+                          lineId={line.id}
+                          productId={line.x_product_id}
+                          labels={{ sell: t("soldOne"), undo: t("undo"), sold: t("soldOneToast"), error: t("errorGeneric") }}
+                          className="flex-1 min-w-[120px]"
+                          showToast={showLineToast}
+                          onOptimistic={() => bumpOptimistic(line.id, 1)}
+                          onUndo={() => bumpOptimistic(line.id, -1)}
+                          onCommitted={() => { setOptimisticSold({}); router.refresh(); }}
+                        />
+                      )}
+                      {Number(line.reportable_qty) - opt > 0 && (
+                        <Button size="sm" variant="outline" className="h-8 px-2.5 text-xs shrink-0" onClick={() => openSaleForm(line.id)}>
+                          <ShoppingCart className="h-3.5 w-3.5 me-1" /> {t("reportSale")}
+                        </Button>
+                      )}
+                      {(Number(line.x_qty_sold) > 0 || Number(line.pending_reported_qty) + opt > 0) && (
+                        <Button size="sm" variant="outline" disabled={topupBusy === line.id}
+                          className="h-8 px-2.5 text-xs shrink-0 border-blue-300 dark:border-blue-700 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20"
+                          onClick={() => void requestTopup(line)}>
+                          <RefreshCw className="h-3.5 w-3.5 me-1" /> {t("requestTopup")}
+                        </Button>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>
-            ))}
+              );
+            })}
           </div>
         </CardContent>
       </Card>
@@ -374,9 +428,14 @@ export function ConsignmentDetail({ consignment, consignmentId }: Props) {
                         </p>
                       </div>
                       {invoiced ? (
-                        <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 text-[10px] shrink-0">
-                          <CheckCircle2 className="h-3 w-3 me-1" /> {t("addedToBalance")}
-                        </Badge>
+                        <span className="flex items-center gap-1 shrink-0">
+                          <Badge className="bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300 text-[10px]">
+                            🏷 {t("consignmentBadge")}
+                          </Badge>
+                          <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 text-[10px]">
+                            <CheckCircle2 className="h-3 w-3 me-1" /> {t("addedToBalance")}
+                          </Badge>
+                        </span>
                       ) : (
                         <span className="flex items-center gap-1.5 shrink-0">
                           <Icon className="h-3.5 w-3.5 text-muted-foreground" />
@@ -448,6 +507,13 @@ export function ConsignmentDetail({ consignment, consignmentId }: Props) {
             </div>
           </CardContent>
         </Card>
+      )}
+
+      {/* One-tap toast */}
+      {lineToast && (
+        <div className="fixed bottom-5 inset-x-0 z-50 flex justify-center px-4 pointer-events-none">
+          <div className="rounded-xl bg-foreground text-background px-4 py-2.5 text-xs font-bold shadow-xl max-w-[92vw]">{lineToast}</div>
+        </div>
       )}
     </div>
   );

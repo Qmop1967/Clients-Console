@@ -553,6 +553,11 @@ export function InvoicesContent({
                                 <Badge className={cn("text-xs border", statusConfig.className)}>
                                   {statusConfig.label}
                                 </Badge>
+                                {invoice.reference_number?.startsWith("CSGN") && (
+                                  <Badge className="text-xs border bg-violet-100 text-violet-700 border-violet-200 dark:bg-violet-900/40 dark:text-violet-300 dark:border-violet-800">
+                                    🏷 {t("consignmentBadge")}
+                                  </Badge>
+                                )}
                               </div>
                               {dueDateLabel && (
                                 <p className={cn("text-xs font-medium mt-0.5", dueDateLabel.className)}>

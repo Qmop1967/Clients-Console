@@ -413,6 +413,11 @@ export function AccountStatementContent({
                             {tx.transaction_type === "credit_note" && t("creditNote")}
                             {tx.transaction_type === "opening_balance" && t("journalEntry")}
                           </Badge>
+                          {tx.reference_number?.startsWith("CSGN") && (
+                            <Badge className="text-[10px] border shrink-0 bg-violet-100 text-violet-700 border-violet-200 dark:bg-violet-900/40 dark:text-violet-300 dark:border-violet-800">
+                              🏷 {t("consignmentBadge")}
+                            </Badge>
+                          )}
                         </div>
                         <p className="text-xs text-muted-foreground truncate">{tx.description}</p>
                       </div>
