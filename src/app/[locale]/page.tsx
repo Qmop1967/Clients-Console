@@ -27,9 +27,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
         : "Wholesale IT hardware and security systems distributor in Baghdad, Iraq.",
       images: [
         {
-          url: `${COMPANY.website}/images/tsh-lockup.webp`,
-          width: 560,
-          height: 394,
+          url: `${COMPANY.website}/images/og-share-${isAr ? "ar" : "en"}.png`,
+          width: 1200,
+          height: 630,
           alt: isAr ? COMPANY.legalNameAr : COMPANY.legalNameEn,
         },
       ],
