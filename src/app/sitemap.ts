@@ -1,7 +1,7 @@
 import type { MetadataRoute } from "next";
 
 const BASE = "https://tsh.sale";
-const PAGES = ["", "/about", "/catalog", "/contact-us", "/privacy", "/terms"];
+const PAGES = ["", "/about", "/catalog", "/wholesale", "/contact-us", "/privacy", "/terms"];
 const LOCALES = ["ar", "en"];
 
 /** Public company pages only. Partner-portal routes are intentionally excluded. */

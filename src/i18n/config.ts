@@ -21,6 +21,19 @@ export const localeDirection: Record<Locale, 'ltr' | 'rtl'> = {
   tm: 'ltr',
 };
 
+/**
+ * BCP47 language tag for the server-rendered <html lang>. Our route segment "tm"
+ * is a UI alias for Turkmen; the valid BCP47 subtag is "tk", so it must be mapped
+ * (ar/en/ckb/kmr are already valid BCP47 subtags and pass through unchanged).
+ */
+export const localeToBcp47: Record<Locale, string> = {
+  ar: 'ar',
+  en: 'en',
+  ckb: 'ckb',
+  kmr: 'kmr',
+  tm: 'tk',
+};
+
 export default getRequestConfig(async ({ requestLocale }) => {
   // This is called for every request, we use the locale from the request
   const locale = await requestLocale;

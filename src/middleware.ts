@@ -21,7 +21,7 @@ const publicPaths = ['/login', '/api', '/admin'];
 // shop-window and MUST stay reachable with no session. Trading stays gated.
 // Exact segment match at depth 2 only — publicPaths uses substring matching, which would
 // leak deeper routes.
-const PUBLIC_MARKETING = new Set(['about', 'catalog', 'contact-us', 'privacy', 'terms']);
+const PUBLIC_MARKETING = new Set(['about', 'catalog', 'contact-us', 'privacy', 'terms', 'wholesale']);
 
 // BROWSER_LOCALE_DETECT_2026_07_22: pick the landing locale for the bare domain.
 // Order: saved NEXT_LOCALE cookie (manual choice persists) -> Accept-Language

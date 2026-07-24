@@ -1,14 +1,11 @@
-import ChunkReloader from "../components/ChunkReloader";
-import VersionWatcher from "../components/VersionWatcher";
 import type { Metadata } from "next";
 import "./globals.css";
-import { ErrorReporter } from "@/components/error-reporter";
-import { ServiceWorkerRegister } from "@/components/service-worker-register";
-import { UpdateBanner } from "@/components/pwa/update-banner";
-import { OfflineIndicator } from "@/components/pwa/offline-indicator";
 
-// PERFORMANCE: Removed unused Geist fonts (~100KB savings)
-// Actual fonts are loaded in [locale]/layout.tsx
+// The single <html>/<body> lives in src/app/[locale]/layout.tsx so lang/dir are
+// server-rendered per locale. This root layout is a pass-through: rendering its own
+// <html>/<body> here produced nested duplicate tags. Global client mounts (chunk
+// reloader, version watcher, error reporter, service worker, offline/update banners)
+// now live in the locale <body>. The root page only redirects to a locale.
 
 export const metadata: Metadata = {
   title: "TSH Clients Console",
@@ -20,15 +17,5 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  return (
-    <html lang="en" suppressHydrationWarning>
-      <body className="antialiased"><ChunkReloader /><VersionWatcher />
-        <ErrorReporter />
-        <ServiceWorkerRegister />
-        <OfflineIndicator />
-        <UpdateBanner />
-        {children}
-      </body>
-    </html>
-  );
+  return children;
 }

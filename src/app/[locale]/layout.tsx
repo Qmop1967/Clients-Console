@@ -8,7 +8,14 @@ import { PushPermission } from "@/components/pwa/push-permission";
 import { CartSessionProvider } from "@/components/providers/cart-session-provider";
 import { CatalogModeProvider } from "@/components/providers/catalog-mode-provider";
 import { Toaster } from "@/components/ui/toaster";
-import { locales, localeDirection, type Locale } from "@/i18n/config";
+import { locales, localeDirection, localeToBcp47, type Locale } from "@/i18n/config";
+import ChunkReloader from "@/components/ChunkReloader";
+import VersionWatcher from "@/components/VersionWatcher";
+import { ErrorReporter } from "@/components/error-reporter";
+import { ServiceWorkerRegister } from "@/components/service-worker-register";
+import { UpdateBanner } from "@/components/pwa/update-banner";
+import { OfflineIndicator } from "@/components/pwa/offline-indicator";
+import { TikTokConsent } from "@/components/analytics/tiktok-consent";
 import "../globals.css";
 
 // Performance-optimized fonts using next/font/google
@@ -119,18 +126,25 @@ export default async function RootLayout({
 
   const messages = await getMessages();
   const dir = localeDirection[locale as Locale];
+  const htmlLang = localeToBcp47[locale as Locale];
 
   // Combine all font CSS variables
   const fontVariables = `${plusJakartaSans.variable} ${cormorantGaramond.variable} ${cairo.variable} ${ibmPlexSansArabic.variable}`;
 
   return (
-    <html lang={locale} dir={dir} suppressHydrationWarning className={fontVariables}>
+    <html lang={htmlLang} dir={dir} suppressHydrationWarning className={fontVariables}>
       <head>
         {/* Preconnect to Vercel Blob storage for faster image loading (LCP optimization) */}
         {/* Preconnect to the system domains for faster API loading */}
         {/* Note: Font preconnects handled automatically by next/font */}
       </head>
       <body className="font-body antialiased">
+        <ChunkReloader />
+        <VersionWatcher />
+        <ErrorReporter />
+        <ServiceWorkerRegister />
+        <OfflineIndicator />
+        <UpdateBanner />
         <SessionProvider>
           <ThemeProvider
             attribute="class"
@@ -142,9 +156,10 @@ export default async function RootLayout({
               <CatalogModeProvider>
                 <CartSessionProvider>
                   {children}
-                  
+
                   <Toaster />
                   <PushPermission />
+                  <TikTokConsent />
                 </CartSessionProvider>
               </CatalogModeProvider>
             </NextIntlClientProvider>
