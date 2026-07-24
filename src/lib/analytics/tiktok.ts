@@ -45,6 +45,8 @@ interface Ttq {
     options?: { event_id?: string },
   ) => void;
   load: (id: string, options?: Record<string, unknown>) => void;
+  grantConsent?: () => void;
+  revokeConsent?: () => void;
   [key: string]: unknown;
 }
 
@@ -53,6 +55,7 @@ declare global {
     ttq?: Ttq;
     TiktokAnalyticsObject?: string;
     __ttqLoaded?: boolean;
+    __ttqConsentGranted?: boolean;
   }
 }
 
@@ -116,15 +119,33 @@ function bootstrapTtq(): void {
  */
 export function loadTikTokPixel(): void {
   if (typeof window === "undefined" || !isPixelConfigured()) return;
-  if (window.__ttqLoaded) return;
-  bootstrapTtq();
-  window.ttq?.load(TIKTOK_PIXEL_ID);
-  window.__ttqLoaded = true;
+  if (!window.__ttqLoaded) {
+    bootstrapTtq();
+    window.ttq?.load(TIKTOK_PIXEL_ID);
+    window.__ttqLoaded = true;
+  }
+  window.ttq?.grantConsent?.();
+  window.__ttqConsentGranted = true;
+}
+
+/**
+ * Withdraws runtime consent and blocks every subsequent event immediately. The
+ * vendor script may remain after a previous acceptance, but receives revocation and
+ * every local tracking helper fails closed.
+ */
+export function revokeTikTokConsent(): void {
+  if (typeof window === "undefined") return;
+  window.__ttqConsentGranted = false;
+  if (window.__ttqLoaded) window.ttq?.revokeConsent?.();
 }
 
 /** Fires PageView. Safe to call repeatedly; no-op until the pixel is loaded. */
 export function trackPageView(): void {
-  if (typeof window === "undefined" || !window.__ttqLoaded) return;
+  if (
+    typeof window === "undefined" ||
+    !window.__ttqLoaded ||
+    !window.__ttqConsentGranted
+  ) return;
   window.ttq?.page();
 }
 
@@ -136,7 +157,11 @@ export function trackEvent(
   name: TikTokEventName,
   properties: TikTokEventProperties = {},
 ): string | null {
-  if (typeof window === "undefined" || !window.__ttqLoaded) return null;
+  if (
+    typeof window === "undefined" ||
+    !window.__ttqLoaded ||
+    !window.__ttqConsentGranted
+  ) return null;
   const eventId = generateEventId();
   window.ttq?.track(name, properties as Record<string, unknown>, { event_id: eventId });
   return eventId;

@@ -1,7 +1,12 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
-import { isPixelConfigured, loadTikTokPixel, trackPageView } from "@/lib/analytics/tiktok";
+import {
+  isPixelConfigured,
+  loadTikTokPixel,
+  revokeTikTokConsent,
+  trackPageView,
+} from "@/lib/analytics/tiktok";
 
 /**
  * Consent-first gate for the TikTok Pixel.
@@ -58,11 +63,13 @@ export function ConsentProvider({ children }: { children: React.ReactNode }) {
 
   const reject = useCallback(() => {
     window.localStorage.setItem(STORAGE_KEY, "rejected");
+    revokeTikTokConsent();
     setStatus("rejected");
   }, []);
 
   const reset = useCallback(() => {
     window.localStorage.removeItem(STORAGE_KEY);
+    revokeTikTokConsent();
     setStatus("unset");
   }, []);
 
