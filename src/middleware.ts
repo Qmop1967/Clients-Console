@@ -22,6 +22,7 @@ const publicPaths = ['/login', '/api', '/admin'];
 // Exact segment match at depth 2 only — publicPaths uses substring matching, which would
 // leak deeper routes.
 const PUBLIC_MARKETING = new Set(['about', 'catalog', 'contact-us', 'privacy', 'terms', 'wholesale']);
+const PUBLIC_MARKETING_NESTED = new Set(['wholesale/ac-adapters']);
 
 // BROWSER_LOCALE_DETECT_2026_07_22: pick the landing locale for the bare domain.
 // Order: saved NEXT_LOCALE cookie (manual choice persists) -> Accept-Language
@@ -95,8 +96,13 @@ export default function middleware(request: NextRequest) {
 
   const seg = pathname.split('/');
 
-  // Public company pages (about / catalog / contact-us / privacy / terms) — no auth.
-  if (seg[2] && PUBLIC_MARKETING.has(seg[2]) && !seg[3]) {
+  // Public company pages and explicitly approved campaign landing pages — no auth.
+  // Deeper wholesale routes stay private unless their exact path is listed above.
+  const marketingPath = seg.slice(2).filter(Boolean).join('/');
+  if (
+    (seg[2] && PUBLIC_MARKETING.has(seg[2]) && !seg[3]) ||
+    PUBLIC_MARKETING_NESTED.has(marketingPath)
+  ) {
     return intlMiddleware(request);
   }
 
