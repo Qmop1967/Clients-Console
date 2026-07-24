@@ -1,8 +1,17 @@
-import type { MetadataRoute } from "next";
+import type { MetadataRoute } from 'next';
 
-const BASE = "https://tsh.sale";
-const PAGES = ["", "/about", "/catalog", "/wholesale", "/contact-us", "/privacy", "/terms"];
-const LOCALES = ["ar", "en"];
+const BASE = 'https://tsh.sale';
+const PAGES = [
+  '',
+  '/about',
+  '/catalog',
+  '/wholesale',
+  '/wholesale/ac-adapters',
+  '/contact-us',
+  '/privacy',
+  '/terms',
+];
+const LOCALES = ['ar', 'en'];
 
 /** Public company pages only. Partner-portal routes are intentionally excluded. */
 export default function sitemap(): MetadataRoute.Sitemap {
@@ -11,8 +20,8 @@ export default function sitemap(): MetadataRoute.Sitemap {
     PAGES.map((page) => ({
       url: `${BASE}/${locale}${page}`,
       lastModified: now,
-      changeFrequency: page === "" ? ("weekly" as const) : ("monthly" as const),
-      priority: page === "" ? 1 : 0.7,
+      changeFrequency: page === '' ? ('weekly' as const) : ('monthly' as const),
+      priority: page === '' ? 1 : 0.7,
     }))
   );
 }

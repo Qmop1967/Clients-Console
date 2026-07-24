@@ -1,12 +1,12 @@
-"use client";
+'use client';
 
-import { createContext, useCallback, useContext, useEffect, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import {
   isPixelConfigured,
   loadTikTokPixel,
   revokeTikTokConsent,
   trackPageView,
-} from "@/lib/analytics/tiktok";
+} from '@/lib/analytics/tiktok';
 
 /**
  * Consent-first gate for the TikTok Pixel.
@@ -17,9 +17,10 @@ import {
  * A change-consent control lets the visitor reopen the choice and withdraw at any time.
  */
 
-export type ConsentStatus = "unset" | "accepted" | "rejected";
+export type ConsentStatus = 'unset' | 'accepted' | 'rejected';
 
-const STORAGE_KEY = "tsh_tt_consent";
+const STORAGE_KEY = 'tsh_tt_consent';
+const CONSENT_GRANTED_EVENT = 'tsh:tiktok-consent-granted';
 
 interface ConsentContextValue {
   status: ConsentStatus;
@@ -34,13 +35,13 @@ interface ConsentContextValue {
 const ConsentContext = createContext<ConsentContextValue | null>(null);
 
 function readStored(): ConsentStatus {
-  if (typeof window === "undefined") return "unset";
+  if (typeof window === 'undefined') return 'unset';
   const value = window.localStorage.getItem(STORAGE_KEY);
-  return value === "accepted" || value === "rejected" ? value : "unset";
+  return value === 'accepted' || value === 'rejected' ? value : 'unset';
 }
 
 export function ConsentProvider({ children }: { children: React.ReactNode }) {
-  const [status, setStatus] = useState<ConsentStatus>("unset");
+  const [status, setStatus] = useState<ConsentStatus>('unset');
   const [ready, setReady] = useState(false);
 
   // Load persisted decision on mount and honour a prior "accepted".
@@ -48,29 +49,31 @@ export function ConsentProvider({ children }: { children: React.ReactNode }) {
     const stored = readStored();
     setStatus(stored);
     setReady(true);
-    if (stored === "accepted") {
+    if (stored === 'accepted') {
       loadTikTokPixel();
       trackPageView();
+      window.dispatchEvent(new Event(CONSENT_GRANTED_EVENT));
     }
   }, []);
 
   const accept = useCallback(() => {
-    window.localStorage.setItem(STORAGE_KEY, "accepted");
-    setStatus("accepted");
+    window.localStorage.setItem(STORAGE_KEY, 'accepted');
+    setStatus('accepted');
     loadTikTokPixel();
     trackPageView();
+    window.dispatchEvent(new Event(CONSENT_GRANTED_EVENT));
   }, []);
 
   const reject = useCallback(() => {
-    window.localStorage.setItem(STORAGE_KEY, "rejected");
+    window.localStorage.setItem(STORAGE_KEY, 'rejected');
     revokeTikTokConsent();
-    setStatus("rejected");
+    setStatus('rejected');
   }, []);
 
   const reset = useCallback(() => {
     window.localStorage.removeItem(STORAGE_KEY);
     revokeTikTokConsent();
-    setStatus("unset");
+    setStatus('unset');
   }, []);
 
   return (
@@ -82,7 +85,7 @@ export function ConsentProvider({ children }: { children: React.ReactNode }) {
 
 export function useConsent(): ConsentContextValue {
   const ctx = useContext(ConsentContext);
-  if (!ctx) throw new Error("useConsent must be used within a ConsentProvider");
+  if (!ctx) throw new Error('useConsent must be used within a ConsentProvider');
   return ctx;
 }
 
