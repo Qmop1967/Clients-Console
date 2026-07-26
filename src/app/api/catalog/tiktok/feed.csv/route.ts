@@ -68,7 +68,7 @@ export async function GET() {
 
     const header = [
       'sku_id', 'title', 'description', 'availability', 'condition',
-      'price', 'link', 'image_link', 'brand',
+      'price', 'link', 'image_link', 'brand', 'product_type',
     ].join(',');
     const rows = [header];
 
@@ -90,6 +90,7 @@ export async function GET() {
         csvCell(`${SITE_BASE}/ar/shop/${product.item_id}`),
         csvCell(image),
         csvCell(product.brand || deriveBrand(title)),
+        csvCell(product.category_name || 'Electronics'),
       ].join(','));
     }
 
