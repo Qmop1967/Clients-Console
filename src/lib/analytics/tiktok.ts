@@ -14,26 +14,28 @@
  * future server event describing the same action collapse into one on TikTok's side.
  */
 
+import { isAllowedTshMeasurementPath } from '@/lib/analytics/meta-policy';
+import {
+  sanitizeTikTokProperties,
+  type TikTokEventProperties,
+} from '@/lib/analytics/tiktok-policy';
+
+export type { TikTokContentItem, TikTokEventProperties } from '@/lib/analytics/tiktok-policy';
+
 export const TIKTOK_PIXEL_ID = process.env.NEXT_PUBLIC_TIKTOK_PIXEL_ID || "";
 
 /** Standard TikTok events we intend to use. Kept small and intentional. */
 export type TikTokEventName =
   | "ViewContent"
+  | "AddToCart"
+  | "InitiateCheckout"
+  | "Purchase"
   | "ClickButton"
   | "Contact"
   | "ViewCatalog";
 
-/**
- * Whitelisted, non-identifying event properties. This shape is the guardrail that
- * keeps PII out of the pixel — there is deliberately no field for email/phone/name.
- */
-export interface TikTokEventProperties {
-  content_id?: string;
-  content_type?: "product";
-  content_name?: string;
-  content_category?: string;
-  currency?: string;
-  value?: number;
+interface TikTokTrackOptions {
+  eventId?: string;
 }
 
 interface Ttq {
@@ -62,6 +64,15 @@ declare global {
 /** True only when an activation id is present. No id -> pixel stays fully dormant. */
 export function isPixelConfigured(): boolean {
   return TIKTOK_PIXEL_ID.length > 0;
+}
+
+export function isTikTokConsentGranted(): boolean {
+  return (
+    typeof window !== 'undefined' &&
+    window.__ttqLoaded === true &&
+    window.__ttqConsentGranted === true &&
+    isAllowedTshMeasurementPath(window.location.pathname)
+  );
 }
 
 /** Dedup key shared with the future server-side Events API. */
@@ -118,7 +129,11 @@ function bootstrapTtq(): void {
  * No-op on the server, when no id is configured, or when already loaded.
  */
 export function loadTikTokPixel(): void {
-  if (typeof window === "undefined" || !isPixelConfigured()) return;
+  if (
+    typeof window === "undefined" ||
+    !isPixelConfigured() ||
+    !isAllowedTshMeasurementPath(window.location.pathname)
+  ) return;
   if (!window.__ttqLoaded) {
     bootstrapTtq();
     window.ttq?.load(TIKTOK_PIXEL_ID);
@@ -144,7 +159,8 @@ export function trackPageView(): void {
   if (
     typeof window === "undefined" ||
     !window.__ttqLoaded ||
-    !window.__ttqConsentGranted
+    !window.__ttqConsentGranted ||
+    !isAllowedTshMeasurementPath(window.location.pathname)
   ) return;
   window.ttq?.page();
 }
@@ -156,13 +172,16 @@ export function trackPageView(): void {
 export function trackEvent(
   name: TikTokEventName,
   properties: TikTokEventProperties = {},
+  options: TikTokTrackOptions = {},
 ): string | null {
   if (
     typeof window === "undefined" ||
     !window.__ttqLoaded ||
-    !window.__ttqConsentGranted
+    !window.__ttqConsentGranted ||
+    !isAllowedTshMeasurementPath(window.location.pathname)
   ) return null;
-  const eventId = generateEventId();
-  window.ttq?.track(name, properties as Record<string, unknown>, { event_id: eventId });
+  const requestedEventId = options.eventId?.trim().slice(0, 128);
+  const eventId = requestedEventId || generateEventId();
+  window.ttq?.track(name, sanitizeTikTokProperties(properties), { event_id: eventId });
   return eventId;
 }

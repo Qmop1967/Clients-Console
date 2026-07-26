@@ -4,7 +4,7 @@ import { useEffect, useRef } from 'react';
 import { usePathname } from 'next/navigation';
 import { ConsentProvider, useConsent } from '@/components/analytics/consent-context';
 import { ConsentBanner } from '@/components/analytics/consent-banner';
-import { trackPageView } from '@/lib/analytics/tiktok';
+import { loadTikTokPixel, trackPageView } from '@/lib/analytics/tiktok';
 import { loadMetaPixel, trackMetaPageView } from '@/lib/analytics/meta';
 
 /**
@@ -21,6 +21,7 @@ function PixelPageView() {
     if (previousPath.current === pathname) return;
     previousPath.current = pathname;
     if (!measurementActive) return;
+    loadTikTokPixel();
     trackPageView();
     loadMetaPixel();
     trackMetaPageView();

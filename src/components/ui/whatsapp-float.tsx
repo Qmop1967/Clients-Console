@@ -2,6 +2,7 @@
 
 import { useTranslations } from "next-intl";
 import { whatsappSalesLink } from "@/lib/config/contact";
+import { trackEvent as trackTikTokEvent } from "@/lib/analytics/tiktok";
 
 /**
  * WhatsAppFloat — always-reachable sales line (the #1 conversation channel
@@ -19,6 +20,11 @@ export function WhatsAppFloat() {
       rel="noopener noreferrer"
       aria-label={t("whatsappSales")}
       title={t("whatsappSales")}
+      onClick={() =>
+        trackTikTokEvent("Contact", {
+          content_name: "TSH WhatsApp Sales",
+        })
+      }
       className="fixed bottom-20 end-4 z-40 flex h-12 w-12 items-center justify-center rounded-2xl bg-[#25D366] text-white shadow-lg shadow-emerald-900/30 transition-transform native-press hover:scale-105 md:bottom-6 md:end-6"
     >
       <svg viewBox="0 0 24 24" fill="currentColor" className="h-6 w-6" aria-hidden="true">

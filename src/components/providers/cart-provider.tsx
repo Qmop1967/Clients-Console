@@ -3,6 +3,7 @@
 import * as React from "react";
 import { createContext, useContext, useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { trackMetaEvent } from "@/lib/analytics/meta";
+import { trackEvent as trackTikTokEvent } from "@/lib/analytics/tiktok";
 
 export interface CartItem {
   item_id: string;
@@ -212,6 +213,21 @@ export function CartProvider({ children, currencyCode = "IQD" }: CartProviderPro
         currency: currencyCode,
         value: item.rate * addedQuantity,
         num_items: addedQuantity,
+      });
+      trackTikTokEvent("AddToCart", {
+        content_ids: [item.sku],
+        contents: [
+          {
+            content_id: item.sku,
+            content_name: item.name,
+            quantity: addedQuantity,
+            price: item.rate,
+          },
+        ],
+        content_type: "product",
+        content_name: item.name,
+        currency: currencyCode,
+        value: item.rate * addedQuantity,
       });
     }
 

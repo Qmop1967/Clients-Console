@@ -10,6 +10,7 @@
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "test:auth-routes": "node --experimental-strip-types --test tests/auth-route-policy.test.mjs",
+    "test:tiktok-analytics": "node --experimental-strip-types --test tests/tiktok-analytics-policy.test.mjs",
     "analyze": "ANALYZE=true next build",
     "verify-upstash": "node scripts/verify-upstash.js",
     "index-products": "node scripts/index-products.js",

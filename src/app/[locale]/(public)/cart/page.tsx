@@ -30,6 +30,10 @@ import { useParams, useRouter } from 'next/navigation';
 import { useOnlineStatus } from '@/lib/use-online-status';
 import { isMetaConsentGranted, trackMetaEvent } from '@/lib/analytics/meta';
 import { normalizeTshMeasurementUrl } from '@/lib/analytics/meta-policy';
+import {
+  isTikTokConsentGranted,
+  trackEvent as trackTikTokEvent,
+} from '@/lib/analytics/tiktok';
 
 export default function CartPage() {
   const t = useTranslations('cart');
@@ -257,8 +261,25 @@ export default function CartPage() {
         num_items: validItemCount,
       };
 
+      const tikTokConsent = isTikTokConsentGranted();
+      const tikTokProperties = {
+        content_ids: validItems.map((item) => item.sku),
+        contents: validItems.map((item) => ({
+          content_id: item.sku,
+          content_name: item.name,
+          quantity: item.quantity,
+          price: item.rate,
+        })),
+        content_type: 'product' as const,
+        currency: currencyCode,
+        value: validSubtotal,
+      };
+
       if (metaConsent) {
         trackMetaEvent('InitiateCheckout', metaProperties);
+      }
+      if (tikTokConsent) {
+        trackTikTokEvent('InitiateCheckout', tikTokProperties);
       }
 
       const __metaEventSourceUrl = metaConsent
@@ -309,6 +330,11 @@ export default function CartPage() {
         trackMetaEvent('Purchase', data.meta_purchase.custom_data, {
           eventId: data.meta_purchase.event_id,
           sendServer: false,
+        });
+      }
+      if (tikTokConsent) {
+        trackTikTokEvent('Purchase', tikTokProperties, {
+          eventId: `tt_purchase_${__idemKey}`,
         });
       }
 

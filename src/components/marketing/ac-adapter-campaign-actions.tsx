@@ -8,13 +8,12 @@ import { trackEvent } from '@/lib/analytics/tiktok';
 const CONSENT_GRANTED_EVENT = 'tsh:tiktok-consent-granted';
 
 const eventProperties = {
-  content_id: 'category-laptop-ac-adapters',
   content_name: 'PowerPluse Laptop AC Adapters',
   content_category: 'Laptop AC Adapters',
 } as const;
 
 function trackCampaignView(): void {
-  trackEvent('ViewContent', eventProperties);
+  trackEvent('ViewCatalog', eventProperties);
 }
 
 export function AcAdapterCampaignView() {

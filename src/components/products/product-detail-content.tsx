@@ -40,6 +40,7 @@ import {
   MEASUREMENT_CONSENT_GRANTED_EVENT,
   trackMetaEvent,
 } from "@/lib/analytics/meta";
+import { trackEvent as trackTikTokEvent } from "@/lib/analytics/tiktok";
 
 interface ProductDetailProps {
   product: {
@@ -167,8 +168,8 @@ export function ProductDetailContent({ product, locale, canOrder, showExactStock
     viewTrackedRef.current = false;
 
     const trackProductView = () => {
-      if (viewTrackedRef.current) return;
-      const eventId = trackMetaEvent("ViewContent", {
+      if (viewTrackedRef.current || !product.sku.trim()) return;
+      const metaEventId = trackMetaEvent("ViewContent", {
         content_ids: [product.sku],
         contents: [
           {
@@ -184,7 +185,24 @@ export function ProductDetailContent({ product, locale, canOrder, showExactStock
         value: product.rate,
         num_items: 1,
       });
-      if (eventId) viewTrackedRef.current = true;
+      const tikTokEventId = trackTikTokEvent("ViewContent", {
+        content_ids: [product.sku],
+        contents: [
+          {
+            content_id: product.sku,
+            content_name: product.name,
+            content_category: product.category_name,
+            quantity: 1,
+            price: product.rate,
+          },
+        ],
+        content_type: "product",
+        content_name: product.name,
+        content_category: product.category_name,
+        currency: product.currencyCode,
+        value: product.rate,
+      });
+      if (metaEventId || tikTokEventId) viewTrackedRef.current = true;
     };
 
     trackProductView();
