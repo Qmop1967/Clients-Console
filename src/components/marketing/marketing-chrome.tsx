@@ -61,7 +61,8 @@ export function OrganizationJsonLd({ locale }: { locale: string }) {
 const NAV = [
   { href: "", ar: "الرئيسية", en: "Home" },
   { href: "/about", ar: "من نحن", en: "About" },
-  { href: "/catalog", ar: "المنتجات", en: "Products" },
+  { href: "/shop", ar: "المتجر", en: "Shop" },
+  { href: "/catalog", ar: "الأقسام", en: "Categories" },
   { href: "/contact-us", ar: "تواصل معنا", en: "Contact" },
 ] as const;
 

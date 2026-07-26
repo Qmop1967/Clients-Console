@@ -35,7 +35,7 @@
       "usd": "USD"
     },
     "brandStore": "Online Store",
-    "brandCompany": "Tech Spider Hand Co.",
+    "brandCompany": "Tech Spider Hand Ltd Company",
     "whatsappSales": "Sales WhatsApp",
     "whatsappPrefill": "Hello, I have a question about your products"
   },
@@ -56,7 +56,7 @@
     "welcome": "Welcome to TSH",
     "loginDescription": "Enter your email to access your account",
     "zohoAccountLink": "Existing TSH customer? Your account will be automatically linked to your customer profile and pricing.",
-    "newVisitorWelcome": "New here? Enter your email to create an account and start ordering.",
+    "newVisitorWelcome": "New to TSH? Submit a wholesale account request for sales review.",
     "secureLogin": "Secure Login",
     "noPassword": "No Password",
     "loginMethod": "Login method",
@@ -631,9 +631,9 @@
     "contactUs": "Contact Us",
     "terms": "Terms of Service",
     "privacy": "Privacy Policy",
-    "aboutShort": "Computers, accessories, CCTV and networking supply for Iraqi traders — wholesale prices updated daily.",
+    "aboutShort": "A public product catalogue for Iraqi traders; contracted partner pricing appears after sign-in.",
     "quickLinks": "Quick Links",
-    "legalName": "Tech Spider Hand General Trading Co. Ltd."
+    "legalName": "Tech Spider Hand Ltd Company"
   },
   "publicSupport": {
     "title": "Support Center",

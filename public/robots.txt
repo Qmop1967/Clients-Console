@@ -13,11 +13,14 @@ Allow: /ar/privacy
 Allow: /en/privacy
 Allow: /ar/terms
 Allow: /en/terms
+Allow: /ar/shop
+Allow: /en/shop
 
-# Partner-only areas — trade accounts, contractual pricing, statements
+# The shop index and numeric product pages are public. Checkout and partner
+# account areas remain private.
 Disallow: /api/
 Disallow: /admin
-Disallow: /*/shop
+Disallow: /*/shop/order-type
 Disallow: /*/cart
 Disallow: /*/login
 Disallow: /*/dashboard

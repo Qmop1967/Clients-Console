@@ -18,6 +18,7 @@ import {
   platformAuthenticatorIsAvailable,
 } from "@simplewebauthn/browser";
 import { resolvePostLoginTarget } from "@/lib/auth/route-policy";
+import { COMPANY } from "@/lib/marketing/company";
 
 type LoginMethod = "phone" | "email";
 
@@ -509,7 +510,7 @@ export default function LoginPage() {
           </div>
 
           <h1 className="text-xs font-medium text-muted-foreground mt-1">
-            {isAr ? "شركة TSH للتجارة العامة المحدودة" : "TSH General Trading Co. Ltd."}
+            {isAr ? COMPANY.legalNameAr : COMPANY.legalNameEn}
           </h1>
           <p className="text-xs text-muted-foreground mt-0.5 flex items-center justify-center gap-1">
             <span>{isAr ? "العراق — بغداد" : "Iraq — Baghdad"}</span>
@@ -522,10 +523,12 @@ export default function LoginPage() {
         <Card className="glass-auth rounded-2xl overflow-hidden animate-fade-in-up stagger-1">
           <CardHeader className="space-y-1 pb-4 pt-6">
             <CardTitle className="text-2xl font-bold text-center">
-              {isAr ? "تسجيل الدخول" : "Sign In"}
+              {isAr ? "تسجيل دخول الشركاء الحاليين" : "Existing Partner Sign In"}
             </CardTitle>
             <CardDescription className="text-center text-base">
-              {isAr ? "أدخل بياناتك للوصول إلى حسابك" : "Enter your credentials to access your account"}
+              {isAr
+                ? "استخدم البريد أو رقم الهاتف المرتبط بحسابك"
+                : "Use the email or phone number linked to your account"}
             </CardDescription>
           </CardHeader>
           <CardContent className="pb-6">
@@ -785,6 +788,25 @@ export default function LoginPage() {
           </CardContent>
         </Card>
 
+        {/* New wholesale customers submit an application; access is granted only
+            after sales review, so this never creates an unverified Odoo account. */}
+        <section className="animate-fade-in-up mt-4 rounded-2xl border border-gold/30 bg-gold/5 p-4 text-center">
+          <h2 className="font-semibold text-foreground">
+            {isAr ? "عميل جملة جديد؟" : "New wholesale customer?"}
+          </h2>
+          <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
+            {isAr
+              ? "قدّم طلب تسجيل جديد، وسيراجع فريق المبيعات بيانات النشاط قبل تفعيل الحساب."
+              : "Submit a new registration request. Our sales team will review the business details before activating access."}
+          </p>
+          <Link
+            href={`/${locale}/contact-us#partner`}
+            className="mt-3 inline-flex min-h-11 w-full items-center justify-center rounded-xl border border-gold bg-background px-4 text-sm font-semibold text-gold transition-colors hover:bg-gold hover:text-white"
+          >
+            {isAr ? "طلب تسجيل جديد" : "New registration request"}
+          </Link>
+        </section>
+
         {/* Wholesale partners info — for prospects */}
           <div className="animate-fade-in-up mt-6 mx-auto max-w-sm relative overflow-hidden rounded-xl border border-blue-200/60 dark:border-blue-700/40">
             <div className="absolute inset-0 bg-gradient-to-br from-blue-50 via-slate-50 to-cyan-50/50 dark:from-blue-950/50 dark:via-slate-900/50 dark:to-cyan-950/30" />
@@ -802,6 +824,26 @@ export default function LoginPage() {
               </p>
             </div>
           </div>
+        <footer className="mt-5 text-center text-xs text-muted-foreground">
+          <nav
+            aria-label={isAr ? "روابط معلومات الشركة" : "Company information links"}
+            className="flex flex-wrap items-center justify-center gap-x-3 gap-y-2"
+          >
+            <Link href={`/${locale}/about`} className="hover:text-foreground hover:underline">
+              {isAr ? "من نحن" : "About"}
+            </Link>
+            <Link href={`/${locale}/contact-us`} className="hover:text-foreground hover:underline">
+              {isAr ? "تواصل معنا" : "Contact"}
+            </Link>
+            <Link href={`/${locale}/privacy`} className="hover:text-foreground hover:underline">
+              {isAr ? "الخصوصية" : "Privacy"}
+            </Link>
+            <Link href={`/${locale}/terms`} className="hover:text-foreground hover:underline">
+              {isAr ? "الشروط" : "Terms"}
+            </Link>
+          </nav>
+          <a href={`mailto:${COMPANY.email}`} className="mt-2 inline-block hover:text-foreground" dir="ltr">{COMPANY.email}</a>
+        </footer>
       </div>
     </div>
   );

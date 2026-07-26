@@ -86,10 +86,10 @@ export default async function HomePage({ params }: Props) {
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
               <Link
-                href={`/${locale}/catalog`}
+                href={`/${locale}/shop`}
                 className="inline-flex min-h-12 items-center gap-2 rounded-lg bg-gold px-5 text-sm font-semibold text-white transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold"
               >
-                {isAr ? "استعرض أقسام المنتجات" : "Browse product departments"}
+                {isAr ? "تصفّح المتجر العام" : "Browse the public shop"}
                 <Arrow className="size-4" aria-hidden />
               </Link>
               <Link
