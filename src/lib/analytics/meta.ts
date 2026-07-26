@@ -1,3 +1,8 @@
+import {
+  isAllowedTshMeasurementPath,
+  normalizeTshMeasurementUrl,
+} from '@/lib/analytics/meta-policy';
+
 /**
  * Meta Pixel — explicit-consent, first-party measurement.
  *
@@ -97,7 +102,13 @@ function bootstrapFbq(): void {
 }
 
 export function loadMetaPixel(): void {
-  if (typeof window === 'undefined' || !isMetaPixelConfigured()) return;
+  if (
+    typeof window === 'undefined' ||
+    !isMetaPixelConfigured() ||
+    !isAllowedTshMeasurementPath(window.location.pathname)
+  ) {
+    return;
+  }
 
   if (!window.__tshMetaPixelLoaded) {
     bootstrapFbq();
@@ -129,7 +140,7 @@ function sanitizeProperties(properties: MetaEventProperties): Record<string, unk
   const contentIds = properties.content_ids
     ?.filter((id) => typeof id === 'string' && id.trim().length > 0)
     .slice(0, 100)
-    .map((id) => id.trim().slice(0, 128));
+    .map((id) => id.trim().slice(0, 100));
   if (contentIds?.length) clean.content_ids = contentIds;
 
   const contents = properties.contents
@@ -142,7 +153,7 @@ function sanitizeProperties(properties: MetaEventProperties): Record<string, unk
     )
     .slice(0, 100)
     .map((item) => ({
-      id: item.id.trim().slice(0, 128),
+      id: item.id.trim().slice(0, 100),
       quantity: Math.max(1, Math.trunc(item.quantity)),
       ...(finiteNonNegative(item.item_price) !== undefined
         ? { item_price: finiteNonNegative(item.item_price) }
@@ -182,7 +193,8 @@ function queueServerEvent(
   eventId: string,
   customData: Record<string, unknown>
 ): void {
-  if (!META_CAPI_BROWSER_BRIDGE_ENABLED) return;
+  const eventSourceUrl = normalizeTshMeasurementUrl(window.location.href);
+  if (!META_CAPI_BROWSER_BRIDGE_ENABLED || !eventSourceUrl) return;
 
   void fetch('/api/analytics/meta', {
     method: 'POST',
@@ -193,7 +205,7 @@ function queueServerEvent(
       consent: true,
       eventName,
       eventId,
-      eventSourceUrl: window.location.href,
+      eventSourceUrl,
       customData,
     }),
   }).catch(() => undefined);
@@ -207,7 +219,8 @@ export function trackMetaEvent(
   if (
     typeof window === 'undefined' ||
     !window.__tshMetaPixelLoaded ||
-    !window.__tshMetaConsentGranted
+    !window.__tshMetaConsentGranted ||
+    !isAllowedTshMeasurementPath(window.location.pathname)
   ) {
     return null;
   }

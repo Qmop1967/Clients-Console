@@ -1,15 +1,15 @@
-"use client";
+'use client';
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { useTranslations } from "next-intl";
-import { useSession } from "next-auth/react";
-import { useCart } from "@/components/providers/cart-provider";
-import { useCatalogMode } from "@/components/providers/catalog-mode-provider";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
-import { Badge } from "@/components/ui/badge";
-import { Textarea } from "@/components/ui/textarea";
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useTranslations } from 'next-intl';
+import { useSession } from 'next-auth/react';
+import { useCart } from '@/components/providers/cart-provider';
+import { useCatalogMode } from '@/components/providers/catalog-mode-provider';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Separator } from '@/components/ui/separator';
+import { Badge } from '@/components/ui/badge';
+import { Textarea } from '@/components/ui/textarea';
 import {
   ShoppingBag,
   Trash2,
@@ -21,28 +21,34 @@ import {
   CheckCircle,
   LogIn,
   MessageCircle,
-} from "lucide-react";
-import { WholesaleQuantityInput } from "@/components/ui/wholesale-quantity-input";
-import { DraftOrderMerge } from "@/components/cart/draft-order-merge";
-import Image from "next/image";
-import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
-import { useOnlineStatus } from "@/lib/use-online-status";
-import {
-  generateMetaEventId,
-  isMetaConsentGranted,
-  trackMetaEvent,
-} from "@/lib/analytics/meta";
+} from 'lucide-react';
+import { WholesaleQuantityInput } from '@/components/ui/wholesale-quantity-input';
+import { DraftOrderMerge } from '@/components/cart/draft-order-merge';
+import Image from 'next/image';
+import Link from 'next/link';
+import { useParams, useRouter } from 'next/navigation';
+import { useOnlineStatus } from '@/lib/use-online-status';
+import { isMetaConsentGranted, trackMetaEvent } from '@/lib/analytics/meta';
+import { normalizeTshMeasurementUrl } from '@/lib/analytics/meta-policy';
 
 export default function CartPage() {
-  const t = useTranslations("cart");
-  const tProducts = useTranslations("products");
-  const tCommon = useTranslations("common");
-  const tCatalog = useTranslations("catalogMode");
+  const t = useTranslations('cart');
+  const tProducts = useTranslations('products');
+  const tCommon = useTranslations('common');
+  const tCatalog = useTranslations('catalogMode');
   const { locale } = useParams();
   const router = useRouter();
   const { data: session, status } = useSession();
-  const { items, currencyCode, orderNote, removeItem, updateQuantity, updateItemNote, updateOrderNote, clearCart } = useCart();
+  const {
+    items,
+    currencyCode,
+    orderNote,
+    removeItem,
+    updateQuantity,
+    updateItemNote,
+    updateOrderNote,
+    clearCart,
+  } = useCart();
   const { isCatalogMode, showCatalogModal } = useCatalogMode();
 
   const [isCheckingOut, setIsCheckingOut] = useState(false);
@@ -66,15 +72,20 @@ export default function CartPage() {
   } | null>(null);
   const [skipMergeCheck, setSkipMergeCheck] = useState(false);
 
-  const isAuthenticated = status === "authenticated" && !!session?.user?.odooPartnerId;
+  const isAuthenticated = status === 'authenticated' && !!session?.user?.odooPartnerId;
 
   // Separate valid and invalid items
   const { validItems, invalidItems, validSubtotal, validItemCount } = useMemo(() => {
-    const valid = items.filter(item => item.rate > 0);
-    const invalid = items.filter(item => item.rate <= 0);
+    const valid = items.filter((item) => item.rate > 0);
+    const invalid = items.filter((item) => item.rate <= 0);
     const subtotal = valid.reduce((sum, item) => sum + item.rate * item.quantity, 0);
     const count = valid.reduce((sum, item) => sum + item.quantity, 0);
-    return { validItems: valid, invalidItems: invalid, validSubtotal: subtotal, validItemCount: count };
+    return {
+      validItems: valid,
+      invalidItems: invalid,
+      validSubtotal: subtotal,
+      validItemCount: count,
+    };
   }, [items]);
 
   const totalItemCount = items.reduce((sum, item) => sum + item.quantity, 0);
@@ -83,13 +94,12 @@ export default function CartPage() {
   // Format currency - show decimals for small amounts in IQD
   const formatCurrency = (amount: number, forceDecimals = false) => {
     // For IQD: show decimals only if amount is small (< 10) or forced
-    const needsDecimals = currencyCode === "IQD"
-      ? (amount > 0 && amount < 10) || forceDecimals
-      : true;
+    const needsDecimals =
+      currencyCode === 'IQD' ? (amount > 0 && amount < 10) || forceDecimals : true;
     const decimals = needsDecimals ? 2 : 0;
 
-    return new Intl.NumberFormat("en-US", {
-      style: "decimal",
+    return new Intl.NumberFormat('en-US', {
+      style: 'decimal',
       minimumFractionDigits: decimals,
       maximumFractionDigits: decimals,
     }).format(amount);
@@ -97,11 +107,11 @@ export default function CartPage() {
 
   // Format unit price - always show precision for unit prices
   const formatUnitPrice = (rate: number) => {
-    if (rate <= 0) return "0";
+    if (rate <= 0) return '0';
     // Always show at least 2 decimals for unit prices to avoid confusion
-    const decimals = currencyCode === "IQD" ? (rate < 1 ? 2 : (rate < 10 ? 1 : 0)) : 2;
-    return new Intl.NumberFormat("en-US", {
-      style: "decimal",
+    const decimals = currencyCode === 'IQD' ? (rate < 1 ? 2 : rate < 10 ? 1 : 0) : 2;
+    return new Intl.NumberFormat('en-US', {
+      style: 'decimal',
       minimumFractionDigits: decimals,
       maximumFractionDigits: decimals,
     }).format(rate);
@@ -130,61 +140,66 @@ export default function CartPage() {
     };
 
     fetchDrafts();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [isAuthenticated, items.length]);
 
   // Handle merge into existing draft order
-  const handleMerge = useCallback(async (orderId: number) => {
-    if (isMerging || validItems.length === 0) return;
+  const handleMerge = useCallback(
+    async (orderId: number) => {
+      if (isMerging || validItems.length === 0) return;
 
-    setIsMerging(true);
-    setCheckoutError(null);
+      setIsMerging(true);
+      setCheckoutError(null);
 
-    try {
-      const itemNotesText = validItems
-        .filter(item => item.note && item.note.trim())
-        .map(item => `${item.name} (${item.sku}): ${item.note}`)
-        .join('\n');
-      const combinedNotes = [orderNote, itemNotesText].filter(Boolean).join('\n\n');
+      try {
+        const itemNotesText = validItems
+          .filter((item) => item.note && item.note.trim())
+          .map((item) => `${item.name} (${item.sku}): ${item.note}`)
+          .join('\n');
+        const combinedNotes = [orderNote, itemNotesText].filter(Boolean).join('\n\n');
 
-      const res = await fetch(`/api/orders/${orderId}/merge`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          items: validItems.map(item => ({
-            item_id: item.item_id,
-            quantity: item.quantity,
-            rate: item.rate,
-            name: item.name,
-          })),
-          notes: combinedNotes || undefined,
-        }),
-      });
+        const res = await fetch(`/api/orders/${orderId}/merge`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            items: validItems.map((item) => ({
+              item_id: item.item_id,
+              quantity: item.quantity,
+              rate: item.rate,
+              name: item.name,
+            })),
+            notes: combinedNotes || undefined,
+          }),
+        });
 
-      const data = await res.json();
+        const data = await res.json();
 
-      if (!res.ok) {
-        throw new Error(data.error || 'Merge failed');
+        if (!res.ok) {
+          throw new Error(data.error || 'Merge failed');
+        }
+
+        const targetDraft = draftOrders.find((d) => d.id === orderId);
+        setMergeResult({
+          success: true,
+          addedCount: data.addedCount,
+          updatedCount: data.updatedCount,
+          orderName: targetDraft?.name || data.order?.salesorder_number || '',
+          orderId: String(orderId),
+        });
+
+        // Clear the cart after successful merge
+        clearCart();
+      } catch (error) {
+        console.error('Merge error:', error);
+        setCheckoutError(error instanceof Error ? error.message : 'Merge failed');
+      } finally {
+        setIsMerging(false);
       }
-
-      const targetDraft = draftOrders.find(d => d.id === orderId);
-      setMergeResult({
-        success: true,
-        addedCount: data.addedCount,
-        updatedCount: data.updatedCount,
-        orderName: targetDraft?.name || data.order?.salesorder_number || '',
-        orderId: String(orderId),
-      });
-
-      // Clear the cart after successful merge
-      clearCart();
-    } catch (error) {
-      console.error('Merge error:', error);
-      setCheckoutError(error instanceof Error ? error.message : 'Merge failed');
-    } finally {
-      setIsMerging(false);
-    }
-  }, [isMerging, validItems, orderNote, draftOrders, clearCart]);
+    },
+    [isMerging, validItems, orderNote, draftOrders, clearCart]
+  );
 
   // Handle "create new order" — skip merge check
   const handleSkipMerge = useCallback(() => {
@@ -201,20 +216,26 @@ export default function CartPage() {
     try {
       // Collect all notes (item notes + order note)
       const itemNotesText = validItems
-        .filter(item => item.note && item.note.trim())
-        .map(item => `${item.name} (${item.sku}): ${item.note}`)
+        .filter((item) => item.note && item.note.trim())
+        .map((item) => `${item.name} (${item.sku}): ${item.note}`)
         .join('\n');
 
       const combinedNotes = [orderNote, itemNotesText].filter(Boolean).join('\n\n');
 
       // Stable idempotency key per cart (survives reload/retry; rate-independent)
-      const __cartKey = validItems.map((i) => `${i.item_id}:${i.quantity}`).sort().join('|');
+      const __cartKey = validItems
+        .map((i) => `${i.item_id}:${i.quantity}`)
+        .sort()
+        .join('|');
       const __idemStoreKey = `tsh_idem:${__cartKey}`;
       let __idemKey = '';
       try {
         __idemKey = sessionStorage.getItem(__idemStoreKey) || '';
         if (!__idemKey) {
-          __idemKey = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+          __idemKey =
+            typeof crypto !== 'undefined' && crypto.randomUUID
+              ? crypto.randomUUID()
+              : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
           sessionStorage.setItem(__idemStoreKey, __idemKey);
         }
       } catch {
@@ -230,36 +251,19 @@ export default function CartPage() {
       const metaProperties = {
         content_ids: validItems.map((item) => item.sku),
         contents: metaContents,
-        content_type: "product" as const,
+        content_type: 'product' as const,
         currency: currencyCode,
         value: validSubtotal,
         num_items: validItemCount,
       };
 
       if (metaConsent) {
-        trackMetaEvent("InitiateCheckout", metaProperties);
+        trackMetaEvent('InitiateCheckout', metaProperties);
       }
 
-      // Persist the Purchase event id with the cart idempotency key. If the
-      // browser retries after an interrupted response, Pixel and CAPI still use
-      // the same id and Meta deduplicates the confirmed order.
-      const __metaEventStoreKey = `tsh_meta_purchase:${__cartKey}`;
-      let __metaPurchaseEventId: string | undefined;
-      if (metaConsent) {
-        try {
-          __metaPurchaseEventId =
-            sessionStorage.getItem(__metaEventStoreKey) || undefined;
-          if (!__metaPurchaseEventId) {
-            __metaPurchaseEventId = generateMetaEventId();
-            sessionStorage.setItem(
-              __metaEventStoreKey,
-              __metaPurchaseEventId,
-            );
-          }
-        } catch {
-          __metaPurchaseEventId = generateMetaEventId();
-        }
-      }
+      const __metaEventSourceUrl = metaConsent
+        ? normalizeTshMeasurementUrl(window.location.href)
+        : null;
 
       const response = await fetch('/api/checkout', {
         method: 'POST',
@@ -268,7 +272,7 @@ export default function CartPage() {
           'Idempotency-Key': __idemKey,
         },
         body: JSON.stringify({
-          items: validItems.map(item => ({
+          items: validItems.map((item) => ({
             item_id: item.item_id,
             quantity: item.quantity,
             rate: item.rate,
@@ -277,14 +281,21 @@ export default function CartPage() {
           })),
           notes: combinedNotes,
           // Phase 3: نوع الطلبية المختار من صفحة shop/order-type (bulk=نقليات، delivery=توصيل COD)
-          orderType: ((): string | undefined => { try { const v = localStorage.getItem('selectedOrderType'); return v === 'bulk' || v === 'delivery' ? v : undefined; } catch { return undefined; } })(),
-          meta: metaConsent && __metaPurchaseEventId
-            ? {
-                consent: true,
-                event_id: __metaPurchaseEventId,
-                event_source_url: window.location.href,
-              }
-            : undefined,
+          orderType: ((): string | undefined => {
+            try {
+              const v = localStorage.getItem('selectedOrderType');
+              return v === 'bulk' || v === 'delivery' ? v : undefined;
+            } catch {
+              return undefined;
+            }
+          })(),
+          meta:
+            metaConsent && __metaEventSourceUrl
+              ? {
+                  consent: true,
+                  event_source_url: __metaEventSourceUrl,
+                }
+              : undefined,
         }),
       });
 
@@ -294,22 +305,17 @@ export default function CartPage() {
         throw new Error(data.error || 'Failed to place order');
       }
 
-      if (__metaPurchaseEventId) {
-        trackMetaEvent(
-          "Purchase",
-          {
-            ...metaProperties,
-            value: Number(data.order.total) || validSubtotal,
-          },
-          { eventId: __metaPurchaseEventId, sendServer: false },
-        );
-        try {
-          sessionStorage.removeItem(__metaEventStoreKey);
-        } catch {}
+      if (metaConsent && data.meta_purchase?.event_id && data.meta_purchase?.custom_data) {
+        trackMetaEvent('Purchase', data.meta_purchase.custom_data, {
+          eventId: data.meta_purchase.event_id,
+          sendServer: false,
+        });
       }
 
       // Success!
-      try { sessionStorage.removeItem(__idemStoreKey); } catch {}
+      try {
+        sessionStorage.removeItem(__idemStoreKey);
+      } catch {}
       setOrderSuccess({
         orderNumber: data.order.salesorder_number,
         orderId: data.order.salesorder_id,
@@ -317,7 +323,6 @@ export default function CartPage() {
 
       // Clear the cart
       clearCart();
-
     } catch (error) {
       console.error('Checkout error:', error);
       setCheckoutError(error instanceof Error ? error.message : 'Failed to place order');
@@ -335,25 +340,19 @@ export default function CartPage() {
         </div>
         <div className="text-center space-y-2">
           <h2 className="text-2xl font-bold text-green-600 dark:text-green-400">
-            {t("orderPlaced")}
+            {t('orderPlaced')}
           </h2>
-          <p className="text-muted-foreground max-w-sm">
-            {t("orderPlacedDescription")}
-          </p>
+          <p className="text-muted-foreground max-w-sm">{t('orderPlacedDescription')}</p>
           <p className="text-lg font-semibold mt-4">
-            {t("orderNumber")}: <span className="text-primary">{orderSuccess.orderNumber}</span>
+            {t('orderNumber')}: <span className="text-primary">{orderSuccess.orderNumber}</span>
           </p>
         </div>
         <div className="flex gap-3 mt-4">
           <Link href={`/${locale}/orders/${orderSuccess.orderId}`}>
-            <Button>
-              {t("viewOrder")}
-            </Button>
+            <Button>{t('viewOrder')}</Button>
           </Link>
           <Link href={`/${locale}/orders`}>
-            <Button variant="outline">
-              {t("viewAllOrders")}
-            </Button>
+            <Button variant="outline">{t('viewAllOrders')}</Button>
           </Link>
         </div>
       </div>
@@ -373,18 +372,22 @@ export default function CartPage() {
             تم دمج المواد بنجاح!
           </h2>
           <p className="text-muted-foreground max-w-sm">
-            تمت إضافة {mergeResult.addedCount || 0} مادة جديدة وتحديث {mergeResult.updatedCount || 0} مادة موجودة في طلبية {mergeResult.orderName}.
+            تمت إضافة {mergeResult.addedCount || 0} مادة جديدة وتحديث{' '}
+            {mergeResult.updatedCount || 0} مادة موجودة في طلبية {mergeResult.orderName}.
           </p>
         </div>
         <div className="flex gap-3 mt-4">
           <Link href={`/${locale}/quotations`}>
-            <Button>{t("viewAllOrders")}</Button>
+            <Button>{t('viewAllOrders')}</Button>
           </Link>
-          <Button variant="outline" onClick={() => {
-            router.push(`/${locale}/shop`);
-          }}>
+          <Button
+            variant="outline"
+            onClick={() => {
+              router.push(`/${locale}/shop`);
+            }}
+          >
             <ArrowLeft className="mr-2 h-4 w-4" />
-            {t("continueShopping")}
+            {t('continueShopping')}
           </Button>
         </div>
       </div>
@@ -398,25 +401,28 @@ export default function CartPage() {
           <MessageCircle className="h-12 w-12 text-primary" />
         </div>
         <div className="text-center space-y-4" dir="rtl">
-          <h2 className="text-2xl font-semibold">{tCatalog("title")}</h2>
+          <h2 className="text-2xl font-semibold">{tCatalog('title')}</h2>
           <p className="text-muted-foreground max-w-md whitespace-pre-line">
-            {tCatalog("message")}
+            {tCatalog('message')}
           </p>
         </div>
         <div className="flex gap-3">
           <Button onClick={showCatalogModal} variant="gold">
             <MessageCircle className="me-2 h-4 w-4" />
-            {tCatalog("contactSales")}
+            {tCatalog('contactSales')}
           </Button>
-          <Button variant="outline" onClick={() => {
+          <Button
+            variant="outline"
+            onClick={() => {
               if (window.history.length > 1 && document.referrer.includes('/shop')) {
                 router.back();
               } else {
                 router.push(`/${locale}/shop`);
               }
-            }}>
-              {t("continueShopping")}
-            </Button>
+            }}
+          >
+            {t('continueShopping')}
+          </Button>
         </div>
       </div>
     );
@@ -429,21 +435,22 @@ export default function CartPage() {
           <ShoppingBag className="h-12 w-12 text-muted-foreground" />
         </div>
         <div className="text-center space-y-2">
-          <h2 className="text-2xl font-semibold">{t("empty")}</h2>
-          <p className="text-muted-foreground max-w-sm">
-            {t("emptyDescription")}
-          </p>
+          <h2 className="text-2xl font-semibold">{t('empty')}</h2>
+          <p className="text-muted-foreground max-w-sm">{t('emptyDescription')}</p>
         </div>
-        <Button size="lg" onClick={() => {
+        <Button
+          size="lg"
+          onClick={() => {
             if (window.history.length > 1 && document.referrer.includes('/shop')) {
               router.back();
             } else {
               router.push(`/${locale}/shop`);
             }
-          }}>
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            {t("continueShopping")}
-          </Button>
+          }}
+        >
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          {t('continueShopping')}
+        </Button>
       </div>
     );
   }
@@ -453,14 +460,20 @@ export default function CartPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">{t("title")}</h1>
+          <h1 className="text-2xl font-bold">{t('title')}</h1>
           <p className="text-sm text-muted-foreground">
-            {totalItemCount} {t("item")}{totalItemCount > 1 ? "s" : ""} {t("inYourCart")}
+            {totalItemCount} {t('item')}
+            {totalItemCount > 1 ? 's' : ''} {t('inYourCart')}
           </p>
         </div>
-        <Button variant="outline" size="sm" onClick={clearCart} className="text-destructive hover:text-destructive">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={clearCart}
+          className="text-destructive hover:text-destructive"
+        >
           <Trash2 className="mr-2 h-4 w-4" />
-          {t("clear")}
+          {t('clear')}
         </Button>
       </div>
 
@@ -472,15 +485,15 @@ export default function CartPage() {
               <LogIn className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
               <div className="flex-1">
                 <h3 className="font-medium text-blue-800 dark:text-blue-200">
-                  {t("loginRequired")}
+                  {t('loginRequired')}
                 </h3>
                 <p className="text-sm text-blue-700 dark:text-blue-300 mt-1">
-                  {t("loginRequiredDescription")}
+                  {t('loginRequiredDescription')}
                 </p>
                 <Link href={`/${locale}/login`}>
                   <Button size="sm" className="mt-3">
                     <LogIn className="mr-2 h-4 w-4" />
-                    {tCommon("login")}
+                    {tCommon('login')}
                   </Button>
                 </Link>
               </div>
@@ -497,10 +510,10 @@ export default function CartPage() {
               <AlertTriangle className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
               <div className="flex-1">
                 <h3 className="font-medium text-amber-800 dark:text-amber-200">
-                  {t("priceUnavailable")}
+                  {t('priceUnavailable')}
                 </h3>
                 <p className="text-sm text-amber-700 dark:text-amber-300 mt-1">
-                  {t("priceUnavailableDescription")}
+                  {t('priceUnavailableDescription')}
                 </p>
               </div>
             </div>
@@ -515,12 +528,8 @@ export default function CartPage() {
             <div className="flex items-start gap-3">
               <AlertTriangle className="h-5 w-5 text-red-600 flex-shrink-0 mt-0.5" />
               <div className="flex-1">
-                <h3 className="font-medium text-red-800 dark:text-red-200">
-                  {t("checkoutError")}
-                </h3>
-                <p className="text-sm text-red-700 dark:text-red-300 mt-1">
-                  {checkoutError}
-                </p>
+                <h3 className="font-medium text-red-800 dark:text-red-200">{t('checkoutError')}</h3>
+                <p className="text-sm text-red-700 dark:text-red-300 mt-1">{checkoutError}</p>
               </div>
             </div>
           </CardContent>
@@ -535,14 +544,20 @@ export default function CartPage() {
             <div className="space-y-3">
               <h3 className="text-sm font-medium text-amber-600 flex items-center gap-2">
                 <Phone className="h-4 w-4" />
-                {t("contactForPrice")} ({invalidItems.length})
+                {t('contactForPrice')} ({invalidItems.length})
               </h3>
               {invalidItems.map((item) => (
-                <Card key={item.item_id} className="border-amber-500/30 bg-amber-50/50 dark:bg-amber-950/10">
+                <Card
+                  key={item.item_id}
+                  className="border-amber-500/30 bg-amber-50/50 dark:bg-amber-950/10"
+                >
                   <CardContent className="p-4">
                     <div className="flex gap-4">
                       {/* Image */}
-                      <Link href={`/${locale}/shop/${item.item_id}`} className="relative h-20 w-20 flex-shrink-0 overflow-hidden rounded-lg bg-muted">
+                      <Link
+                        href={`/${locale}/shop/${item.item_id}`}
+                        className="relative h-20 w-20 flex-shrink-0 overflow-hidden rounded-lg bg-muted"
+                      >
                         {item.image_url ? (
                           <Image
                             src={item.image_url}
@@ -562,7 +577,10 @@ export default function CartPage() {
                       <div className="flex flex-1 flex-col min-w-0">
                         <div className="flex justify-between gap-2">
                           <div className="min-w-0">
-                            <Link href={`/${locale}/shop/${item.item_id}`} className="hover:underline">
+                            <Link
+                              href={`/${locale}/shop/${item.item_id}`}
+                              className="hover:underline"
+                            >
                               <h3 className="font-medium truncate">{item.name}</h3>
                             </Link>
                             <p className="text-xs text-muted-foreground">{item.sku}</p>
@@ -580,11 +598,11 @@ export default function CartPage() {
                         <div className="mt-auto flex items-center justify-between pt-2">
                           <div className="flex items-center gap-2">
                             <span className="text-sm text-muted-foreground">
-                              {t("quantity")}: {item.quantity}
+                              {t('quantity')}: {item.quantity}
                             </span>
                           </div>
                           <Badge variant="outline" className="text-amber-600 border-amber-500/50">
-                            {tProducts("contactForPrice")}
+                            {tProducts('contactForPrice')}
                           </Badge>
                         </div>
                       </div>
@@ -601,7 +619,7 @@ export default function CartPage() {
               {invalidItems.length > 0 && (
                 <h3 className="text-sm font-medium text-muted-foreground flex items-center gap-2">
                   <Package className="h-4 w-4" />
-                  {t("readyToOrder")} ({validItems.length})
+                  {t('readyToOrder')} ({validItems.length})
                 </h3>
               )}
               {validItems.map((item) => (
@@ -609,7 +627,10 @@ export default function CartPage() {
                   <CardContent className="p-4">
                     <div className="flex gap-4">
                       {/* Image */}
-                      <Link href={`/${locale}/shop/${item.item_id}`} className="relative h-20 w-20 flex-shrink-0 overflow-hidden rounded-lg bg-muted group">
+                      <Link
+                        href={`/${locale}/shop/${item.item_id}`}
+                        className="relative h-20 w-20 flex-shrink-0 overflow-hidden rounded-lg bg-muted group"
+                      >
                         {item.image_url ? (
                           <Image
                             src={item.image_url}
@@ -629,7 +650,10 @@ export default function CartPage() {
                       <div className="flex flex-1 flex-col min-w-0">
                         <div className="flex justify-between gap-2">
                           <div className="min-w-0">
-                            <Link href={`/${locale}/shop/${item.item_id}`} className="hover:underline">
+                            <Link
+                              href={`/${locale}/shop/${item.item_id}`}
+                              className="hover:underline"
+                            >
                               <h3 className="font-medium truncate">{item.name}</h3>
                             </Link>
                             <p className="text-xs text-muted-foreground">{item.sku}</p>
@@ -665,21 +689,26 @@ export default function CartPage() {
                             onChange={(newQuantity) => updateQuantity(item.item_id, newQuantity)}
                             max={item.available_stock}
                             translations={{
-                              max: tProducts("maxQuantity"),
-                              available: tProducts("availableStock"),
-                              exceededMax: tProducts("exceededMaxQuantity", { count: item.available_stock }),
+                              max: tProducts('maxQuantity'),
+                              available: tProducts('availableStock'),
+                              exceededMax: tProducts('exceededMaxQuantity', {
+                                count: item.available_stock,
+                              }),
                             }}
                           />
 
                           {/* Item Note */}
                           <div className="space-y-1">
-                            <label htmlFor={`note-${item.item_id}`} className="text-xs text-muted-foreground">
-                              {t("itemNote")}
+                            <label
+                              htmlFor={`note-${item.item_id}`}
+                              className="text-xs text-muted-foreground"
+                            >
+                              {t('itemNote')}
                             </label>
                             <Textarea
                               id={`note-${item.item_id}`}
-                              placeholder={t("itemNotePlaceholder")}
-                              value={item.note || ""}
+                              placeholder={t('itemNotePlaceholder')}
+                              value={item.note || ''}
                               onChange={(e) => updateItemNote(item.item_id, e.target.value)}
                               className="min-h-[60px] text-sm"
                             />
@@ -712,14 +741,14 @@ export default function CartPage() {
             <CardHeader className="pb-4">
               <CardTitle className="flex items-center gap-2">
                 <ShoppingBag className="h-5 w-5" />
-                {t("orderSummary")}
+                {t('orderSummary')}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               {/* Item Count */}
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">
-                  {t("items")} ({validItemCount})
+                  {t('items')} ({validItemCount})
                 </span>
                 <span>
                   {formatCurrency(validSubtotal)} {currencyCode}
@@ -729,7 +758,9 @@ export default function CartPage() {
               {/* Invalid Items Warning */}
               {invalidItems.length > 0 && (
                 <div className="flex justify-between text-sm text-amber-600">
-                  <span>{t("pendingPrice")} ({invalidItems.reduce((s, i) => s + i.quantity, 0)})</span>
+                  <span>
+                    {t('pendingPrice')} ({invalidItems.reduce((s, i) => s + i.quantity, 0)})
+                  </span>
                   <span>--</span>
                 </div>
               )}
@@ -738,16 +769,14 @@ export default function CartPage() {
 
               {/* Total */}
               <div className="flex justify-between text-lg font-bold">
-                <span>{t("total")}</span>
+                <span>{t('total')}</span>
                 <span className="text-primary">
                   {formatCurrency(validSubtotal)} {currencyCode}
                 </span>
               </div>
 
               {invalidItems.length > 0 && (
-                <p className="text-xs text-amber-600">
-                  * {t("excludesPendingItems")}
-                </p>
+                <p className="text-xs text-amber-600">* {t('excludesPendingItems')}</p>
               )}
 
               <Separator />
@@ -755,11 +784,11 @@ export default function CartPage() {
               {/* Order Note */}
               <div className="space-y-2">
                 <label htmlFor="order-note" className="text-sm font-medium">
-                  {t("orderNote")}
+                  {t('orderNote')}
                 </label>
                 <Textarea
                   id="order-note"
-                  placeholder={t("orderNotePlaceholder")}
+                  placeholder={t('orderNotePlaceholder')}
                   value={orderNote}
                   onChange={(e) => updateOrderNote(e.target.value)}
                   className="min-h-[80px] text-sm"
@@ -778,35 +807,39 @@ export default function CartPage() {
                   {isCheckingOut ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      {t("processing")}
+                      {t('processing')}
                     </>
                   ) : !online ? (
-                    "لا يوجد اتصال — يرجى المحاولة بعد الاتصال"
+                    'لا يوجد اتصال — يرجى المحاولة بعد الاتصال'
                   ) : invalidItems.length > 0 ? (
-                    t("removeInvalidFirst")
+                    t('removeInvalidFirst')
                   ) : (
-                    t("checkout")
+                    t('checkout')
                   )}
                 </Button>
               ) : (
                 <Link href={`/${locale}/login`} className="w-full">
                   <Button className="w-full" size="lg">
                     <LogIn className="mr-2 h-4 w-4" />
-                    {t("loginToCheckout")}
+                    {t('loginToCheckout')}
                   </Button>
                 </Link>
               )}
-              <Button variant="outline" className="w-full" onClick={() => {
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={() => {
                   // Smart back: if came from shop, go back (preserves page); otherwise go to shop
                   if (window.history.length > 1 && document.referrer.includes('/shop')) {
                     router.back();
                   } else {
                     router.push(`/${locale}/shop`);
                   }
-                }}>
-                  <ArrowLeft className="mr-2 h-4 w-4" />
-                  {t("continueShopping")}
-                </Button>
+                }}
+              >
+                <ArrowLeft className="mr-2 h-4 w-4" />
+                {t('continueShopping')}
+              </Button>
             </CardFooter>
           </Card>
         </div>

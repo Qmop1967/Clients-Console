@@ -1,3 +1,8 @@
+import 'server-only';
+import { isIP } from 'node:net';
+import { isMetaConsentVerificationConfigured } from '@/lib/analytics/meta-consent';
+import { normalizeTshMeasurementUrl } from '@/lib/analytics/meta-policy';
+
 /**
  * Server-only Meta Conversions API sender.
  *
@@ -28,6 +33,7 @@ export interface MetaServerEventInput {
   clientUserAgent: string;
   fbp?: string;
   fbc?: string;
+  testSessionAuthorized?: boolean;
 }
 
 export interface MetaServerEventResult {
@@ -41,14 +47,62 @@ const ACCESS_TOKEN = process.env.META_CAPI_ACCESS_TOKEN || '';
 const TEST_EVENT_CODE = process.env.META_CAPI_TEST_EVENT_CODE || '';
 const RAW_API_VERSION = process.env.META_GRAPH_API_VERSION || 'v25.0';
 const API_VERSION = /^v\d+\.\d+$/.test(RAW_API_VERSION) ? RAW_API_VERSION : 'v25.0';
+const RAW_MODE = process.env.META_CAPI_MODE || 'disabled';
+const MODE = RAW_MODE === 'test' || RAW_MODE === 'production' ? RAW_MODE : 'disabled';
+const VALID_EVENT_NAMES = new Set<MetaServerEventName>([
+  'PageView',
+  'ViewContent',
+  'AddToCart',
+  'InitiateCheckout',
+  'Purchase',
+]);
+const PRODUCTION_EVENTS = new Set<MetaServerEventName>(
+  (process.env.META_CAPI_EVENTS || 'PageView,ViewContent')
+    .split(',')
+    .map((name) => name.trim())
+    .filter((name): name is MetaServerEventName =>
+      VALID_EVENT_NAMES.has(name as MetaServerEventName)
+    )
+);
 
 export function isMetaCapiConfigured(): boolean {
-  return PIXEL_ID.length > 0 && ACCESS_TOKEN.length > 0;
+  const baseConfigured =
+    /^\d+$/.test(PIXEL_ID) && ACCESS_TOKEN.length > 0 && isMetaConsentVerificationConfigured();
+  if (!baseConfigured) return false;
+  if (MODE === 'test') return TEST_EVENT_CODE.length > 0;
+  if (MODE === 'production') return TEST_EVENT_CODE.length === 0;
+  return false;
+}
+
+export function canSendMetaServerEvent(
+  eventName: MetaServerEventName,
+  testSessionAuthorized = false
+): boolean {
+  if (!isMetaCapiConfigured()) return false;
+  // Purchase requires a durable outbox/retry ledger before it can be sent
+  // safely. Keep it hard-disabled even if an environment allowlist is edited.
+  if (eventName === 'Purchase') {
+    return false;
+  }
+  if (MODE === 'test') {
+    return eventName === 'ViewContent' && testSessionAuthorized;
+  }
+  return MODE === 'production' && PRODUCTION_EVENTS.has(eventName);
 }
 
 function cleanText(value: string | undefined, maxLength: number): string | undefined {
   const clean = value?.trim();
   return clean ? clean.slice(0, maxLength) : undefined;
+}
+
+function cleanBrowserId(value: string | undefined, kind: 'fbp' | 'fbc'): string | undefined {
+  const clean = cleanText(value, 256);
+  if (!clean) return undefined;
+  const pattern =
+    kind === 'fbp'
+      ? /^fb\.[12]\.\d{10,13}\.[A-Za-z0-9._-]{1,160}$/
+      : /^fb\.[12]\.\d{10,13}\.[A-Za-z0-9._-]{6,200}$/;
+  return pattern.test(clean) ? clean : undefined;
 }
 
 function cleanCustomData(
@@ -60,7 +114,7 @@ function cleanCustomData(
   const ids = data.content_ids
     ?.filter((id) => typeof id === 'string' && id.trim().length > 0)
     .slice(0, 100)
-    .map((id) => id.trim().slice(0, 128));
+    .map((id) => id.trim().slice(0, 100));
   if (ids?.length) clean.content_ids = ids;
 
   const contents = data.contents
@@ -73,7 +127,7 @@ function cleanCustomData(
     )
     .slice(0, 100)
     .map((item) => ({
-      id: item.id.trim().slice(0, 128),
+      id: item.id.trim().slice(0, 100),
       quantity: Math.max(1, Math.trunc(item.quantity)),
       ...(typeof item.item_price === 'number' &&
       Number.isFinite(item.item_price) &&
@@ -114,22 +168,30 @@ export async function sendMetaServerEvent(
   if (!isMetaCapiConfigured()) {
     return { configured: false, sent: false };
   }
+  if (!canSendMetaServerEvent(input.eventName, input.testSessionAuthorized === true)) {
+    return { configured: true, sent: false };
+  }
 
   if (!/^[A-Za-z0-9_-]{8,128}$/.test(input.eventId)) {
     throw new Error('Invalid Meta event id');
   }
 
+  const eventSourceUrl = normalizeTshMeasurementUrl(input.eventSourceUrl);
+  if (!eventSourceUrl) {
+    throw new Error('Invalid Meta event source URL');
+  }
+
   const userData: Record<string, string> = {};
   const clientIp = cleanText(input.clientIp, 64);
-  if (clientIp) userData.client_ip_address = clientIp;
+  if (clientIp && isIP(clientIp)) userData.client_ip_address = clientIp;
 
   const userAgent = cleanText(input.clientUserAgent, 512);
   if (!userAgent) throw new Error('Client user agent is required');
   userData.client_user_agent = userAgent;
 
-  const fbp = cleanText(input.fbp, 256);
+  const fbp = cleanBrowserId(input.fbp, 'fbp');
   if (fbp) userData.fbp = fbp;
-  const fbc = cleanText(input.fbc, 256);
+  const fbc = cleanBrowserId(input.fbc, 'fbc');
   if (fbc) userData.fbc = fbc;
 
   const customData = cleanCustomData(input.customData);
@@ -137,7 +199,7 @@ export async function sendMetaServerEvent(
     event_name: input.eventName,
     event_time: Math.floor(Date.now() / 1000),
     event_id: input.eventId,
-    event_source_url: input.eventSourceUrl,
+    event_source_url: eventSourceUrl,
     action_source: 'website',
     user_data: userData,
     ...(customData ? { custom_data: customData } : {}),
@@ -147,7 +209,9 @@ export async function sendMetaServerEvent(
     data: [event],
     access_token: ACCESS_TOKEN,
   };
-  if (TEST_EVENT_CODE) payload.test_event_code = TEST_EVENT_CODE;
+  if (MODE === 'test') {
+    payload.test_event_code = TEST_EVENT_CODE;
+  }
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 5_000);

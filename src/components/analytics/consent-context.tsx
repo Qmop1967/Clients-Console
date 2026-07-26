@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import {
   isPixelConfigured,
   loadTikTokPixel,
@@ -51,6 +51,8 @@ interface ConsentContextValue {
   status: ConsentStatus;
   /** True once localStorage has been read — avoids a flash before hydration. */
   ready: boolean;
+  /** True only after the server has issued a valid consent receipt. */
+  measurementActive: boolean;
   accept: () => void;
   reject: () => void;
   /** Reopen the choice (change/withdraw consent). Does not fire the pixel. */
@@ -59,6 +61,20 @@ interface ConsentContextValue {
 
 const ConsentContext = createContext<ConsentContextValue | null>(null);
 
+async function syncServerConsent(status: 'accepted' | 'rejected'): Promise<boolean> {
+  try {
+    const response = await fetch('/api/analytics/consent', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify({ status }),
+    });
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
 function readStored(): ConsentStatus {
   if (typeof window === 'undefined') return 'unset';
   const value = window.localStorage.getItem(STORAGE_KEY);
@@ -66,27 +82,80 @@ function readStored(): ConsentStatus {
 }
 
 export function ConsentProvider({ children }: { children: React.ReactNode }) {
+  const consentGenerationRef = useRef(0);
+  const receiptReadyRef = useRef(false);
   const [status, setStatus] = useState<ConsentStatus>('unset');
   const [ready, setReady] = useState(false);
+  const [measurementActive, setMeasurementActive] = useState(false);
 
   // Load persisted decision on mount and honour a prior "accepted".
   useEffect(() => {
     const stored = readStored();
     setStatus(stored);
     setReady(true);
-    if (stored === 'accepted') {
-      activateMeasurement();
-    }
   }, []);
+
+  useEffect(() => {
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key !== STORAGE_KEY) return;
+      consentGenerationRef.current += 1;
+      receiptReadyRef.current = false;
+      setMeasurementActive(false);
+      const next =
+        event.newValue === 'accepted' || event.newValue === 'rejected' ? event.newValue : 'unset';
+      setStatus(next);
+    };
+
+    window.addEventListener('storage', handleStorage);
+    return () => window.removeEventListener('storage', handleStorage);
+  }, []);
+
+  useEffect(() => {
+    if (!ready) return;
+
+    if (status !== 'accepted') {
+      receiptReadyRef.current = false;
+      setMeasurementActive(false);
+      revokeMeasurement();
+      void syncServerConsent('rejected');
+      return;
+    }
+
+    if (receiptReadyRef.current) {
+      setMeasurementActive(true);
+      activateMeasurement();
+      return;
+    }
+
+    setMeasurementActive(false);
+    const generation = ++consentGenerationRef.current;
+    void syncServerConsent('accepted').then((saved) => {
+      if (consentGenerationRef.current !== generation) {
+        setMeasurementActive(false);
+        void syncServerConsent('rejected');
+        return;
+      }
+      if (!saved) {
+        setMeasurementActive(false);
+        revokeMeasurement();
+        return;
+      }
+      receiptReadyRef.current = true;
+      setMeasurementActive(true);
+      activateMeasurement();
+    });
+  }, [ready, status]);
 
   const accept = useCallback(() => {
     window.localStorage.removeItem(LEGACY_TIKTOK_STORAGE_KEY);
     window.localStorage.setItem(STORAGE_KEY, 'accepted');
     setStatus('accepted');
-    activateMeasurement();
   }, []);
 
   const reject = useCallback(() => {
+    consentGenerationRef.current += 1;
+    receiptReadyRef.current = false;
+    setMeasurementActive(false);
     window.localStorage.removeItem(LEGACY_TIKTOK_STORAGE_KEY);
     window.localStorage.setItem(STORAGE_KEY, 'rejected');
     revokeMeasurement();
@@ -94,6 +163,9 @@ export function ConsentProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const reset = useCallback(() => {
+    consentGenerationRef.current += 1;
+    receiptReadyRef.current = false;
+    setMeasurementActive(false);
     window.localStorage.removeItem(STORAGE_KEY);
     window.localStorage.removeItem(LEGACY_TIKTOK_STORAGE_KEY);
     revokeMeasurement();
@@ -101,7 +173,7 @@ export function ConsentProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <ConsentContext.Provider value={{ status, ready, accept, reject, reset }}>
+    <ConsentContext.Provider value={{ status, ready, measurementActive, accept, reject, reset }}>
       {children}
     </ConsentContext.Provider>
   );
@@ -114,5 +186,4 @@ export function useConsent(): ConsentContextValue {
 }
 
 /** Whether at least one measurement pixel can run in this deployment. */
-export const pixelEnabled = (): boolean =>
-  isPixelConfigured() || isMetaPixelConfigured();
+export const pixelEnabled = (): boolean => isPixelConfigured() || isMetaPixelConfigured();

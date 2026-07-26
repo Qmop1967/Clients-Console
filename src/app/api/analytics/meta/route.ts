@@ -1,41 +1,51 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { isMetaCapiConfigured, sendMetaServerEvent } from '@/lib/analytics/meta-server';
+import {
+  hasValidMetaCapiTestSession,
+  hasValidMetaMeasurementConsent,
+  META_CAPI_TEST_SESSION_COOKIE,
+  META_MEASUREMENT_CONSENT_COOKIE,
+} from '@/lib/analytics/meta-consent';
+import { isAllowedTshOrigin, normalizeTshMeasurementUrl } from '@/lib/analytics/meta-policy';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const publicEventSchema = z.object({
-  consent: z.literal(true),
-  eventName: z.enum(['PageView', 'ViewContent', 'AddToCart', 'InitiateCheckout']),
-  eventId: z.string().regex(/^[A-Za-z0-9_-]{8,128}$/),
-  eventSourceUrl: z.string().url(),
-  customData: z
-    .object({
-      content_ids: z.array(z.string().min(1).max(128)).max(100).optional(),
-      contents: z
-        .array(
-          z.object({
-            id: z.string().min(1).max(128),
-            quantity: z.number().int().positive(),
-            item_price: z.number().nonnegative().optional(),
-          })
-        )
-        .max(100)
-        .optional(),
-      content_type: z.literal('product').optional(),
-      content_name: z.string().max(512).optional(),
-      content_category: z.string().max(256).optional(),
-      currency: z
-        .string()
-        .regex(/^[A-Za-z]{3}$/)
-        .optional(),
-      value: z.number().nonnegative().optional(),
-      num_items: z.number().int().nonnegative().optional(),
-    })
-    .strict()
-    .optional(),
-});
+const publicEventSchema = z
+  .object({
+    consent: z.literal(true),
+    eventName: z.enum(['PageView', 'ViewContent', 'AddToCart', 'InitiateCheckout']),
+    eventId: z.string().regex(/^[A-Za-z0-9_-]{8,128}$/),
+    eventSourceUrl: z.string().url().max(2048),
+    customData: z
+      .object({
+        content_ids: z.array(z.string().min(1).max(100)).max(100).optional(),
+        contents: z
+          .array(
+            z.object({
+              id: z.string().min(1).max(100),
+              quantity: z.number().int().positive(),
+              item_price: z.number().nonnegative().optional(),
+            })
+          )
+          .max(100)
+          .optional(),
+        content_type: z.literal('product').optional(),
+        content_name: z.string().max(512).optional(),
+        content_category: z.string().max(256).optional(),
+        currency: z
+          .string()
+          .regex(/^[A-Za-z]{3}$/)
+          .optional(),
+        value: z.number().nonnegative().optional(),
+        num_items: z.number().int().nonnegative().optional(),
+      })
+      .strict()
+      .optional(),
+  })
+  .strict();
 
 interface RateEntry {
   count: number;
@@ -46,13 +56,11 @@ const RATE_WINDOW_MS = 60_000;
 const RATE_LIMIT = 120;
 const rateStore = new Map<string, RateEntry>();
 
-function clientIp(request: NextRequest): string | undefined {
-  const forwarded = request.headers.get('x-forwarded-for');
-  if (forwarded) return forwarded.split(',')[0]?.trim();
-  return request.headers.get('x-real-ip')?.trim() || undefined;
+function receiptRateKey(consentReceipt: string): string {
+  return `receipt:${createHash('sha256').update(consentReceipt).digest('hex')}`;
 }
 
-function rateLimit(key: string): boolean {
+function rateLimit(key: string, limit = RATE_LIMIT): boolean {
   const now = Date.now();
   const current = rateStore.get(key);
 
@@ -61,7 +69,7 @@ function rateLimit(key: string): boolean {
     return true;
   }
 
-  if (current.count >= RATE_LIMIT) return false;
+  if (current.count >= limit) return false;
   current.count += 1;
 
   if (rateStore.size > 2_000) {
@@ -72,29 +80,9 @@ function rateLimit(key: string): boolean {
   return true;
 }
 
-function allowedTshUrl(value: string): boolean {
-  try {
-    const url = new URL(value);
-    if (process.env.NODE_ENV !== 'production') {
-      return (
-        url.hostname === 'localhost' ||
-        url.hostname === '127.0.0.1' ||
-        url.hostname === 'tsh.sale' ||
-        url.hostname === 'www.tsh.sale'
-      );
-    }
-    return (
-      url.protocol === 'https:' && (url.hostname === 'tsh.sale' || url.hostname === 'www.tsh.sale')
-    );
-  } catch {
-    return false;
-  }
-}
-
 function sameSiteOrigin(request: NextRequest): boolean {
   const origin = request.headers.get('origin');
-  if (!origin) return false;
-  return allowedTshUrl(origin);
+  return Boolean(origin && isAllowedTshOrigin(origin));
 }
 
 export async function POST(request: NextRequest) {
@@ -102,8 +90,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
-  const ip = clientIp(request);
-  if (!rateLimit(ip || 'unknown')) {
+  const consentReceipt = request.cookies.get(META_MEASUREMENT_CONSENT_COOKIE)?.value;
+  if (!consentReceipt || !hasValidMetaMeasurementConsent(consentReceipt)) {
+    return NextResponse.json({ error: 'Measurement consent required' }, { status: 403 });
+  }
+
+  if (!rateLimit('global', 2_000) || !rateLimit(receiptRateKey(consentReceipt))) {
     return NextResponse.json({ error: 'Too many measurement requests' }, { status: 429 });
   }
 
@@ -113,7 +105,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid measurement event' }, { status: 400 });
   }
 
-  if (!allowedTshUrl(parsed.data.eventSourceUrl)) {
+  const eventSourceUrl = normalizeTshMeasurementUrl(parsed.data.eventSourceUrl);
+  if (!eventSourceUrl) {
     return NextResponse.json({ error: 'Invalid event source' }, { status: 400 });
   }
 
@@ -130,10 +123,13 @@ export async function POST(request: NextRequest) {
     const result = await sendMetaServerEvent({
       eventName: parsed.data.eventName,
       eventId: parsed.data.eventId,
-      eventSourceUrl: parsed.data.eventSourceUrl,
+      eventSourceUrl,
       customData: parsed.data.customData,
-      clientIp: ip,
+      clientIp: undefined,
       clientUserAgent: userAgent,
+      testSessionAuthorized: hasValidMetaCapiTestSession(
+        request.cookies.get(META_CAPI_TEST_SESSION_COOKIE)?.value
+      ),
       fbp: request.cookies.get('_fbp')?.value,
       fbc: request.cookies.get('_fbc')?.value,
     });
