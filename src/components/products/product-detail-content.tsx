@@ -36,6 +36,10 @@ import {
 import { WholesaleQuantityInput } from "@/components/ui/wholesale-quantity-input";
 import { cn } from "@/lib/utils/cn";
 import { formatCurrency } from "@/lib/utils/format";
+import {
+  MEASUREMENT_CONSENT_GRANTED_EVENT,
+  trackMetaEvent,
+} from "@/lib/analytics/meta";
 
 interface ProductDetailProps {
   product: {
@@ -73,6 +77,7 @@ export function ProductDetailContent({ product, locale }: ProductDetailProps) {
   const [copied, setCopied] = useState(false);
   const [minimumQtyError, setMinimumQtyError] = useState<string | null>(null);
   const { addItem, getItemQuantity } = useCart();
+  const viewTrackedRef = useRef(false);
   const { isCatalogMode, showCatalogModal } = useCatalogMode();
 
   const isInStock = product.available_stock > 0;
@@ -155,6 +160,48 @@ export function ProductDetailContent({ product, locale }: ProductDetailProps) {
       }
     }
   };
+
+  useEffect(() => {
+    viewTrackedRef.current = false;
+
+    const trackProductView = () => {
+      if (viewTrackedRef.current) return;
+      const eventId = trackMetaEvent("ViewContent", {
+        content_ids: [product.sku],
+        contents: [
+          {
+            id: product.sku,
+            quantity: 1,
+            item_price: product.rate,
+          },
+        ],
+        content_type: "product",
+        content_name: product.name,
+        content_category: product.category_name,
+        currency: product.currencyCode,
+        value: product.rate,
+        num_items: 1,
+      });
+      if (eventId) viewTrackedRef.current = true;
+    };
+
+    trackProductView();
+    window.addEventListener(
+      MEASUREMENT_CONSENT_GRANTED_EVENT,
+      trackProductView,
+    );
+    return () =>
+      window.removeEventListener(
+        MEASUREMENT_CONSENT_GRANTED_EVENT,
+        trackProductView,
+      );
+  }, [
+    product.category_name,
+    product.currencyCode,
+    product.name,
+    product.rate,
+    product.sku,
+  ]);
 
   // Whether to show the sticky bar (mobile only, when product is purchasable)
   const showStickyBar = !isCatalogMode && hasPrice && isInStock;

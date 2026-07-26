@@ -28,6 +28,11 @@ import Image from "next/image";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useOnlineStatus } from "@/lib/use-online-status";
+import {
+  generateMetaEventId,
+  isMetaConsentGranted,
+  trackMetaEvent,
+} from "@/lib/analytics/meta";
 
 export default function CartPage() {
   const t = useTranslations("cart");
@@ -215,6 +220,47 @@ export default function CartPage() {
       } catch {
         __idemKey = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
       }
+
+      const metaConsent = isMetaConsentGranted();
+      const metaContents = validItems.map((item) => ({
+        id: item.sku,
+        quantity: item.quantity,
+        item_price: item.rate,
+      }));
+      const metaProperties = {
+        content_ids: validItems.map((item) => item.sku),
+        contents: metaContents,
+        content_type: "product" as const,
+        currency: currencyCode,
+        value: validSubtotal,
+        num_items: validItemCount,
+      };
+
+      if (metaConsent) {
+        trackMetaEvent("InitiateCheckout", metaProperties);
+      }
+
+      // Persist the Purchase event id with the cart idempotency key. If the
+      // browser retries after an interrupted response, Pixel and CAPI still use
+      // the same id and Meta deduplicates the confirmed order.
+      const __metaEventStoreKey = `tsh_meta_purchase:${__cartKey}`;
+      let __metaPurchaseEventId: string | undefined;
+      if (metaConsent) {
+        try {
+          __metaPurchaseEventId =
+            sessionStorage.getItem(__metaEventStoreKey) || undefined;
+          if (!__metaPurchaseEventId) {
+            __metaPurchaseEventId = generateMetaEventId();
+            sessionStorage.setItem(
+              __metaEventStoreKey,
+              __metaPurchaseEventId,
+            );
+          }
+        } catch {
+          __metaPurchaseEventId = generateMetaEventId();
+        }
+      }
+
       const response = await fetch('/api/checkout', {
         method: 'POST',
         headers: {
@@ -232,6 +278,13 @@ export default function CartPage() {
           notes: combinedNotes,
           // Phase 3: نوع الطلبية المختار من صفحة shop/order-type (bulk=نقليات، delivery=توصيل COD)
           orderType: ((): string | undefined => { try { const v = localStorage.getItem('selectedOrderType'); return v === 'bulk' || v === 'delivery' ? v : undefined; } catch { return undefined; } })(),
+          meta: metaConsent && __metaPurchaseEventId
+            ? {
+                consent: true,
+                event_id: __metaPurchaseEventId,
+                event_source_url: window.location.href,
+              }
+            : undefined,
         }),
       });
 
@@ -239,6 +292,20 @@ export default function CartPage() {
 
       if (!response.ok) {
         throw new Error(data.error || 'Failed to place order');
+      }
+
+      if (__metaPurchaseEventId) {
+        trackMetaEvent(
+          "Purchase",
+          {
+            ...metaProperties,
+            value: Number(data.order.total) || validSubtotal,
+          },
+          { eventId: __metaPurchaseEventId, sendServer: false },
+        );
+        try {
+          sessionStorage.removeItem(__metaEventStoreKey);
+        } catch {}
       }
 
       // Success!

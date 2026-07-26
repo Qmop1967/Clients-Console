@@ -15,7 +15,7 @@ import { ErrorReporter } from "@/components/error-reporter";
 import { ServiceWorkerRegister } from "@/components/service-worker-register";
 import { UpdateBanner } from "@/components/pwa/update-banner";
 import { OfflineIndicator } from "@/components/pwa/offline-indicator";
-import { TikTokConsent } from "@/components/analytics/tiktok-consent";
+import { MeasurementConsent } from "@/components/analytics/tiktok-consent";
 import "../globals.css";
 
 // Performance-optimized fonts using next/font/google
@@ -159,7 +159,7 @@ export default async function RootLayout({
 
                   <Toaster />
                   <PushPermission />
-                  <TikTokConsent />
+                  <MeasurementConsent />
                 </CartSessionProvider>
               </CatalogModeProvider>
             </NextIntlClientProvider>

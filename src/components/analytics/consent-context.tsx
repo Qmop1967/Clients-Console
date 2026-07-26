@@ -7,20 +7,45 @@ import {
   revokeTikTokConsent,
   trackPageView,
 } from '@/lib/analytics/tiktok';
+import {
+  isMetaPixelConfigured,
+  loadMetaPixel,
+  MEASUREMENT_CONSENT_GRANTED_EVENT,
+  revokeMetaConsent,
+  trackMetaPageView,
+} from '@/lib/analytics/meta';
 
 /**
- * Consent-first gate for the TikTok Pixel.
+ * Consent-first gate for TSH advertising measurement.
  *
  * State is persisted in localStorage so a decision (Accept OR Reject) survives reloads
- * and the banner does not nag a visitor who already chose. The pixel is loaded and
- * PageView fired ONLY after an explicit "accepted" — never on "unset" or "rejected".
- * A change-consent control lets the visitor reopen the choice and withdraw at any time.
+ * and the banner does not nag a visitor who already chose. Vendor pixels are loaded and
+ * PageView is fired ONLY after an explicit "accepted" — never on "unset" or "rejected".
+ *
+ * This is a new versioned decision. A historical TikTok-only acceptance is deliberately
+ * not interpreted as consent for Meta.
  */
 
 export type ConsentStatus = 'unset' | 'accepted' | 'rejected';
 
-const STORAGE_KEY = 'tsh_tt_consent';
-const CONSENT_GRANTED_EVENT = 'tsh:tiktok-consent-granted';
+const STORAGE_KEY = 'tsh_measurement_consent_v2';
+const LEGACY_TIKTOK_STORAGE_KEY = 'tsh_tt_consent';
+const LEGACY_TIKTOK_GRANTED_EVENT = 'tsh:tiktok-consent-granted';
+
+function activateMeasurement(): void {
+  loadTikTokPixel();
+  loadMetaPixel();
+  trackPageView();
+  trackMetaPageView();
+  window.dispatchEvent(new Event(MEASUREMENT_CONSENT_GRANTED_EVENT));
+  // Compatibility for the existing TikTok campaign components.
+  window.dispatchEvent(new Event(LEGACY_TIKTOK_GRANTED_EVENT));
+}
+
+function revokeMeasurement(): void {
+  revokeTikTokConsent();
+  revokeMetaConsent();
+}
 
 interface ConsentContextValue {
   status: ConsentStatus;
@@ -50,29 +75,28 @@ export function ConsentProvider({ children }: { children: React.ReactNode }) {
     setStatus(stored);
     setReady(true);
     if (stored === 'accepted') {
-      loadTikTokPixel();
-      trackPageView();
-      window.dispatchEvent(new Event(CONSENT_GRANTED_EVENT));
+      activateMeasurement();
     }
   }, []);
 
   const accept = useCallback(() => {
+    window.localStorage.removeItem(LEGACY_TIKTOK_STORAGE_KEY);
     window.localStorage.setItem(STORAGE_KEY, 'accepted');
     setStatus('accepted');
-    loadTikTokPixel();
-    trackPageView();
-    window.dispatchEvent(new Event(CONSENT_GRANTED_EVENT));
+    activateMeasurement();
   }, []);
 
   const reject = useCallback(() => {
+    window.localStorage.removeItem(LEGACY_TIKTOK_STORAGE_KEY);
     window.localStorage.setItem(STORAGE_KEY, 'rejected');
-    revokeTikTokConsent();
+    revokeMeasurement();
     setStatus('rejected');
   }, []);
 
   const reset = useCallback(() => {
     window.localStorage.removeItem(STORAGE_KEY);
-    revokeTikTokConsent();
+    window.localStorage.removeItem(LEGACY_TIKTOK_STORAGE_KEY);
+    revokeMeasurement();
     setStatus('unset');
   }, []);
 
@@ -89,5 +113,6 @@ export function useConsent(): ConsentContextValue {
   return ctx;
 }
 
-/** Whether the pixel can ever run in this deployment (id configured). */
-export const pixelEnabled = isPixelConfigured;
+/** Whether at least one measurement pixel can run in this deployment. */
+export const pixelEnabled = (): boolean =>
+  isPixelConfigured() || isMetaPixelConfigured();

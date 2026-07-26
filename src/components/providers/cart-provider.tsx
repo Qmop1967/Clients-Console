@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { createContext, useContext, useEffect, useState, useCallback, useMemo, useRef } from "react";
+import { trackMetaEvent } from "@/lib/analytics/meta";
 
 export interface CartItem {
   item_id: string;
@@ -171,6 +172,15 @@ export function CartProvider({ children, currencyCode = "IQD" }: CartProviderPro
       return validation;
     }
 
+    const currentQuantity = itemsMap.get(item.item_id)?.quantity || 0;
+    const addedQuantity = Math.min(
+      quantity,
+      Math.max(0, item.available_stock - currentQuantity),
+    );
+    if (addedQuantity <= 0) {
+      return { hasError: false };
+    }
+
     setItems((prevItems) => {
       const existingIndex = prevItems.findIndex((i) => i.item_id === item.item_id);
 
@@ -187,8 +197,26 @@ export function CartProvider({ children, currencyCode = "IQD" }: CartProviderPro
       return [...prevItems, { ...item, quantity: Math.min(quantity, item.available_stock) }];
     });
 
+    if (item.sku) {
+      trackMetaEvent("AddToCart", {
+        content_ids: [item.sku],
+        contents: [
+          {
+            id: item.sku,
+            quantity: addedQuantity,
+            item_price: item.rate,
+          },
+        ],
+        content_type: "product",
+        content_name: item.name,
+        currency: currencyCode,
+        value: item.rate * addedQuantity,
+        num_items: addedQuantity,
+      });
+    }
+
     return { hasError: false };
-  }, [validateMinimumQuantity]);
+  }, [currencyCode, itemsMap, validateMinimumQuantity]);
 
   const removeItem = useCallback((itemId: string) => {
     setItems((prevItems) => prevItems.filter((item) => item.item_id !== itemId));

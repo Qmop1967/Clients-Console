@@ -3,6 +3,10 @@ import { auth } from '@/lib/auth/auth';
 import { createSalesOrder } from '@/lib/odoo/orders';
 import { z } from 'zod';
 import crypto from 'crypto';
+import {
+  isMetaCapiConfigured,
+  sendMetaServerEvent,
+} from '@/lib/analytics/meta-server';
 
 export const maxDuration = 60;
 
@@ -38,6 +42,32 @@ function generateIdempotencyKey(partnerId: string | number, items: any[]): strin
   return `checkout:${partnerId}:${itemsHash}`;
 }
 
+function allowedTshEventUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    if (process.env.NODE_ENV !== 'production') {
+      return (
+        url.hostname === 'localhost' ||
+        url.hostname === '127.0.0.1' ||
+        url.hostname === 'tsh.sale' ||
+        url.hostname === 'www.tsh.sale'
+      );
+    }
+    return (
+      url.protocol === 'https:' &&
+      (url.hostname === 'tsh.sale' || url.hostname === 'www.tsh.sale')
+    );
+  } catch {
+    return false;
+  }
+}
+
+function requestClientIp(request: NextRequest): string | undefined {
+  const forwarded = request.headers.get('x-forwarded-for');
+  if (forwarded) return forwarded.split(',')[0]?.trim();
+  return request.headers.get('x-real-ip')?.trim() || undefined;
+}
+
 const checkoutSchema = z.object({
   items: z.array(z.object({
     item_id: z.string(),
@@ -49,6 +79,11 @@ const checkoutSchema = z.object({
   notes: z.string().optional(),
   orderType: z.enum(['bulk', 'delivery']).optional(), // Phase 3: bulk=نقليات، delivery=توصيل COD
   idempotencyKey: z.string().optional(),
+  meta: z.object({
+    consent: z.literal(true),
+    event_id: z.string().regex(/^[A-Za-z0-9_-]{8,128}$/),
+    event_source_url: z.string().url().refine(allowedTshEventUrl),
+  }).strict().optional(),
 });
 
 export async function POST(request: NextRequest) {
@@ -72,7 +107,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { items, notes, orderType } = validation.data;
+    const { items, notes, orderType, meta } = validation.data;
 
     if (items.length === 0) {
       return NextResponse.json({ error: 'No items in cart' }, { status: 400 });
@@ -115,6 +150,45 @@ export async function POST(request: NextRequest) {
 
     const order = result.order;
     console.log(`[Checkout] Order created: ${order.salesorder_number}`);
+
+    // Purchase is server-trusted: it is emitted only after the gateway confirms
+    // the real Odoo sale order. A CAPI failure can never fail or duplicate the
+    // customer's order.
+    if (meta?.consent && isMetaCapiConfigured()) {
+      const userAgent = request.headers.get('user-agent')?.trim();
+      if (userAgent) {
+        try {
+          await sendMetaServerEvent({
+            eventName: 'Purchase',
+            eventId: meta.event_id,
+            eventSourceUrl: meta.event_source_url,
+            clientIp: requestClientIp(request),
+            clientUserAgent: userAgent,
+            fbp: request.cookies.get('_fbp')?.value,
+            fbc: request.cookies.get('_fbc')?.value,
+            customData: {
+              content_ids: items.map((item) => item.sku),
+              contents: items.map((item) => ({
+                id: item.sku,
+                quantity: item.quantity,
+                item_price: item.rate,
+              })),
+              content_type: 'product',
+              currency: order.currency_code || 'IQD',
+              value: Number(order.total),
+              num_items: items.reduce(
+                (total, item) => total + item.quantity,
+                0,
+              ),
+            },
+          });
+        } catch {
+          console.error(
+            '[Checkout] Meta CAPI Purchase delivery failed safely',
+          );
+        }
+      }
+    }
 
     const successResp = {
       success: true,

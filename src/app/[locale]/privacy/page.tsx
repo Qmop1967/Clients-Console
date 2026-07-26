@@ -3,7 +3,7 @@ import { LegalPage } from "@/components/marketing/legal-layout";
 import { COMPANY, toMarketingLocale } from "@/lib/marketing/company";
 
 interface Props { params: Promise<{ locale: string }> }
-const UPDATED = "2026-07-24";
+const UPDATED = "2026-07-26";
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { locale } = await params;
@@ -22,14 +22,14 @@ const AR = [
   { h: "البيانات التي نجمعها", p: ["اسم الشخص واسم النشاط التجاري، ورقم الهاتف، والبريد الإلكتروني، وعنوان التسليم والمحافظة.", "بيانات الحساب التجاري: الطلبات، الفواتير، المدفوعات، المرتجعات، وكشف الحساب.", "بيانات تقنية محدودة لازمة لتشغيل الموقع: ملفات تعريف الجلسة، وسجلات الأخطاء، ونوع المتصفح.", "لا نجمع أرقام بطاقات الدفع الكاملة ولا كلمات المرور البنكية، ولا نطلب صور وثائق شخصية عبر الرسائل."] },
   { h: "لماذا نستخدمها", p: ["تنفيذ الطلبات وإصدار الفواتير وترتيب التوصيل.", "إدارة الحساب التجاري وكشف الحساب والتحصيل.", "الدعم الفني وخدمة ما بعد البيع والضمان.", "إرسال إشعارات تخصّ الطلب أو الفاتورة أو التسليم إلى من وافق على استلامها.", "الوفاء بالالتزامات المحاسبية والقانونية في العراق."] },
   { h: "الرسائل والموافقة", p: ["نراسل الشركاء في أمور طلباتهم وحساباتهم فقط. لا نرسل رسائل ترويجية إلا لمن وافق صراحةً على ذلك.", `يمكن سحب الموافقة وإيقاف الرسائل في أي وقت بمراسلتنا على ${COMPANY.email}، وننفّذ الطلب فوراً.`, "لا نشتري قوائم أرقام ولا نراسل من لم يتعامل معنا."] },
-  { h: "التحليلات وبكسل TikTok", p: [
-    "نستخدم بكسل TikTok على موقعنا لقياس أداء حملاتنا الإعلانية فقط، ولا يعمل إلا بعد موافقتك الصريحة. يمكنك رفضه أو سحب موافقتك في أي وقت من إعداد الخصوصية في الموقع، وعندها يتوقّف عن العمل.",
-    "البيانات التي يجمعها البكسل تقنية فقط: الصفحة التي تُزار، ونوع الحدث (مثل مشاهدة منتج)، ومعرّف حدث (event_id) عشوائي، وبيانات المتصفح والجهاز العامة. لا نرسل عبره اسمك أو رقم هاتفك أو بريدك أو أي بيانات تعريف شخصية.",
-    "لا نرسل عبر البكسل أي بيانات حسّاسة أو مالية — لا أرقام بطاقات، ولا بيانات دفع، ولا معلومات حساب بنكي.",
-    "يُعامَل TikTok كمعالِج بيانات (مزوّد خدمة) بالقدر اللازم لقياس الإعلانات. وقد نستخدم مستقبلاً واجهة الأحداث (Events API) لإرسال الأحداث نفسها من خادمنا؛ عندها يُستخدم معرّف الحدث (event_id) لمنع احتساب الحدث الواحد مرّتين بين المتصفح والخادم.",
-    "نحتفظ ببيانات القياس للمدة اللازمة لتقييم أداء الحملات فقط ووفق شروط TikTok كمعالج، ثم تُحذف أو تُجمَّع بشكل مجهول الهوية.",
+  { h: "التحليلات وبكسلات TikTok وMeta", p: [
+    "نستخدم أدوات قياس TikTok وMeta على موقعنا لقياس أداء حملاتنا الإعلانية فقط، ولا تعمل إلا بعد موافقتك الصريحة. يمكنك رفضها أو سحب موافقتك في أي وقت من إعداد الخصوصية في الموقع، وعندها يتوقّف إرسال الأحداث الجديدة.",
+    "عند الموافقة قد تُرسل بيانات تقنية تشمل الصفحة التي تُزار، ونوع الحدث (مثل مشاهدة منتج أو إضافة إلى السلة أو إتمام طلب)، ومعرّف حدث عشوائي، ومعرّفات ملفات الارتباط الإعلانية الخاصة بالمزوّد، وعنوان IP ونوع المتصفح اللازمين لقياس أحداث الويب. لا نرسل الاسم أو رقم الهاتف أو البريد الإلكتروني أو عنوان التسليم ضمن أحداث القياس.",
+    "قد نرسل الحدث نفسه من المتصفح ومن خادمنا إلى Meta عبر Conversions API. نستخدم معرّف الحدث نفسه (event_id) لمنع احتساب الإجراء الواحد مرتين.",
+    "لا نرسل عبر أدوات القياس بيانات حساسة أو مالية — لا أرقام بطاقات، ولا بيانات دفع، ولا معلومات حساب بنكي، ولا كلمات مرور.",
+    "نحتفظ ببيانات القياس للمدة اللازمة لتقييم أداء الحملات، وفق شروط وأدوات الاحتفاظ لدى مزوّدي القياس، ثم نحذف ما لدينا أو نجمّعه دون ربط مباشر بالعميل.",
   ] },
-  { h: "مع من نشاركها", p: ["مندوبو التوصيل وشركات الشحن — بالقدر اللازم لإيصال الطلب فقط.", "قنوات الدفع والتحويل المالي المعتمدة — لتأكيد عمليات الدفع.", "مزوّدو قياس الإعلانات (TikTok) كمعالِجين — بيانات أحداث تقنية فقط وبعد موافقتك.", "الجهات الرسمية عند وجود التزام قانوني.", "لا نبيع بيانات العملاء ولا نؤجّرها ولا نشاركها لأغراض تسويقية تخصّ طرفاً ثالثاً."] },
+  { h: "مع من نشاركها", p: ["مندوبو التوصيل وشركات الشحن — بالقدر اللازم لإيصال الطلب فقط.", "قنوات الدفع والتحويل المالي المعتمدة — لتأكيد عمليات الدفع.", "مزوّدو قياس الإعلانات (TikTok وMeta) — بيانات أحداث تقنية فقط وبعد موافقتك.", "الجهات الرسمية عند وجود التزام قانوني.", "لا نبيع بيانات العملاء ولا نؤجّرها ولا نشاركها لأغراض تسويقية تخصّ طرفاً ثالثاً."] },
   { h: "مدة الاحتفاظ", p: ["نحتفظ بالسجلات التجارية والمحاسبية للمدة التي يفرضها القانون العراقي، وبالبيانات التشغيلية طالما بقي الحساب فعّالاً. عند انتهاء الغرض نحذف البيانات أو نجعلها مجهولة الهوية."] },
   { h: "حماية البيانات", p: ["الوصول إلى بيانات الحسابات مقيّد بالموظفين المخوّلين، والاتصال بالموقع مشفّر عبر HTTPS، والدخول إلى بوابة الشركاء يتم برمز تحقق لمرة واحدة."] },
   { h: "حقوقك", p: [`يحق لك الاطلاع على بياناتك، أو تصحيحها، أو طلب حذفها ضمن ما يسمح به القانون. راسلنا على ${COMPANY.email} أو اتصل على ${COMPANY.phoneDisplay} وسنردّ خلال مدة معقولة.`] },
@@ -41,14 +41,14 @@ const EN = [
   { h: "Data we collect", p: ["Contact person name, business name, phone number, email address, delivery address and province.", "Trade account data: orders, invoices, payments, returns and account statements.", "Limited technical data needed to run the site: session cookies, error logs and browser type.", "We do not collect full payment card numbers or banking passwords, and we never request images of personal identity documents over messaging."] },
   { h: "Why we use it", p: ["Fulfilling orders, issuing invoices and arranging delivery.", "Managing the trade account, statements and collections.", "Technical support, after-sales service and warranty.", "Sending order, invoice and delivery notifications to partners who agreed to receive them.", "Meeting accounting and legal obligations in Iraq."] },
   { h: "Messaging and consent", p: ["We message partners about their own orders and accounts only. We do not send promotional messages unless the recipient has explicitly opted in.", `Consent can be withdrawn and messages stopped at any time by emailing ${COMPANY.email}; we action such requests immediately.`, "We do not buy phone lists and we do not message people who have no business relationship with us."] },
-  { h: "Analytics and the TikTok Pixel", p: [
-    "We use the TikTok Pixel on our website only to measure the performance of our advertising campaigns. It does not run until you give explicit consent, and you can reject it or withdraw your consent at any time from the site's privacy settings — after which it stops running.",
-    "The data the pixel collects is technical only: the page visited, the type of event (such as viewing a product), a random event identifier (event_id), and general browser and device information. We do not send your name, phone number, email or any personally identifying data through it.",
-    "We never send sensitive or financial data through the pixel — no card numbers, no payment data, and no bank account information.",
-    "TikTok acts as a data processor (a service provider) to the extent needed to measure advertising. In future we may use the Events API to send the same events from our own server; the event_id is then used to deduplicate a single action so it is not double-counted between browser and server.",
-    "We retain measurement data only for as long as needed to evaluate campaign performance, in line with TikTok's processor terms, after which it is deleted or aggregated anonymously.",
+  { h: "Analytics and the TikTok and Meta Pixels", p: [
+    "We use TikTok and Meta measurement tools on our website only to measure advertising performance. They do not run until you give explicit consent. You can reject or withdraw consent at any time from the site's privacy settings, after which new measurement events stop.",
+    "After consent, technical data may be sent, including the page visited, event type (such as viewing a product, adding to cart or completing an order), a random event identifier, vendor advertising-cookie identifiers, IP address and browser type needed to measure web events. We do not include your name, phone number, email address or delivery address in measurement events.",
+    "The same event may be sent from the browser and our server to Meta through the Conversions API. We use the same event_id to prevent one action from being counted twice.",
+    "We never send sensitive or financial data through measurement tools — no card numbers, payment data, bank-account information or passwords.",
+    "We retain measurement data only as long as needed to evaluate campaign performance, subject to the providers' retention controls and terms, after which we delete what we hold or aggregate it without a direct customer link.",
   ] },
-  { h: "Who we share it with", p: ["Delivery agents and shipping companies — only as needed to deliver the order.", "Approved payment and money-transfer channels — to confirm payments.", "Advertising-measurement providers (TikTok) as processors — technical event data only, and only after your consent.", "Authorities where a legal obligation applies.", "We do not sell, rent or share customer data for third-party marketing."] },
+  { h: "Who we share it with", p: ["Delivery agents and shipping companies — only as needed to deliver the order.", "Approved payment and money-transfer channels — to confirm payments.", "Advertising-measurement providers (TikTok and Meta) — technical event data only, and only after your consent.", "Authorities where a legal obligation applies.", "We do not sell, rent or share customer data for third-party marketing."] },
   { h: "Retention", p: ["We keep commercial and accounting records for the period required by Iraqi law, and operational data for as long as the account remains active. When the purpose ends, we delete or anonymise the data."] },
   { h: "Security", p: ["Access to account data is restricted to authorised staff, traffic to the site is encrypted over HTTPS, and partner portal sign-in uses a one-time verification code."] },
   { h: "Your rights", p: [`You may request access to your data, correction of it, or its deletion where the law permits. Email ${COMPANY.email} or call ${COMPANY.phoneDisplay} and we will respond within a reasonable period.`] },

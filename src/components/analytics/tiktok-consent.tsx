@@ -5,30 +5,31 @@ import { usePathname } from "next/navigation";
 import { ConsentProvider, useConsent } from "@/components/analytics/consent-context";
 import { ConsentBanner } from "@/components/analytics/consent-banner";
 import { trackPageView } from "@/lib/analytics/tiktok";
+import { trackMetaPageView } from "@/lib/analytics/meta";
 
 /**
- * Fires PageView on client-side navigation — but only once consent is "accepted".
- * The very first PageView (initial load / the moment of Accept) is fired by the
- * provider, so we skip the mount render here to avoid a duplicate hit.
+ * Fires vendor PageView events on client-side navigation after consent.
+ * The provider owns the initial/accept PageView. Tracking only when the pathname
+ * actually changes prevents a second PageView when status changes to accepted.
  */
 function PixelPageView() {
   const { status } = useConsent();
   const pathname = usePathname();
-  const skippedMount = useRef(false);
+  const previousPath = useRef(pathname);
 
   useEffect(() => {
-    if (!skippedMount.current) {
-      skippedMount.current = true;
-      return;
-    }
-    if (status === "accepted") trackPageView();
+    if (previousPath.current === pathname) return;
+    previousPath.current = pathname;
+    if (status !== "accepted") return;
+    trackPageView();
+    trackMetaPageView();
   }, [pathname, status]);
 
   return null;
 }
 
-/** Single mount point for the consent-gated TikTok Pixel. Place in the locale body. */
-export function TikTokConsent() {
+/** Single mount point for consent-gated advertising measurement. */
+export function MeasurementConsent() {
   return (
     <ConsentProvider>
       <PixelPageView />

@@ -7,10 +7,10 @@ import { pixelEnabled, useConsent } from "@/components/analytics/consent-context
 import { toMarketingLocale } from "@/lib/marketing/company";
 
 /**
- * Consent UI for the TikTok Pixel.
+ * Consent UI for the TikTok and Meta measurement pixels.
  * - Before a decision: a bottom banner offering Accept / Reject.
  * - After a decision: a small floating control to change/withdraw consent.
- * Renders nothing at all when no pixel id is configured (nothing to consent to).
+ * Renders nothing when neither vendor has a pixel id configured.
  */
 export function ConsentBanner() {
   const locale = useLocale();
@@ -31,8 +31,8 @@ export function ConsentBanner() {
         <div className="mx-auto flex max-w-4xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-sm leading-relaxed text-muted-foreground">
             {isAr
-              ? "نستخدم بكسل TikTok لقياس أداء إعلاناتنا فقط، ولا يعمل إلا بعد موافقتك. لا نرسل أي بيانات تعريف شخصية."
-              : "We use the TikTok Pixel only to measure our ad performance, and it runs only after you agree. No personally identifying data is sent."}{" "}
+              ? "نستخدم أدوات قياس TikTok وMeta لقياس أداء إعلاناتنا، ولا تعمل إلا بعد موافقتك. قد تُرسل بيانات تقنية مثل الصفحة ونوع الحدث ومعرّفات المتصفح، ولا نرسل الاسم أو الهاتف أو البريد."
+              : "We use TikTok and Meta measurement tools to measure ad performance, and they run only after you agree. Technical data such as the page, event type and browser identifiers may be sent; we do not send your name, phone number or email."}{" "}
             <Link
               href={`/${locale}/privacy`}
               className="font-semibold text-gold underline-offset-2 hover:underline"
