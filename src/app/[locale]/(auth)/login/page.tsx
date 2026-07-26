@@ -17,6 +17,7 @@ import {
   browserSupportsWebAuthn,
   platformAuthenticatorIsAvailable,
 } from "@simplewebauthn/browser";
+import { resolvePostLoginTarget } from "@/lib/auth/route-policy";
 
 type LoginMethod = "phone" | "email";
 
@@ -32,11 +33,7 @@ export default function LoginPage() {
   // customers re-authenticated for nothing.
   const { status: sessionStatus } = useSession();
   const postLoginTarget = useCallback(() => {
-    try {
-      const cb = new URLSearchParams(window.location.search).get("callbackUrl") || "";
-      if (cb.startsWith("/") && !cb.startsWith("//")) return cb;
-    } catch { /* ignore */ }
-    return `/${locale}/dashboard`;
+    return resolvePostLoginTarget(locale, window.location.search);
   }, [locale]);
   useEffect(() => {
     if (sessionStatus !== "authenticated") return;
@@ -459,7 +456,12 @@ export default function LoginPage() {
       sessionStorage.setItem("otp_method", method);
       if (data.devOtp) sessionStorage.setItem("dev_otp", data.devOtp);
       if (data.fallback) sessionStorage.setItem("otp_fallback", "true");
-      router.push(`/${locale}/login/verify${window.location.search || ""}`);
+
+      const target = postLoginTarget();
+      const fallback = `/${locale}/dashboard`;
+      const callbackQuery =
+        target === fallback ? "" : `?callbackUrl=${encodeURIComponent(target)}`;
+      router.push(`/${locale}/login/verify${callbackQuery}`);
     } catch {
       setError(isAr ? "حدث خطأ بالاتصال، حاول مرة أخرى" : "Connection error, please try again");
     } finally {

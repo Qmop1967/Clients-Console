@@ -1,4 +1,5 @@
 import type { NextAuthConfig } from 'next-auth';
+import { isExactPublicAuthPath } from './route-policy';
 
 export const authConfig: NextAuthConfig = {
   pages: {
@@ -16,7 +17,8 @@ export const authConfig: NextAuthConfig = {
       // Keep this callback as a second, exact-match defense. Substring matching
       // here previously made paths containing "/shop" or "/login" public.
       const isPublicPage =
-        (!id && (section === 'login' || section === 'register')) ||
+        isExactPublicAuthPath(pathname) ||
+        (!id && section === 'register') ||
         (section === 'shop' && (!id || (!extra && /^\d+$/.test(id))));
 
       // Auth and health are the only intentionally public API namespaces here.

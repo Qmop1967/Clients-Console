@@ -1,6 +1,7 @@
 import createIntlMiddleware from 'next-intl/middleware';
 import { NextRequest, NextResponse } from 'next/server';
 import { locales, defaultLocale } from './i18n/config';
+import { isExactPublicAuthPath } from './lib/auth/route-policy';
 
 const intlMiddleware = createIntlMiddleware({
   locales,
@@ -49,9 +50,11 @@ function isExactPublicAppPath(pathname: string): boolean {
 
   if (!locale || !known.includes(locale) || !section) return false;
 
-  // Authentication and compatibility redirects are exact routes, never
-  // substring matches. This prevents adjacent paths from bypassing the guard.
-  if ((section === 'login' || section === 'products') && !id) return true;
+  // Login entry and OTP verification must be reachable before a session
+  // exists. The shared helper keeps this exact so adjacent/deeper login paths
+  // cannot bypass the guard.
+  if (isExactPublicAuthPath(pathname)) return true;
+  if (section === 'products' && !id) return true;
 
   // Public storefront: the index and one numeric product detail segment only.
   // Checkout/order-type and every deeper route remain protected.

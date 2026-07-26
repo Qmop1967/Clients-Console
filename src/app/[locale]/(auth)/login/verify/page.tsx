@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Loader2, ArrowRight, RefreshCw, CheckCircle2, Mail, MessageSquare } from "lucide-react";
 import { useLocale } from "next-intl";
 import { useRouter } from "next/navigation";
+import { resolvePostLoginTarget } from "@/lib/auth/route-policy";
 
 export default function VerifyOTPPage() {
   const locale = useLocale();
@@ -29,11 +30,7 @@ export default function VerifyOTPPage() {
   // already-authenticated user (stale tab / back button / bookmarked verify).
   const { status: sessionStatus } = useSession();
   const postLoginTarget = () => {
-    try {
-      const cb = new URLSearchParams(window.location.search).get("callbackUrl") || "";
-      if (cb.startsWith("/") && !cb.startsWith("//")) return cb;
-    } catch { /* ignore */ }
-    return `/${locale}/dashboard`;
+    return resolvePostLoginTarget(locale, window.location.search);
   };
   useEffect(() => {
     if (sessionStatus !== "authenticated" || loading || verified) return;
