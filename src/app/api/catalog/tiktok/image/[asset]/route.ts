@@ -19,7 +19,7 @@ export async function GET(
   { params }: { params: Promise<{ asset: string }> }
 ) {
   const { asset } = await params;
-  const match = /^(\d+)-(\d+)\.jpg$/.exec(asset);
+  const match = /^(\d+)-(\d+)\.jpe?g$/.exec(asset);
   if (!match) return notFound();
 
   const mediaId = Number(match[1]);

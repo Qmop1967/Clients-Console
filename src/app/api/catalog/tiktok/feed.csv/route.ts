@@ -79,7 +79,7 @@ export async function GET() {
       const description = title;
       const price = `${Math.round(product.display_price)} IQD`;
       const availability = (product.available_stock || 0) > 0 ? 'in stock' : 'out of stock';
-      const image = `${SITE_BASE}/api/catalog/tiktok/image/${product.public_image_id}-${product.public_image_version}.jpg`;
+      const image = `${SITE_BASE}/api/catalog/tiktok/image/${product.public_image_id}-${product.public_image_version}.jpeg`;
       rows.push([
         csvCell(product.sku),
         csvCell(title),
