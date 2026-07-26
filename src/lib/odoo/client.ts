@@ -3,12 +3,19 @@
 // ============================================
 
 const GATEWAY_URL = process.env.API_GATEWAY_URL || 'http://localhost:3010';
-const API_KEY = process.env.API_KEY || 'tsh-client-2026-key';
+const API_KEY = process.env.API_KEY || '';
+
+function requireApiKey(): string {
+  if (!API_KEY) {
+    throw new Error('API_KEY is not configured');
+  }
+  return API_KEY;
+}
 
 async function gw(path: string, body: any, extraHeaders?: Record<string, string>): Promise<any> {
   const res = await fetch(`${GATEWAY_URL}${path}`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-api-key': API_KEY, ...(extraHeaders || {}) },
+    headers: { 'Content-Type': 'application/json', 'x-api-key': requireApiKey(), ...(extraHeaders || {}) },
     body: JSON.stringify(body),
     cache: 'no-store',
   });
@@ -33,6 +40,41 @@ async function gw(path: string, body: any, extraHeaders?: Record<string, string>
 // Returns the unwrapped `data` payload; throws on { success: false }.
 export async function gatewayPost<T = unknown>(path: string, body: Record<string, unknown> = {}): Promise<T> {
   return gw(path, body);
+}
+
+export interface ApprovedPublicMediaRow {
+  asset_id: number;
+  product_template_id: number;
+  url: string;
+  is_main: boolean;
+  sequence: number;
+  mime_type: string;
+  version: number;
+}
+
+/**
+ * Read only the gateway's approval-filtered public DAM projection. The client
+ * app never receives direct x_product_media model access.
+ */
+export async function getApprovedPublicMedia(assetId?: number): Promise<ApprovedPublicMediaRow[]> {
+  const query = assetId === undefined ? '' : `?asset_id=${encodeURIComponent(String(assetId))}`;
+  const res = await fetch(`${GATEWAY_URL}/api/product-media/public-approved${query}`, {
+    method: 'GET',
+    headers: { 'x-api-key': requireApiKey() },
+    cache: 'no-store',
+  });
+  let data: any;
+  try {
+    data = await res.json();
+  } catch {
+    throw new Error(`Gateway returned malformed public-media response (HTTP ${res.status})`);
+  }
+  if (!res.ok || !data?.success || !Array.isArray(data.media)) {
+    const error: any = new Error(data?.error || 'Approved public media lookup failed');
+    error.status = res.status;
+    throw error;
+  }
+  return data.media as ApprovedPublicMediaRow[];
 }
 
 export async function authenticate(): Promise<number> { return 1; } // Auth handled by gateway
@@ -131,7 +173,7 @@ export async function getImageVersions(productIds: number[]): Promise<Map<number
   try {
     const res = await fetch(`${GATEWAY_URL}/api/products/image-versions?ids=${ids.join(',')}`, {
       method: 'GET',
-      headers: { 'x-api-key': API_KEY },
+      headers: { 'x-api-key': requireApiKey() },
       cache: 'no-store',
     });
     const data = await res.json();

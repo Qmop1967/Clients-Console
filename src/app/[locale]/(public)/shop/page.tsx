@@ -3,20 +3,15 @@ import { getTranslations, getLocale } from "next-intl/server";
 import { ShopContainer } from "@/components/products/shop-container";
 import { ProductsSkeleton } from "@/components/products/products-skeleton";
 import { LCPImagePreload } from "@/components/products/lcp-image-preload";
-import { getProductsWithPricesCached as getProductsWithPrices, getProductImageUrl, getCategoriesCached as getCategories, getDirectImageUrls } from "@/lib/odoo/products";
+import { getPublicProductsWithPricesCached as getProductsWithPrices, getCategoriesCached as getCategories } from "@/lib/odoo/products";
 import { auth } from "@/lib/auth/auth";
-import { PRICE_LIST_IDS } from "@/lib/odoo/pricelists";
+import { getConsumerPricelistId } from "@/lib/odoo/pricelists";
 import { localeToOdooLang } from "@/i18n/config";
 
 // PERSONALIZED PRICING: Page is dynamic for logged-in users to show their assigned prices
 // Public visitors still get Consumer prices
 // This ensures customers see their negotiated wholesale/retail prices, not consumer prices
 export const dynamic = "force-dynamic"; // Required for auth() to work
-
-// LCP OPTIMIZATION: Reduced from 8 to 4 priority products
-// 8 images competing for bandwidth slows LCP - only first row (4 desktop, 2 mobile) matters
-// This allows the LCP image to load ~40% faster by reducing network contention
-const PRIORITY_PRODUCTS_COUNT = 4;
 
 export async function generateMetadata() {
   const t = await getTranslations("products");
@@ -36,14 +31,14 @@ export async function generateMetadata() {
  *
  * @param priceListId - Customer's price list ID (from session) or undefined for Consumer
  */
-async function fetchShopData(priceListId?: string, lang?: string) {
+async function fetchShopData(priceListId: string | undefined, lang: string | undefined, isAuthenticated: boolean) {
   try {
     // Determine which price list to use
-    const effectivePriceListId = priceListId || PRICE_LIST_IDS.CONSUMER;
+    const effectivePriceListId = priceListId || await getConsumerPricelistId();
 
     // Fetch products with appropriate prices and categories in parallel
     const [productResult, categories] = await Promise.all([
-      getProductsWithPrices(effectivePriceListId, lang),
+      getProductsWithPrices(effectivePriceListId, lang, !isAuthenticated),
       getCategories(lang)
     ]);
 
@@ -61,8 +56,8 @@ async function fetchShopData(priceListId?: string, lang?: string) {
       sku: product.sku,
       description: product.description,
       rate: product.display_price || 0,
-      available_stock: product.available_stock ?? 0,
-      image_url: getProductImageUrl(product),
+      available_stock: isAuthenticated ? (product.available_stock ?? 0) : ((product.available_stock ?? 0) > 0 ? 1 : 0),
+      image_url: product.image_url,
       category_id: product.category_id,
       category_name: product.category_name,
       brand: product.brand,
@@ -73,30 +68,10 @@ async function fetchShopData(priceListId?: string, lang?: string) {
       carton_qty: product.carton_qty,
     }));
 
-    // Filter to only in-stock products
-    const inStockProducts = productsWithPrices.filter(p => p.available_stock > 0);
-
-    // Filter to only active categories
+    // All active sellable products stay visible. Out-of-stock items are marked
+    // unavailable instead of disappearing from public URLs and catalog sync.
+    const optimizedProducts = productsWithPrices;
     const activeCategories = categories.filter(c => c.is_active);
-
-    // LCP OPTIMIZATION: Get direct Blob CDN URLs for priority products
-    // This eliminates the redirect chain (API → 302 → Blob) for above-the-fold images
-    const priorityProductIds = inStockProducts
-      .slice(0, PRIORITY_PRODUCTS_COUNT)
-      .map(p => p.item_id);
-
-    const directImageUrls = await getDirectImageUrls(priorityProductIds);
-
-    // Replace proxy URLs with direct Blob URLs for priority products
-    const optimizedProducts = inStockProducts.map((product, index) => {
-      if (index < PRIORITY_PRODUCTS_COUNT) {
-        const directUrl = directImageUrls.get(product.item_id);
-        if (directUrl) {
-          return { ...product, image_url: directUrl };
-        }
-      }
-      return product;
-    });
 
     // Get LCP image URL (first product's image) for preloading
     const lcpImageUrl = optimizedProducts[0]?.image_url || null;
@@ -130,6 +105,7 @@ async function ShopLoader() {
   // Check if user is authenticated and get their price list
   const session = await auth();
   const priceListId = session?.user?.priceListId;
+  const isAuthenticated = Boolean(session?.user?.odooPartnerId);
 
   if (process.env.NODE_ENV === 'development') {
     console.log(`[ShopLoader] Session priceListId: ${priceListId || 'Consumer (not logged in)'}`);
@@ -137,7 +113,7 @@ async function ShopLoader() {
 
   // i18n: fetch catalog in the visitor's language (en → en_US, else → ar_001)
   const odooLang = localeToOdooLang(await getLocale());
-  const { products, categories, currencyCode, lcpImageUrl, error } = await fetchShopData(priceListId, odooLang);
+  const { products, categories, currencyCode, lcpImageUrl, error } = await fetchShopData(priceListId, odooLang, isAuthenticated);
 
   // Error State
   if (error && products.length === 0) {
@@ -177,6 +153,8 @@ async function ShopLoader() {
         products={products}
         categories={categories}
         currencyCode={currencyCode}
+        canOrder={isAuthenticated}
+        showExactStock={isAuthenticated}
       />
     </>
   );

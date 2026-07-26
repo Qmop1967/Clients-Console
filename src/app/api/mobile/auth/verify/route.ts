@@ -27,6 +27,8 @@ const verifySchema = z.object({
 
 // Demo account for Apple App Store review
 const DEMO_EMAIL = 'demo@tsh.sale';
+const DEMO_ENABLED = process.env.ENABLE_MOBILE_DEMO_ACCOUNT === 'true'
+  && /^\d{6}$/.test(process.env.MOBILE_DEMO_OTP || '');
 const DEMO_USER: MobileUser = {
   id: 'mobile:demo-user',
   email: DEMO_EMAIL,
@@ -76,7 +78,7 @@ export async function POST(request: NextRequest) {
 
     // Handle demo account for Apple App Store review
     const emailLower = email.toLowerCase();
-    if (emailLower === DEMO_EMAIL) {
+    if (DEMO_ENABLED && emailLower === DEMO_EMAIL) {
       // Store demo user in Redis
       await redis.set(
         `mobile:user:${DEMO_USER.id}`,

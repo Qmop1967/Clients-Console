@@ -88,6 +88,8 @@ interface PublicProductsContentProps {
   allProducts: PublicProduct[];
   categories: PublicCategory[];
   currencyCode: string;
+  canOrder: boolean;
+  showExactStock: boolean;
   selectedCategory?: string | null;
   selectedCategoryName?: string | null;
   onClearCategory?: () => void;
@@ -104,11 +106,15 @@ const ProductCardWithCart = memo(function ProductCardWithCart({
   product,
   currencyCode,
   locale,
+  canOrder,
+  showExactStock,
   priority = false,
 }: {
   product: PublicProduct;
   currencyCode: string;
   locale: string;
+  canOrder: boolean;
+  showExactStock: boolean;
   priority?: boolean;
 }) {
   const displayName = getLocalizedName(product, locale);
@@ -141,17 +147,17 @@ const ProductCardWithCart = memo(function ProductCardWithCart({
   );
 
   const isInStock = product.available_stock > 0;
-  const isLowStock = product.available_stock > 0 && product.available_stock <= 5;
+  const isLowStock = showExactStock && product.available_stock > 0 && product.available_stock <= 5;
   const hasPrice = product.inPriceList !== false && product.rate > 0;
   const cartQuantity = getItemQuantity(product.item_id);
-  const maxQuantity = Math.max(0, product.available_stock - cartQuantity);
+  const maxQuantity = canOrder ? Math.max(0, product.available_stock - cartQuantity) : 0;
 
   // Memoized add to cart handler for better performance
   const handleAddToCart = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
 
-    if (!hasPrice || !isInStock || maxQuantity <= 0) return;
+    if (!canOrder || !hasPrice || !isInStock || maxQuantity <= 0) return;
 
     addItem(
       {
@@ -169,7 +175,7 @@ const ProductCardWithCart = memo(function ProductCardWithCart({
     setAdded(true);
     if (addedTimerRef.current) clearTimeout(addedTimerRef.current);
     addedTimerRef.current = setTimeout(() => setAdded(false), 1200);
-  }, [hasPrice, isInStock, maxQuantity, addItem, product, quantity]);
+  }, [canOrder, hasPrice, isInStock, maxQuantity, addItem, product, quantity]);
 
   // Handler to prevent navigation when interacting with quantity input
   const preventNavigation = useCallback((e: React.MouseEvent) => {
@@ -303,7 +309,9 @@ const ProductCardWithCart = memo(function ProductCardWithCart({
                       : "bg-red-500"
                   )} />
                   {isInStock
-                    ? t("stockCount", { count: product.available_stock })
+                    ? showExactStock
+                      ? t("stockCount", { count: product.available_stock })
+                      : t("inStock")
                     : t("outOfStock")}
                 </div>
               </div>
@@ -344,7 +352,7 @@ const ProductCardWithCart = memo(function ProductCardWithCart({
         )}
 
         {/* Add to Cart Section - Wholesale Enhanced (hidden in catalog mode) */}
-        {!isCatalogMode && hasPrice && isInStock && maxQuantity > 0 && (
+        {!isCatalogMode && canOrder && hasPrice && isInStock && maxQuantity > 0 && (
           <div className="mt-3 sm:mt-4 pt-2 sm:pt-3 border-t border-border/50 space-y-2 sm:space-y-3" onClick={preventNavigation}>
             {/* Wholesale Quantity Input */}
             <WholesaleQuantityInput
@@ -387,7 +395,7 @@ const ProductCardWithCart = memo(function ProductCardWithCart({
         )}
 
         {/* All available stock already in cart — never a silent dead card */}
-        {!isCatalogMode && hasPrice && isInStock && maxQuantity <= 0 && (
+        {!isCatalogMode && canOrder && hasPrice && isInStock && maxQuantity <= 0 && (
           <div className="mt-3 sm:mt-4 pt-2 sm:pt-3 border-t border-border/50">
             <Button disabled variant="outline" className="w-full" size="sm">
               <Check className="h-4 w-4 me-2 text-emerald-600" />
@@ -397,7 +405,7 @@ const ProductCardWithCart = memo(function ProductCardWithCart({
         )}
 
         {/* View Details for non-purchasable items (hidden in catalog mode) */}
-        {!isCatalogMode && (!hasPrice || !isInStock) && (
+        {!isCatalogMode && (!canOrder || !hasPrice || !isInStock) && (
           <div className="mt-3 sm:mt-4 pt-2 sm:pt-3 border-t border-border/50">
             <Link prefetch={false} href={`/${locale}/shop/${product.item_id}`} onClick={handleCardClick} className="block">
             <Button
@@ -421,6 +429,8 @@ export function PublicProductsContent({
   allProducts,
   categories,
   currencyCode,
+  canOrder,
+  showExactStock,
   selectedCategory = null,
   selectedCategoryName = null,
   onClearCategory,
@@ -548,8 +558,8 @@ export function PublicProductsContent({
 
   // Filter and sort products
   const filteredProducts = useMemo(() => {
-    // First filter: ONLY products with stock > 0 (strict rule)
-    let filtered = products.filter((p) => p.available_stock > 0);
+    // Out-of-stock products keep stable public pages and remain discoverable.
+    let filtered = products.slice();
 
     // Search filter - uses deferred value for responsiveness
     if (deferredSearchQuery) {
@@ -775,6 +785,8 @@ export function PublicProductsContent({
                 product={product}
                 currencyCode={currencyCode}
                 locale={locale}
+                canOrder={canOrder}
+                showExactStock={showExactStock}
                 priority={safePage === 1 && index < PRIORITY_PRODUCTS_COUNT}
               />
             ))}

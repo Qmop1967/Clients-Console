@@ -5,7 +5,7 @@
 // hits (names + SKU only — no prices, no stock numbers).
 //
 // QUOTA SAFETY: reuses the SAME unstable_cache entry the shop page warms
-// (getProductsWithPricesCached, CONSUMER tier) — a typing burst costs zero
+// (getPublicProductsWithPricesCached, Consumer tier) — a typing burst costs zero
 // extra gateway calls within the 60s revalidate window.
 //
 // MATCHING: normalized Arabic comparison tolerant of the common Iraqi
@@ -14,8 +14,8 @@
 // ============================================
 
 import { NextRequest, NextResponse } from "next/server";
-import { getProductsWithPricesCached, getCategoriesCached } from "@/lib/odoo/products";
-import { PRICE_LIST_IDS } from "@/lib/odoo/pricelists";
+import { getPublicProductsWithPricesCached, getCategoriesCached } from "@/lib/odoo/products";
+import { getConsumerPricelistId } from "@/lib/odoo/pricelists";
 import { localeToOdooLang } from "@/i18n/config";
 import { getLocalizedName } from "@/lib/product-name";
 
@@ -52,21 +52,18 @@ export async function GET(request: NextRequest) {
 
   try {
     const odooLang = localeToOdooLang(locale);
+    const consumerPricelistId = await getConsumerPricelistId();
     const [productResult, categories] = await Promise.all([
-      getProductsWithPricesCached(PRICE_LIST_IDS.CONSUMER, odooLang),
+      getPublicProductsWithPricesCached(consumerPricelistId, odooLang),
       getCategoriesCached(odooLang),
     ]);
 
     const nq = normalize(q);
     const nqSku = q.toLowerCase();
 
-    const inStock = productResult.products.filter(
-      (p) => (p.available_stock ?? 0) > 0
-    );
-
     // Rank: SKU prefix > SKU substring > name substring
     const scored: { score: number; id: string; name: string; sku: string }[] = [];
-    for (const p of inStock) {
+    for (const p of productResult.products) {
       const sku = (p.sku || "").toLowerCase();
       const displayName = getLocalizedName(p, locale);
       const nName = normalize(`${displayName} ${p.name}`);
@@ -82,15 +79,15 @@ export async function GET(request: NextRequest) {
     scored.sort((a, b) => b.score - a.score);
     const products = scored.slice(0, MAX_PRODUCTS).map(({ id, name, sku }) => ({ id, name, sku }));
 
-    // Categories: only ones that actually have in-stock products behind them
-    const stockedCategoryIds = new Set(
-      inStock.map((p) => p.category_id).filter(Boolean) as string[]
+    // Categories: only ones that actually have public products behind them
+    const publicCategoryIds = new Set(
+      productResult.products.map((p) => p.category_id).filter(Boolean) as string[]
     );
     const matchedCategories = categories
       .filter(
         (c) =>
           c.is_active &&
-          stockedCategoryIds.has(c.category_id) &&
+          publicCategoryIds.has(c.category_id) &&
           normalize(c.name).includes(nq)
       )
       .slice(0, MAX_CATEGORIES)

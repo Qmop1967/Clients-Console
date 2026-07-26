@@ -103,15 +103,19 @@ export const {
       async authorize(credentials) {
         try {
           const emailRaw = String(credentials?.email || '').trim().toLowerCase();
-          const partnerIdStr = String(credentials?.partnerId || '').trim();
-          const partnerId = Number(partnerIdStr);
           if (!emailRaw || !emailRaw.includes('@')) return null;
-          if (!Number.isInteger(partnerId) || partnerId <= 0) return null;
 
           // SECURITY 2026-07-02: require a server-vouched single-use ticket
-          // bound to this partner. No valid ticket => no session.
+          // bound to this email and partner. Browser-supplied IDs are ignored.
           const subject = await consumeAuthTicket(String(credentials?.ticket || ''));
-          if (!subject || subject.method !== 'email' || subject.partnerId !== partnerId) {
+          const partnerId = Number(subject?.partnerId || 0);
+          if (
+            !subject
+            || subject.method !== 'email'
+            || subject.email !== emailRaw
+            || !Number.isInteger(partnerId)
+            || partnerId <= 0
+          ) {
             console.warn('[Auth] email login rejected: missing/invalid ticket');
             return null;
           }

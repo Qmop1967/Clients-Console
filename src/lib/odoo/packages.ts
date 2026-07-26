@@ -3,7 +3,7 @@
 // ============================================
 
 const GATEWAY_URL = process.env.API_GATEWAY_URL || 'http://localhost:3010';
-const API_KEY = process.env.API_KEY || 'tsh-client-2026-key';
+const API_KEY = process.env.API_KEY || '';
 
 export interface ClientPackage {
   id: number;
@@ -27,6 +27,7 @@ export interface PackageItem {
  */
 export async function getCustomerPackages(partnerId: string): Promise<{ packages: ClientPackage[]; total: number }> {
   try {
+    if (!API_KEY) throw new Error('API_KEY is not configured');
     const res = await fetch(`${GATEWAY_URL}/api/packages?limit=100`, {
       headers: {
         'Content-Type': 'application/json',

@@ -79,8 +79,8 @@ self-hosted --prod --yes  # Deploy to production
 ### Cache Revalidation
 ```bash
 # Manual revalidation endpoint
-/api/revalidate?tag=products&secret=tsh-revalidate-2024
-# Tags: products, categories, price-lists, warehouses, all
+curl -H "x-revalidation-secret: $REVALIDATION_SECRET" "http://localhost:3000/api/revalidate?path=/ar/shop"
+# REVALIDATION_SECRET must be configured; query-string secrets are rejected.
 ```
 
 ### Debugging

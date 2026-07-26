@@ -149,6 +149,7 @@ export async function getProductPrices(
     for (const item of items) {
       if (item.date_start && new Date(item.date_start) > now) continue;
       if (item.date_end && new Date(item.date_end) < now) continue;
+      if ((Number(item.min_quantity) || 0) > 1) continue;
 
       if (item.applied_on === '0_product_variant' && Array.isArray(item.product_id)) {
         variantRules.set(item.product_id[0], item);
@@ -295,8 +296,52 @@ export async function getPriceList(priceListId: string): Promise<PriceList | nul
  * We keep a consumer default for public visitors
  */
 export const PRICE_LIST_IDS = {
-  CONSUMER: '1', // Default Odoo pricelist - will be overridden at runtime
+  CONSUMER: '7', // Verified TSH Consumer / IQD fallback
 } as Record<string, string>;
+
+let consumerPricelistCache: { id: string; expiresAt: number } | null = null;
+
+/**
+ * Resolve the public Consumer IQD pricelist by identity, not by a fragile ID.
+ * The verified ID is used only as a short fail-safe if Odoo is temporarily
+ * unavailable; public callers still fail closed on products without a fixed price.
+ */
+export async function getConsumerPricelistId(): Promise<string> {
+  if (consumerPricelistCache && consumerPricelistCache.expiresAt > Date.now()) {
+    return consumerPricelistCache.id;
+  }
+
+  try {
+    const pricelists = await getPricelists();
+    const exact = pricelists.find((list) => {
+      const name = String(list.name || '').trim().toLowerCase();
+      const currency = Array.isArray(list.currency_id)
+        ? String(list.currency_id[1] || '').toUpperCase()
+        : '';
+      return name === 'consumer' && currency === 'IQD';
+    });
+    if (exact) {
+      const id = String(exact.id);
+      consumerPricelistCache = { id, expiresAt: Date.now() + 10 * 60_000 };
+      return id;
+    }
+  } catch (error) {
+    console.error('[Odoo Pricelists] Consumer lookup failed:', error);
+  }
+
+  return PRICE_LIST_IDS.CONSUMER;
+}
+
+/**
+ * Anonymous catalog prices must be plausible Consumer IQD values. This gate
+ * fails closed when a wrong currency or obviously mis-scaled value reaches the
+ * public projection.
+ */
+export function isValidPublicPrice(value: unknown, currency: string): boolean {
+  const price = Number(value);
+  return currency.toUpperCase() === 'IQD'
+    && Number.isFinite(price) && price >= 250;
+}
 
 /**
  * PRICE_LIST_INFO - Basic info, dynamically populated from Odoo

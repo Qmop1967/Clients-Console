@@ -14,12 +14,13 @@ async function indexProducts() {
   // Check environment variables
   const url = process.env.UPSTASH_VECTOR_REST_URL;
   const token = process.env.UPSTASH_VECTOR_REST_TOKEN;
-  const secret = process.env.EMBED_SECRET || 'tsh-embed-2024';
+  const secret = process.env.EMBED_SECRET;
 
-  if (!url || !token) {
+  if (!url || !token || !secret) {
     console.error('❌ Missing environment variables:');
     if (!url) console.error('   - UPSTASH_VECTOR_REST_URL');
     if (!token) console.error('   - UPSTASH_VECTOR_REST_TOKEN');
+    if (!secret) console.error('   - EMBED_SECRET');
     console.error('\nPlease run: npm run verify-upstash');
     process.exit(1);
   }
@@ -27,7 +28,9 @@ async function indexProducts() {
   // Check if dev server is running
   console.log('🔍 Checking if dev server is running...');
   try {
-    const response = await fetch('http://localhost:3000/api/ai/embed?secret=' + secret);
+    const response = await fetch('http://localhost:3000/api/ai/embed', {
+      headers: { 'x-embed-secret': secret },
+    });
     if (!response.ok) {
       throw new Error('Dev server not responding');
     }
@@ -56,10 +59,11 @@ async function indexProducts() {
   console.log('\n🚀 Starting indexing process...\n');
 
   try {
-    const response = await fetch(`http://localhost:3000/api/ai/embed?secret=${secret}`, {
+    const response = await fetch('http://localhost:3000/api/ai/embed', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'x-embed-secret': secret,
       },
       body: JSON.stringify({
         action: 'index-all',

@@ -8,10 +8,6 @@ const intlMiddleware = createIntlMiddleware({
   localePrefix: 'always',
 });
 
-// Public paths that don't require authentication
-// Note: /products redirects to /shop, so it must be public too
-const publicPaths = ['/login', '/api', '/admin'];
-
 // PUBLIC COMPANY PAGES — 2026-07-20
 // Meta disabled all five TSH WhatsApp Business Accounts on 2026-07-18 with the reason:
 // "the website listed in its Business Manager profile does not have information needed
@@ -46,19 +42,39 @@ function detectLocale(request: NextRequest): string {
   return defaultLocale;
 }
 
-function isPublicPath(pathname: string): boolean {
-  // Check if the path includes any public path segment
-  return publicPaths.some(path => pathname.includes(path));
+function isExactPublicAppPath(pathname: string): boolean {
+  const parts = pathname.split('/').filter(Boolean);
+  const [locale, section, id, extra] = parts;
+  const known = locales as readonly string[];
+
+  if (!locale || !known.includes(locale) || !section) return false;
+
+  // Authentication and compatibility redirects are exact routes, never
+  // substring matches. This prevents adjacent paths from bypassing the guard.
+  if ((section === 'login' || section === 'products') && !id) return true;
+
+  // Public storefront: the index and one numeric product detail segment only.
+  // Checkout/order-type and every deeper route remain protected.
+  if (section === 'shop') {
+    return !id || (!extra && /^\d+$/.test(id));
+  }
+
+  return false;
 }
 
 export default function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
 
+  // Administrative tools are hosted separately and must never be exposed from
+  // the customer application, even to an authenticated customer session.
+  if (/^\/(?:[a-z]{2,3}\/)?admin(?:\/|$)/.test(pathname)) {
+    return new NextResponse('Not Found', { status: 404 });
+  }
+
   // Skip middleware for API routes and static files
   // ADMIN_SKIP_INTL_2026_05_02: also skip /admin/* — locale-agnostic admin pages
   if (
     pathname.startsWith('/api') ||
-    pathname.startsWith('/admin') ||
     pathname.startsWith('/_next') ||
     pathname.startsWith('/favicon') ||
     pathname.includes('.')
@@ -107,12 +123,12 @@ export default function middleware(request: NextRequest) {
   }
 
   // Public share pages (product /p/:id, category /c/:id) — no auth, for WhatsApp/social sharing
-  if ((seg[2] === "p" || seg[2] === "c") && seg[3]) {
+  if ((seg[2] === "p" || seg[2] === "c") && seg[3] && !seg[4]) {
     return intlMiddleware(request);
   }
 
-  // Allow only login/API paths without authentication
-  if (isPublicPath(pathname)) {
+  // Public shop index/product details and exact login/redirect routes.
+  if (isExactPublicAppPath(pathname)) {
     return intlMiddleware(request);
   }
 

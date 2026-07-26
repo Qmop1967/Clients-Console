@@ -26,7 +26,9 @@ const loginSchema = z.object({
 
 // Demo account for Apple App Store review
 const DEMO_EMAIL = 'demo@tsh.sale';
-const DEMO_OTP = '123456';
+const DEMO_OTP = process.env.MOBILE_DEMO_OTP || '';
+const DEMO_ENABLED = process.env.ENABLE_MOBILE_DEMO_ACCOUNT === 'true'
+  && /^\d{6}$/.test(DEMO_OTP);
 
 // OTP email template
 function generateOTPEmail(code: string, locale: string): string {
@@ -178,7 +180,7 @@ export async function POST(request: NextRequest) {
     const emailLower = email.toLowerCase();
 
     // Handle demo account for Apple App Store review
-    if (emailLower === DEMO_EMAIL) {
+    if (DEMO_ENABLED && emailLower === DEMO_EMAIL) {
       // Store the static demo OTP code
       await storeOTPCode(emailLower, DEMO_OTP);
       console.log(`[Mobile Login] Demo account login: ${emailLower}`);
@@ -186,8 +188,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({
         success: true,
         data: {
-          message: 'Demo account: Use code 123456',
-          message_ar: 'حساب اختباري: استخدم الرمز 123456',
+          message: 'Demo verification code issued',
+          message_ar: 'تم إصدار رمز التحقق للحساب التجريبي',
         },
       });
     }

@@ -1,8 +1,8 @@
 import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { ProductDetailContent } from "@/components/products/product-detail-content";
-import { getProductByIdStrictCached, getProductImageUrl } from "@/lib/odoo/products";
-import { getCustomerPriceList, getItemPriceFromList, PRICE_LIST_IDS } from "@/lib/odoo/pricelists";
+import { getPublicProductByIdStrictCached } from "@/lib/odoo/products";
+import { getCustomerPriceList, getItemPriceFromList, getConsumerPricelistId, isValidPublicPrice } from "@/lib/odoo/pricelists";
 import { getUnifiedStock } from "@/lib/odoo/stock";
 import { getCustomer } from "@/lib/odoo/customers";
 import { auth } from "@/lib/auth/auth";
@@ -11,10 +11,9 @@ import { Button } from "@/components/ui/button";
 import { AlertCircle, RefreshCw } from "lucide-react";
 import { localeToOdooLang } from "@/i18n/config";
 
-// PERFORMANCE: Use ISR with 2-minute revalidation instead of force-dynamic
-// Auth check still runs on each request, but product data is cached
-// This dramatically improves TTFB for product pages
-export const revalidate = 120; // 2 minutes - balance between freshness and performance
+// Personalized price and stock data must never enter a shared page cache.
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 interface ProductPageProps {
   params: Promise<{ locale: string; id: string }>;
@@ -24,7 +23,7 @@ export async function generateMetadata({ params }: ProductPageProps) {
   const { locale, id } = await params;
 
   try {
-    const product = await getProductByIdStrictCached(id, localeToOdooLang(locale));
+    const product = await getPublicProductByIdStrictCached(id, localeToOdooLang(locale));
     if (!product) {
       return { title: "Product Not Found" };
     }
@@ -65,14 +64,14 @@ type FetchResult = {
   error: "not_found" | "rate_limited" | "error";
 };
 
-async function fetchProductData(productId: string, priceListId?: string, lang?: string): Promise<FetchResult> {
+async function fetchProductData(productId: string, priceListId: string | undefined, lang: string | undefined, isAuthenticated: boolean): Promise<FetchResult> {
   try {
     // PERFORMANCE: Run all API calls in parallel to reduce TTFB
     // This prevents 503 errors on RSC prefetch by reducing function execution time
-    const effectivePriceListId = priceListId || PRICE_LIST_IDS.CONSUMER;
+    const effectivePriceListId = priceListId || await getConsumerPricelistId();
 
     const [product, stockResult, priceList] = await Promise.all([
-      getProductByIdStrictCached(productId, lang),
+      getPublicProductByIdStrictCached(productId, lang),
       getUnifiedStock(productId, {
         fetchOnMiss: true,
         context: 'product-detail',
@@ -91,6 +90,9 @@ async function fetchProductData(productId: string, priceListId?: string, lang?: 
     }
 
     const priceInfo = getItemPriceFromList(productId, priceList);
+    const canDisplayPrice = priceInfo.inPriceList && (
+      isAuthenticated || isValidPublicPrice(priceInfo.rate, priceInfo.currency)
+    );
 
     if (process.env.NODE_ENV === 'development') {
       console.log(`[ProductDetail] ${product.sku}: Final stock=${availableStock}, price=${priceInfo.rate} ${priceList?.currency_code}`);
@@ -104,14 +106,14 @@ async function fetchProductData(productId: string, priceListId?: string, lang?: 
         localized_names: product.localized_names,
         sku: product.sku,
         description: product.description || "",
-        rate: priceInfo.rate,
-        available_stock: availableStock,
-        image_url: getProductImageUrl(product),
+        rate: canDisplayPrice ? priceInfo.rate : 0,
+        available_stock: isAuthenticated ? availableStock : (availableStock > 0 ? 1 : 0),
+        image_url: product.image_url || null,
         category_id: product.category_id,
         category_name: product.category_name,
         brand: product.brand,
         unit: product.unit || "pcs",
-        inPriceList: priceInfo.inPriceList,
+        inPriceList: canDisplayPrice,
         currencyCode: priceList?.currency_code || "IQD",
         minimum_quantity: product.minimum_quantity,
         alias_name: product.alias_name,
@@ -136,6 +138,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
 
   // Check if user is authenticated to use their price list
   const session = await auth();
+  const isAuthenticated = Boolean(session?.user?.odooPartnerId);
   let priceListId: string | undefined;
 
   if (session?.user?.odooPartnerId) {
@@ -157,11 +160,11 @@ export default async function ProductPage({ params }: ProductPageProps) {
     // If no price list ID after checking session and API, fall back to Consumer (public pricing)
     // Do NOT guess based on currency - customer could be on any price list (Wholesale, Technical, etc.)
     if (!priceListId) {
-      priceListId = PRICE_LIST_IDS.CONSUMER;
+      priceListId = await getConsumerPricelistId();
     }
   }
 
-  const result = await fetchProductData(id, priceListId, localeToOdooLang(locale));
+  const result = await fetchProductData(id, priceListId, localeToOdooLang(locale), isAuthenticated);
 
   if (!result.success) {
     if (result.error === "not_found") {
@@ -203,6 +206,8 @@ export default async function ProductPage({ params }: ProductPageProps) {
         <ProductDetailContent
           product={result.product}
           locale={locale}
+          canOrder={isAuthenticated}
+          showExactStock={isAuthenticated}
         />
       </Suspense>
     </div>

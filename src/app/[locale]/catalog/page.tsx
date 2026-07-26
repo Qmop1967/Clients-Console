@@ -35,9 +35,12 @@ export default async function CatalogPage({ params }: Props) {
       </p>
       <p className="mt-4 leading-relaxed text-muted-foreground">
         {isAr
-          ? "نبيع بالجملة للوكلاء والتجّار والمكاتب الفنية. أسعار الجملة وتوفّر المخزون يظهران للشركاء المسجّلين بعد تسجيل الدخول، لأن الأسعار تعاقدية وتختلف بحسب اتفاقية كل شريك."
-          : "We sell wholesale to dealers, traders and technical offices. Wholesale prices and live stock are shown to registered partners after login, because pricing is contractual and differs per partner agreement."}
+          ? "يعرض المتجر العام جميع المنتجات الفعّالة وسعر المستهلك بالدينار وحالة التوفّر دون تسجيل. تبقى أسعار كل شريك والكميات الدقيقة والطلبات والفواتير وكشف الحساب داخل بوابة الشركاء بعد تسجيل الدخول."
+          : "The public shop shows every active product, its standard IQD consumer price and availability without sign-in. Partner pricing, exact quantities, orders, invoices and statements remain inside the authenticated client portal."}
       </p>
+      <Link href={`/${locale}/shop`} className="mt-5 inline-flex rounded-lg bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90">
+        {isAr ? "تصفّح جميع المنتجات" : "Browse all products"}
+      </Link>
 
         </div>
 

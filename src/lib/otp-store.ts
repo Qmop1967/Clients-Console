@@ -5,6 +5,8 @@
 // Works for single PM2 instance
 // ============================================
 
+import { randomInt } from 'crypto';
+
 interface OTPEntry {
   code: string;
   phone: string;
@@ -30,7 +32,7 @@ setInterval(() => {
 }, 5 * 60 * 1000);
 
 export function generateOTP(): string {
-  return Math.floor(100000 + Math.random() * 900000).toString();
+  return randomInt(100000, 1000000).toString();
 }
 
 // Normalize any Iraqi phone format to +9647xxxxxxxxx

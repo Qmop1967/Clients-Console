@@ -8,6 +8,7 @@
  * Created: 2026-05-10 (Phase 8 — Customer Gallery)
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { auth } from '@/lib/auth/auth';
 
 const GATEWAY_URL = process.env.API_GATEWAY_URL || 'http://127.0.0.1:3010';
 const API_KEY = process.env.API_KEY || '';
@@ -36,9 +37,12 @@ export async function GET(
     );
   }
 
+  const session = await auth();
+  const canViewClientMedia = Boolean(session?.user?.odooPartnerId);
+
   try {
     const res = await fetch(
-      `${GATEWAY_URL}/api/product-media/${productId}?public_only=true`,
+      `${GATEWAY_URL}/api/product-media/by-product/${productId}`,
       {
         headers: { 'x-api-key': API_KEY },
         cache: 'no-store',
@@ -55,16 +59,27 @@ export async function GET(
 
     const data = await res.json();
 
-    const customerSafe = (data.media || [])
+    const rows = data.media || data.data?.media || data.data || [];
+    const customerSafe = (Array.isArray(rows) ? rows : [])
       .filter((m: any) => {
-        // PIM v1: use canonical visibility with legacy fallback
-        if (m.is_visible === false) return false;
-        const vis = m.visibility;
-        if (vis) return vis === 'client' || vis === 'public';
-        // Legacy fallback
-        const aud = m.x_audience;
-        if (aud) return aud === 'customer' || aud === 'public' || aud === 'rep';
-        return m.x_is_public === true;
+        // Public visitors can see only explicitly public, approved DAM assets.
+        // A valid client session additionally permits the "client" audience.
+        if (m.is_visible === false || m.x_is_visible === false) return false;
+        const approval = m.approval_status || m.x_approval_status;
+        if (approval !== 'approved') return false;
+
+        const visibility = m.visibility || m.x_visibility;
+        const allowed = canViewClientMedia
+          ? visibility === 'public' || visibility === 'client'
+          : visibility === 'public';
+        if (!allowed || !m.x_url) return false;
+
+        try {
+          const url = new URL(m.x_url);
+          return url.protocol === 'https:' && url.hostname === 'media.tsh.sale';
+        } catch {
+          return false;
+        }
       })
       .map((m: any) => ({
         id: m.id,

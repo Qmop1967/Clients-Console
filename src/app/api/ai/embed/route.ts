@@ -17,7 +17,7 @@ import {
 // ============================================
 
 // Protect this endpoint with a secret
-const EMBED_SECRET = process.env.EMBED_SECRET || 'tsh-embed-2024';
+const EMBED_SECRET = process.env.EMBED_SECRET;
 
 // ============================================
 // POST /api/ai/embed
@@ -27,10 +27,8 @@ const EMBED_SECRET = process.env.EMBED_SECRET || 'tsh-embed-2024';
 export async function POST(request: NextRequest) {
   try {
     // Verify secret
-    const { searchParams } = new URL(request.url);
-    const secret = searchParams.get('secret');
-
-    if (secret !== EMBED_SECRET) {
+    const secret = request.headers.get('x-embed-secret');
+    if (!EMBED_SECRET || secret !== EMBED_SECRET) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -140,10 +138,8 @@ export async function POST(request: NextRequest) {
 export async function GET(request: NextRequest) {
   try {
     // Verify secret
-    const { searchParams } = new URL(request.url);
-    const secret = searchParams.get('secret');
-
-    if (secret !== EMBED_SECRET) {
+    const secret = request.headers.get('x-embed-secret');
+    if (!EMBED_SECRET || secret !== EMBED_SECRET) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 

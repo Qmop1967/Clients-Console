@@ -243,14 +243,11 @@ CRITICAL: iOS AsyncImage requires absolute URLs for images
 ## Quick Diagnostics
 
 ```bash
-# Stock cache status
-curl "https://www.tsh.sale/api/sync/stock?action=status&secret=tsh-stock-sync-2024"
-
-# Force stock sync
-curl "https://www.tsh.sale/api/sync/stock?action=sync&secret=tsh-stock-sync-2024&force=true"
+# Stock source status (read-only)
+curl "https://www.tsh.sale/api/sync/stock"
 
 # Revalidate caches
-curl "https://www.tsh.sale/api/revalidate?tag=all&secret=tsh-revalidate-2024"
+curl -H "x-revalidation-secret: $REVALIDATION_SECRET" "https://www.tsh.sale/api/revalidate?path=/ar/shop"
 
 # Check TTFB
 curl -w "TTFB: %{time_starttransfer}s\n" -o /dev/null -s "https://www.tsh.sale/ar/shop"

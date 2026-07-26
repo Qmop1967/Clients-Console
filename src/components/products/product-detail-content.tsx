@@ -63,9 +63,11 @@ interface ProductDetailProps {
     use_cases?: string;
   };
   locale: string;
+  canOrder: boolean;
+  showExactStock: boolean;
 }
 
-export function ProductDetailContent({ product, locale }: ProductDetailProps) {
+export function ProductDetailContent({ product, locale, canOrder, showExactStock }: ProductDetailProps) {
   const displayName = getLocalizedName(product, locale);
   const isTranslatedName = hasLocalizedName(product, locale);
   const t = useTranslations("products");
@@ -81,23 +83,23 @@ export function ProductDetailContent({ product, locale }: ProductDetailProps) {
   const { isCatalogMode, showCatalogModal } = useCatalogMode();
 
   const isInStock = product.available_stock > 0;
-  const isLowStock = product.available_stock > 0 && product.available_stock <= 5;
+  const isLowStock = showExactStock && product.available_stock > 0 && product.available_stock <= 5;
   const hasPrice = product.inPriceList && product.rate > 0;
   const currentCartQuantity = getItemQuantity(product.item_id);
-  const maxQuantity = Math.max(0, product.available_stock - currentCartQuantity);
+  const maxQuantity = canOrder ? Math.max(0, product.available_stock - currentCartQuantity) : 0;
 
-  // Smart stock label
+  // Anonymous pages expose availability only; exact warehouse quantities remain client-only.
   const stockLabel = !isInStock
     ? t("outOfStock")
-    : product.available_stock <= 5
+    : !showExactStock
+    ? t("inStock")
+    : isLowStock
     ? t("lowStock")
     : t("stockCount", { count: product.available_stock });
   const stockColor = !isInStock
     ? "text-red-500"
-    : product.available_stock <= 5
+    : isLowStock
     ? "text-amber-500"
-    : product.available_stock <= 20
-    ? "text-yellow-500"
     : "text-green-500 dark:text-green-400";
 
   const handleQuantityChange = (newQuantity: number) => {
@@ -105,7 +107,7 @@ export function ProductDetailContent({ product, locale }: ProductDetailProps) {
   };
 
   const handleAddToCart = () => {
-    if (!hasPrice || !isInStock || maxQuantity <= 0) return;
+    if (!canOrder || !hasPrice || !isInStock || maxQuantity <= 0) return;
 
     setMinimumQtyError(null);
 
@@ -204,7 +206,7 @@ export function ProductDetailContent({ product, locale }: ProductDetailProps) {
   ]);
 
   // Whether to show the sticky bar (mobile only, when product is purchasable)
-  const showStickyBar = !isCatalogMode && hasPrice && isInStock;
+  const showStickyBar = !isCatalogMode && canOrder && hasPrice && isInStock;
 
   // IntersectionObserver: hide sticky bar when main quantity section is visible
   const quantitySectionRef = useRef<HTMLDivElement>(null);
@@ -612,7 +614,7 @@ export function ProductDetailContent({ product, locale }: ProductDetailProps) {
             )}
 
             {/* Quantity Section — DESKTOP ONLY (mobile uses sticky bar) */}
-            {!isCatalogMode && hasPrice && isInStock && (
+            {!isCatalogMode && canOrder && hasPrice && isInStock && (
               <div className="hidden lg:block space-y-4">
                 {/* Minimum Quantity Info */}
                 {product.minimum_quantity && product.minimum_quantity > 0 && (
@@ -681,7 +683,7 @@ export function ProductDetailContent({ product, locale }: ProductDetailProps) {
             )}
 
             {/* Quantity Section — MOBILE inline (above sticky bar) */}
-            {!isCatalogMode && hasPrice && isInStock && (
+            {!isCatalogMode && canOrder && hasPrice && isInStock && (
               <div ref={quantitySectionRef} className="lg:hidden space-y-3">
                 <h3 className="text-sm font-semibold text-muted-foreground text-center">
                   {t("wholesaleQuantity") || "اختيار كمية الجملة"}
@@ -718,6 +720,20 @@ export function ProductDetailContent({ product, locale }: ProductDetailProps) {
                   </div>
                 )}
               </div>
+            )}
+
+            {/* Public visitors can browse; client-specific ordering remains authenticated. */}
+            {!isCatalogMode && !canOrder && (
+              <Card className="border-primary/30 bg-primary/5">
+                <CardContent className="p-5 space-y-3">
+                  <p className="text-sm text-muted-foreground">
+                    {t("wholesaleCtaDescription")}
+                  </p>
+                  <Button className="w-full" asChild>
+                    <Link href={`/${locale}/login`}>{t("loginToAccount")}</Link>
+                  </Button>
+                </CardContent>
+              </Card>
             )}
 
             {/* Contact for Price CTA */}

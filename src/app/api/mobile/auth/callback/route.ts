@@ -9,7 +9,7 @@ import { NextRequest, NextResponse } from 'next/server';
 export async function GET(request: NextRequest) {
   const token = request.nextUrl.searchParams.get('token');
 
-  if (!token) {
+  if (!token || !/^[A-Za-z0-9._~-]{20,512}$/.test(token)) {
     // Redirect to error page
     return NextResponse.redirect(
       new URL('/login?error=invalid_token', request.nextUrl.origin)
@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
   // The mobile app will consume it via POST /api/mobile/auth/verify
 
   // Generate HTML page that attempts to open the app
-  const appLink = `tsh://auth/verify?token=${token}`;
+  const appLink = `tsh://auth/verify?token=${encodeURIComponent(token)}`;
 
   const html = `
 <!DOCTYPE html>
@@ -169,6 +169,9 @@ export async function GET(request: NextRequest) {
   return new NextResponse(html, {
     headers: {
       'Content-Type': 'text/html; charset=utf-8',
+      'Cache-Control': 'no-store',
+      'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; base-uri 'none'; frame-ancestors 'none'",
+      'X-Content-Type-Options': 'nosniff',
     },
   });
 }

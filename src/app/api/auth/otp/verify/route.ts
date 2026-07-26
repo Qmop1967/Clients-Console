@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyOTP, normalizePhone } from '@/lib/otp-store';
 import { issueAuthTicket, issueRecoveryToken, type AuthSubject } from '@/lib/auth-tickets';
+import { getCustomerByEmail } from '@/lib/odoo/customers';
 
 export async function POST(request: NextRequest) {
   try {
@@ -8,7 +9,6 @@ export async function POST(request: NextRequest) {
     const identifier = body.phone; // phone number OR email (email logins send the email here)
     const code = body.code || body.otp;
     const method = body.method === 'email' ? 'email' : 'phone';
-    const partnerId = Number(body.partnerId || 0);
 
     if (!identifier || !code) {
       return NextResponse.json(
@@ -50,15 +50,23 @@ export async function POST(request: NextRequest) {
     const isEmail = method === 'email' || String(identifier).includes('@');
     let subject: AuthSubject;
     if (isEmail) {
+      const email = String(identifier).trim().toLowerCase();
+      let partnerId = 0;
+      try {
+        const customer = await getCustomerByEmail(email);
+        partnerId = Number(customer?.contact_id || 0);
+      } catch (error) {
+        console.error('[OTP Verify] Email identity resolution failed:', error);
+      }
       if (!Number.isInteger(partnerId) || partnerId <= 0) {
-        // Email OTP must resolve a partner (sent from send-email). Without it
-        // we cannot bind the ticket safely — refuse rather than over-trust.
+        // Never trust a browser-supplied Odoo ID. Resolve the unique active
+        // client from the verified email, and fail closed on ambiguity/outage.
         return NextResponse.json(
           { error: 'تعذر التحقق من الحساب', errorCode: 'no_partner' },
           { status: 400 }
         );
       }
-      subject = { method: 'email', email: String(identifier).trim().toLowerCase(), partnerId };
+      subject = { method: 'email', email, partnerId };
       console.log('[OTP Verify] ✅ Verified (email):', subject.email);
     } else {
       subject = { method: 'phone', phone: normalizePhone(identifier) };

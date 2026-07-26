@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { getProduct, getProductByIdStrict } from "@/lib/odoo/products";
+import { getPublicProductByIdStrict } from "@/lib/odoo/products";
 
 // Public product share page — no auth (allowed in middleware), for WhatsApp/social sharing.
 export const revalidate = 120;
@@ -13,6 +13,8 @@ type Media = {
   x_visibility: string;
   x_is_main?: boolean;
   x_name?: string;
+  x_approval_status?: string;
+  x_is_visible?: boolean;
 };
 
 async function fetchPublicMedia(
@@ -28,7 +30,10 @@ async function fetchPublicMedia(
     if (!r.ok) return { images: [], video: null };
     const d = await r.json();
     const m: Media[] = d.media || d.data?.media || d.data || [];
-    const pub = m.filter((x) => x && x.x_visibility === "public" && x.x_url);
+    const pub = m.filter((x) => x
+      && x.x_visibility === "public"
+      && x.x_approval_status === "approved"
+      && x.x_is_visible !== false && x.x_url);
     const images = pub
       .filter((x) => x.x_media_type !== "video")
       .sort((a, b) => (b.x_is_main ? 1 : 0) - (a.x_is_main ? 1 : 0));
@@ -52,7 +57,7 @@ interface PageProps {
 
 export async function generateMetadata({ params }: PageProps) {
   const { locale, id } = await params;
-  const product = await getProduct(id, locale === "en" ? "en_US" : "ar_001");
+  const product = await getPublicProductByIdStrict(id, locale === "en" ? "en_US" : "ar_001");
   if (!product) return { title: "TSH" };
   const { images } = await fetchPublicMedia(id);
   const img = images[0]?.x_url;
@@ -79,9 +84,9 @@ export async function generateMetadata({ params }: PageProps) {
 export default async function PublicProductPage({ params }: PageProps) {
   const { locale, id } = await params;
   const isAr = locale !== "en";
-  let product: Awaited<ReturnType<typeof getProductByIdStrict>> = null;
+  let product: Awaited<ReturnType<typeof getPublicProductByIdStrict>> = null;
   try {
-    product = await getProductByIdStrict(id, isAr ? "ar_001" : "en_US");
+    product = await getPublicProductByIdStrict(id, isAr ? "ar_001" : "en_US");
   } catch {
     // Transient backend error (rate-limit / network) — never 404 a real product.
     return (

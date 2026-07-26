@@ -2,6 +2,7 @@
 // Image Proxy for Odoo Product Images
 // ============================================
 import { NextRequest, NextResponse } from 'next/server';
+import { auth } from '@/lib/auth/auth';
 
 const GATEWAY_URL = process.env.API_GATEWAY_URL || 'http://localhost:3010';
 const API_KEY = process.env.API_KEY || '';
@@ -44,6 +45,16 @@ export async function GET(
         headers: { 'Cache-Control': 'no-cache' },
       });
     }
+  }
+
+  // Raw Odoo product images are an internal fallback and may not have passed the
+  // public DAM approval workflow. Only a validated client session may fetch them.
+  const session = await auth();
+  if (!session?.user?.odooPartnerId) {
+    return new NextResponse(null, {
+      status: 404,
+      headers: { 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex' },
+    });
   }
 
   try {

@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { revalidatePath } from 'next/cache';
 
-const SECRET = process.env.REVALIDATION_SECRET || 'tsh-revalidate-2024';
+const SECRET = process.env.REVALIDATION_SECRET;
 
 export async function GET(request: NextRequest) {
-  const secret = request.nextUrl.searchParams.get('secret');
+  const secret = request.headers.get('x-revalidation-secret');
   const path = request.nextUrl.searchParams.get('path') || '/';
 
-  if (secret !== SECRET) {
+  if (!SECRET || secret !== SECRET) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

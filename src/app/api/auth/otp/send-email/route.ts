@@ -3,7 +3,7 @@ import { generateOTP, isRateLimited, storeOTP } from "@/lib/otp-store";
 import { sendEmailOTP } from "@/lib/email-otp";
 
 // Search customer in Odoo by email via Gateway
-async function findCustomerByEmail(email: string): Promise<{ found: boolean; ambiguous?: boolean; partnerId?: number; phone?: string; matchedIds?: number[] }> {
+async function findCustomerByEmail(email: string): Promise<{ found: boolean; ambiguous?: boolean }> {
   const gatewayUrl = process.env.API_GATEWAY_URL || "http://127.0.0.1:3010";
   const apiKey = process.env.API_KEY || "";
 
@@ -33,12 +33,10 @@ async function findCustomerByEmail(email: string): Promise<{ found: boolean; amb
     if (Array.isArray(records) && records.length > 1) {
       const matchedIds = records.map((r: any) => r.id);
       console.error("[Email OTP] AMBIGUOUS_EMAIL", email, matchedIds);
-      return { found: false, ambiguous: true, matchedIds };
+      return { found: false, ambiguous: true };
     }
     if (Array.isArray(records) && records.length === 1) {
-      const customer = records[0];
-      const phone = customer.mobile || customer.phone || "";
-      return { found: true, partnerId: customer.id, phone };
+      return { found: true };
     }
     return { found: false };
   } catch (err) {
@@ -69,35 +67,22 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if customer exists in Odoo
-    const { found, phone, partnerId, ambiguous, matchedIds } = await findCustomerByEmail(cleaned);
-    if (ambiguous) {
-      return NextResponse.json(
-        {
-          error: "يوجد أكثر من حساب بهذا البريد. تواصل مع الدعم لحل الازدواج",
-          errorCode: "ambiguous_email",
-          matchedIds,
-        },
-        { status: 409 }
-      );
-    }
-    if (!found) {
-      return NextResponse.json(
-        {
-          error: "البريد الإلكتروني غير مسجل لدينا. تواصل مع المبيعات للتسجيل",
-          errorCode: "not_found",
-        },
-        { status: 404 }
-      );
+    const { found, ambiguous } = await findCustomerByEmail(cleaned);
+    if (!found || ambiguous) {
+      // Keep the response indistinguishable from a registered account so this
+      // endpoint cannot be used to enumerate TSH client emails. A dummy OTP
+      // applies the same resend throttle without ever creating a session.
+      storeOTP(cleaned, generateOTP());
+      return NextResponse.json({
+        success: true,
+        message: "إذا كان البريد مسجلاً فسيصلك رمز التحقق",
+      });
     }
 
     // Generate and store OTP.
-    // IMPORTANT: the key MUST match what /api/auth/otp/verify receives as its
-    // "phone" field (which is either the phone number or the email address).
-    // otp-store.ts normalizePhone() treats emails as-is but mangles anything
-    // else (e.g. "partner:3866" would become "+partner:3866" and never match).
+    // Email logins are keyed only by the normalized email; no Odoo ID or phone
     const otp = generateOTP();
-    const otpKey = phone || cleaned;
-    storeOTP(otpKey, otp);
+    storeOTP(cleaned, otp);
 
     // Send via Email
     const result = await sendEmailOTP(cleaned, otp);
@@ -115,8 +100,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       message: "تم إرسال رمز التحقق على البريد الإلكتروني",
-      phone: phone || undefined, // still returned for backward compatibility (ignored by new code)
-      partnerId, // canonical anchor for the verify step
     });
   } catch (error) {
     console.error("[Email OTP] Error:", error);

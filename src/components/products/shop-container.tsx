@@ -36,6 +36,8 @@ interface ShopContainerProps {
   products: PublicProduct[];
   categories: PublicCategory[];
   currencyCode: string;
+  canOrder: boolean;
+  showExactStock: boolean;
 }
 
 // Loading fallback component
@@ -60,6 +62,8 @@ function ShopContainerInner({
   products,
   categories,
   currencyCode,
+  canOrder,
+  showExactStock,
 }: ShopContainerProps) {
   const searchParams = useSearchParams();
   const pathname = usePathname();
@@ -130,6 +134,8 @@ function ShopContainerInner({
       allProducts={products}
       categories={visibleCategories}
       currencyCode={currencyCode}
+      canOrder={canOrder}
+      showExactStock={showExactStock}
       selectedCategory={selectedCategory}
       selectedCategoryName={selectedCategory ? getCategoryName(selectedCategory) : null}
       onClearCategory={handleClearCategory}

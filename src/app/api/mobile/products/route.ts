@@ -8,8 +8,8 @@
 
 import { NextRequest } from 'next/server';
 import { getMobileAuth, mobileSuccess, mobileError } from '@/lib/auth/mobile-middleware';
-import { getProductsWithPricesCached as getProductsWithPrices } from '@/lib/odoo/products';
-import { PRICE_LIST_IDS, PRICE_LIST_INFO } from '@/lib/odoo/pricelists';
+import { getPublicProductsWithPricesCached as getProductsWithPrices } from '@/lib/odoo/products';
+import { getConsumerPricelistId, PRICE_LIST_INFO } from '@/lib/odoo/pricelists';
 
 // Allow 60 seconds for product fetching with prices
 export const maxDuration = 60;
@@ -51,8 +51,12 @@ interface MobileProduct {
   in_price_list: boolean;
 }
 
-function transformProductForMobile(item: ProductWithPrice, baseUrl: string): MobileProduct {
-  const stock = item.available_stock ?? 0;
+function transformProductForMobile(item: ProductWithPrice, baseUrl: string, showExactStock: boolean): MobileProduct {
+  const exactStock = item.available_stock ?? 0;
+  const stock = showExactStock ? exactStock : (exactStock > 0 ? 1 : 0);
+  const imageUrl = item.image_url
+    ? item.image_url.startsWith('https://') ? item.image_url : `${baseUrl}${item.image_url}`
+    : null;
   return {
     id: item.item_id,
     name: item.name,
@@ -62,10 +66,8 @@ function transformProductForMobile(item: ProductWithPrice, baseUrl: string): Mob
     category_id: item.category_id ?? null,
     category_name: item.category_name ?? null,
     unit: item.unit ?? null,
-    image_url: item.image_version
-      ? `${baseUrl}/api/images/${item.item_id}?v=${item.image_version}`
-      : null,
-    image_version: item.image_version ?? null,
+    image_url: imageUrl,
+    image_version: null,
     stock,
     in_stock: stock > 0,
     price: item.display_price ?? null,
@@ -92,9 +94,10 @@ export async function GET(request: NextRequest): Promise<Response> {
     const perPage = Math.min(parseInt(searchParams.get('per_page') || '50', 10), 100);
 
     // Determine price list based on auth status
+    const consumerPricelistId = await getConsumerPricelistId();
     const priceListId = auth.isAuthenticated && auth.user?.priceListId
       ? auth.user.priceListId
-      : PRICE_LIST_IDS.CONSUMER;
+      : consumerPricelistId;
     const currencyCode = auth.isAuthenticated && auth.user?.currencyCode
       ? auth.user.currencyCode
       : 'IQD';
@@ -103,11 +106,11 @@ export async function GET(request: NextRequest): Promise<Response> {
     console.log(`[Mobile Products] priceListId: ${priceListId}, auth: ${auth.isAuthenticated}`);
 
     // Fetch products with prices
-    const result = await getProductsWithPrices(priceListId);
+    const result = await getProductsWithPrices(priceListId, undefined, !auth.isAuthenticated);
 
     // Transform products to mobile format
     let products = (result.products ?? []).map(p =>
-      transformProductForMobile(p as unknown as ProductWithPrice, baseUrl)
+      transformProductForMobile(p as unknown as ProductWithPrice, baseUrl, auth.isAuthenticated)
     );
 
     // Apply filters

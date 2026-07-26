@@ -5,11 +5,29 @@
 // Maintains same return types (Product, Category) for page compatibility
 // ============================================
 
-import { odooSearchRead, odooRead, odooCount, getProductImageOrPlaceholderUrl, getImageVersions } from './client';
+import {
+  odooSearchRead, odooRead, odooCount, getProductImageOrPlaceholderUrl,
+  getImageVersions, getApprovedPublicMedia,
+} from './client';
 import type { OdooProduct, OdooCategory as OdooCategoryType } from './types';
 import type { Product, Category, PaginatedResponse } from '@/types';
 import { unstable_cache } from 'next/cache';
 import { cache } from 'react';
+
+export interface ApprovedPublicProductImage {
+  id: number;
+  url: string;
+  version: number;
+  sequence: number;
+  isMain: boolean;
+}
+
+export interface PublicCatalogProduct extends Product {
+  display_price: number;
+  in_price_list: boolean;
+  public_image_id?: number;
+  public_image_version?: number;
+}
 
 // ============================================
 // Warehouse Product Isolation (Phase C — 2026-04-30)
@@ -241,6 +259,141 @@ export async function getAllProducts(lang?: string): Promise<Product[]> {
     return [];
   }
 }
+
+function isSafePublicDamImage(value: unknown): value is string {
+  if (typeof value !== 'string' || !value) return false;
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:'
+      && url.hostname === 'media.tsh.sale'
+      && /\.(?:avif|gif|jpe?g|png|webp)$/i.test(url.pathname);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Approved public DAM image for each product template. This is the only image
+ * source allowed into the anonymous storefront and external catalog feeds.
+ */
+export async function getApprovedPublicProductImages(
+  templateIds: number[]
+): Promise<Map<number, ApprovedPublicProductImage>> {
+  const result = new Map<number, ApprovedPublicProductImage>();
+  const ids = Array.from(new Set(templateIds.filter((id) => Number.isInteger(id) && id > 0)));
+  if (!ids.length) return result;
+
+  try {
+    const idSet = new Set(ids);
+    const media = await getApprovedPublicMedia();
+    const candidates = media
+      .filter((row) => {
+        const mime = String(row.mime_type || '');
+        return idSet.has(Number(row.product_template_id))
+          && (!mime || mime.startsWith('image/'))
+          && isSafePublicDamImage(row.url);
+      })
+      .sort((a, b) =>
+        Number(Boolean(b.is_main)) - Number(Boolean(a.is_main))
+        || Number(a.sequence || 99) - Number(b.sequence || 99)
+        || a.asset_id - b.asset_id
+      );
+
+    for (const row of candidates) {
+      const templateId = Number(row.product_template_id || 0);
+      if (!templateId || result.has(templateId) || !isSafePublicDamImage(row.url)) continue;
+      result.set(templateId, {
+        id: row.asset_id,
+        url: row.url,
+        version: Number(row.version || 1),
+        sequence: Number(row.sequence || 99),
+        isMain: Boolean(row.is_main),
+      });
+    }
+  } catch (error) {
+    console.error('[Odoo Products] Approved public DAM image lookup failed:', error);
+  }
+
+  return result;
+}
+
+function applyPublicImage(
+  product: Product,
+  image: ApprovedPublicProductImage | undefined
+): Product & { public_image_id?: number; public_image_version?: number } {
+  return {
+    ...product,
+    sku: String(product.sku || '').trim() || `ODOO-PP-${product.item_id}`,
+    // Never fall back to Odoo's raw product image for an anonymous page.
+    image_url: image?.url || '/images/product-placeholder.svg',
+    image_version: undefined,
+    public_image_id: image?.id,
+    public_image_version: image?.version,
+  };
+}
+
+/**
+ * All active, sellable, non-service products, including items currently out of
+ * stock. This is deliberately separate from the WH1 purchasing list.
+ */
+export async function getAllPublicProducts(lang?: string): Promise<
+  (Product & { public_image_id?: number; public_image_version?: number })[]
+> {
+  try {
+    const products = await odooSearchRead<OdooProduct>(
+      'product.product',
+      [
+        ['sale_ok', '=', true],
+        ['active', '=', true],
+        ['type', '!=', 'service'],
+      ],
+      PRODUCT_LIST_FIELDS,
+      { order: 'write_date DESC, id DESC', limit: 0, lang }
+    );
+    const templateIds = products
+      .map((p) => Array.isArray(p.product_tmpl_id) ? p.product_tmpl_id[0] : 0)
+      .filter((id) => id > 0);
+    const imageMap = await getApprovedPublicProductImages(templateIds);
+
+    return products.map((p) => {
+      const templateId = Array.isArray(p.product_tmpl_id) ? p.product_tmpl_id[0] : 0;
+      return applyPublicImage(odooProductToProduct(p), imageMap.get(templateId));
+    });
+  } catch (error) {
+    console.error('[Odoo Products] Error fetching public products:', error);
+    return [];
+  }
+}
+
+/** Read one product through the same public eligibility and DAM rules as the list. */
+export async function getPublicProductByIdStrict(
+  id: number | string,
+  lang?: string
+): Promise<(Product & { public_image_id?: number; public_image_version?: number }) | null> {
+  const numId = typeof id === 'string' ? parseInt(id, 10) : id;
+  if (!Number.isInteger(numId) || numId <= 0) return null;
+
+  const products = await odooSearchRead<OdooProduct>(
+    'product.product',
+    [
+      ['id', '=', numId],
+      ['sale_ok', '=', true],
+      ['active', '=', true],
+      ['type', '!=', 'service'],
+    ],
+    PRODUCT_DETAIL_FIELDS,
+    { limit: 1, lang }
+  );
+  if (!products.length) return null;
+  const raw = products[0];
+  const templateId = Array.isArray(raw.product_tmpl_id) ? raw.product_tmpl_id[0] : 0;
+  const imageMap = await getApprovedPublicProductImages(templateId ? [templateId] : []);
+  return applyPublicImage(odooProductToProduct(raw), imageMap.get(templateId));
+}
+
+export const getPublicProductByIdStrictCached = cache(
+  (id: number | string, lang?: string) => getPublicProductByIdStrict(id, lang)
+);
 
 /**
  * Get single product by ID
@@ -511,6 +664,84 @@ export async function getProductsWithPrices(pricelistId: string, lang?: string):
 }
 
 /**
+ * Price the complete public catalog from an explicit Odoo pricelist. Missing
+ * fixed prices remain unavailable instead of falling back to internal list_price.
+ */
+export async function getPublicProductsWithPrices(
+  pricelistId: string,
+  lang?: string,
+  enforcePublicPriceRules = true
+): Promise<{
+  products: (PublicCatalogProduct & { carton_qty?: number })[];
+  currency: string;
+}> {
+  try {
+    const { getProductPrices, getPricelistById, isValidPublicPrice } = await import('./pricelists');
+    const { getAllStock } = await import('./stock');
+    const numericPricelistId = parseInt(pricelistId, 10);
+
+    const [allProducts, pricelist, stockMap] = await Promise.all([
+      getAllPublicProducts(lang),
+      Number.isInteger(numericPricelistId) ? getPricelistById(numericPricelistId) : Promise.resolve(null),
+      getAllStock(),
+    ]);
+
+    const currency = pricelist && Array.isArray(pricelist.currency_id)
+      ? String(pricelist.currency_id[1] || 'IQD')
+      : 'IQD';
+    const productIds = allProducts.map((product) => parseInt(product.item_id, 10));
+    const templateIdMap = new Map<number, number>();
+    for (const product of allProducts) {
+      const productId = parseInt(product.item_id, 10);
+      const templateId = product.image_document_id ? parseInt(product.image_document_id, 10) : 0;
+      if (templateId > 0) templateIdMap.set(productId, templateId);
+    }
+    const priceMap = Number.isInteger(numericPricelistId)
+      ? await getProductPrices(productIds, numericPricelistId, templateIdMap)
+      : new Map<number, number>();
+
+    const packagingMap = new Map<number, number>();
+    try {
+      const packages = await odooSearchRead<{ product_id: [number, string] | number; qty: number }>(
+        'product.packaging',
+        [['product_id', 'in', productIds]],
+        ['product_id', 'qty'],
+        { limit: 0 }
+      );
+      for (const pkg of packages) {
+        const productId = Array.isArray(pkg.product_id) ? pkg.product_id[0] : pkg.product_id;
+        const qty = Number(pkg.qty) || 0;
+        const current = packagingMap.get(productId);
+        if (productId && qty > 1 && (!current || qty < current)) packagingMap.set(productId, qty);
+      }
+    } catch (error) {
+      console.error('[Odoo Products] Public packaging lookup failed:', error);
+    }
+
+    const products = allProducts.map((product) => {
+      const productId = parseInt(product.item_id, 10);
+      const price = priceMap.get(productId);
+      const numericPrice = Number(price);
+      const hasValidPrice = enforcePublicPriceRules
+        ? isValidPublicPrice(numericPrice, currency)
+        : Number.isFinite(numericPrice) && numericPrice > 0;
+      return {
+        ...product,
+        display_price: hasValidPrice ? numericPrice : 0,
+        in_price_list: hasValidPrice,
+        available_stock: stockMap.get(productId) ?? 0,
+        carton_qty: packagingMap.get(productId),
+      };
+    });
+
+    return { products, currency };
+  } catch (error) {
+    console.error('[Odoo Products] Error getting public products with prices:', error);
+    return { products: [], currency: 'IQD' };
+  }
+}
+
+/**
  * Get products with consumer (public) prices
  */
 export async function getProductsWithConsumerPrices(lang?: string): Promise<{
@@ -553,6 +784,13 @@ export const getProductsWithPricesCached = unstable_cache(
   ['sf-products-with-prices-v2'],
   { revalidate: 60, tags: ['products'] }
 );
+export const getPublicProductsWithPricesCached = unstable_cache(
+  (pricelistId: string, lang?: string, enforcePublicPriceRules = true) =>
+    getPublicProductsWithPrices(pricelistId, lang, enforcePublicPriceRules),
+  ['public-products-with-prices-v1'],
+  { revalidate: 60, tags: ['products', 'public-catalog'] }
+);
+
 export const getCategoriesCached = unstable_cache(
   (lang?: string) => getCategories(lang),
   ['sf-categories-v2'],

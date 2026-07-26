@@ -6,6 +6,7 @@
 
 import { SignJWT, jwtVerify, JWTPayload } from 'jose';
 import { Redis } from '@upstash/redis';
+import { randomInt } from 'crypto';
 
 // Initialize Redis for token storage
 const redis = new Redis({
@@ -14,9 +15,13 @@ const redis = new Redis({
 });
 
 // JWT Configuration
-const JWT_SECRET = new TextEncoder().encode(
-  process.env.MOBILE_JWT_SECRET || process.env.NEXTAUTH_SECRET || 'your-secret-key'
-);
+function getJwtSecret(): Uint8Array {
+  const secret = process.env.MOBILE_JWT_SECRET || process.env.NEXTAUTH_SECRET;
+  if (!secret || secret.length < 32) {
+    throw new Error('MOBILE_JWT_SECRET or NEXTAUTH_SECRET must be at least 32 characters');
+  }
+  return new TextEncoder().encode(secret);
+}
 const JWT_ISSUER = 'tsh-mobile';
 const JWT_AUDIENCE = 'tsh-clients-console';
 const ACCESS_TOKEN_EXPIRY = '24h'; // 24 hours - increased from 15m for better shopping UX
@@ -57,7 +62,7 @@ export async function generateAccessToken(user: MobileUser): Promise<string> {
     .setIssuer(JWT_ISSUER)
     .setAudience(JWT_AUDIENCE)
     .setExpirationTime(ACCESS_TOKEN_EXPIRY)
-    .sign(JWT_SECRET);
+    .sign(getJwtSecret());
 
   return token;
 }
@@ -74,7 +79,7 @@ export async function generateRefreshToken(user: MobileUser): Promise<string> {
     .setIssuer(JWT_ISSUER)
     .setAudience(JWT_AUDIENCE)
     .setExpirationTime(REFRESH_TOKEN_EXPIRY)
-    .sign(JWT_SECRET);
+    .sign(getJwtSecret());
 
   // Store refresh token in Redis for revocation capability
   await redis.set(
@@ -89,7 +94,7 @@ export async function generateRefreshToken(user: MobileUser): Promise<string> {
 // Verify and decode JWT token
 export async function verifyToken(token: string): Promise<MobileJWTPayload | null> {
   try {
-    const { payload } = await jwtVerify(token, JWT_SECRET, {
+    const { payload } = await jwtVerify(token, getJwtSecret(), {
       issuer: JWT_ISSUER,
       audience: JWT_AUDIENCE,
     });
@@ -166,7 +171,7 @@ export async function verifyMobileVerificationToken(
 
 // Generate 6-digit OTP code
 export function generateOTPCode(): string {
-  return Math.floor(100000 + Math.random() * 900000).toString();
+  return randomInt(100000, 1000000).toString();
 }
 
 // Store OTP code for email verification

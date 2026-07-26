@@ -34,6 +34,17 @@ export async function getMobileAuth(request: NextRequest): Promise<MobileAuthCon
     return { isAuthenticated: false, user: null };
   }
 
+  // Revoke legacy public App Store demo tokens in production. The demo account
+  // is available only when explicitly enabled in a controlled environment.
+  const demoEnabled = process.env.ENABLE_MOBILE_DEMO_ACCOUNT === 'true'
+    && /^\d{6}$/.test(process.env.MOBILE_DEMO_OTP || '');
+  if (
+    payload.odooPartnerId === 'demo-contact-id'
+    && !demoEnabled
+  ) {
+    return { isAuthenticated: false, user: null };
+  }
+
   return {
     isAuthenticated: true,
     user: {
