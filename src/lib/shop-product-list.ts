@@ -17,6 +17,7 @@ export interface ShopListProduct {
   rate: number;
   available_stock: number;
   image_url?: string | null;
+  create_date?: string;
 }
 
 interface ShopListOptions {
@@ -49,6 +50,29 @@ export function hasProductImage(
   // Odoo maps missing DAM media to this public asset instead of returning null.
   const imagePath = product.image_url.trim().toLocaleLowerCase().split(/[?#]/, 1)[0];
   return !imagePath.endsWith("/images/product-placeholder.svg");
+}
+
+function getCreatedAt(product: Pick<ShopListProduct, "create_date">): number {
+  if (!product.create_date) return 0;
+  const parsed = Date.parse(product.create_date.replace(" ", "T") + "Z");
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+export function selectImageReadyNewArrivals<T extends ShopListProduct>(
+  products: readonly T[],
+  limit = 12
+): T[] {
+  if (limit <= 0) return [];
+
+  return products
+    .filter((product) => product.available_stock > 0 && hasProductImage(product))
+    .slice()
+    .sort((a, b) => {
+      const createdDifference = getCreatedAt(b) - getCreatedAt(a);
+      if (createdDifference !== 0) return createdDifference;
+      return compareNewest(a, b);
+    })
+    .slice(0, limit);
 }
 
 function compareNewest(a: ShopListProduct, b: ShopListProduct): number {

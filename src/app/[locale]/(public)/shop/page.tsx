@@ -57,7 +57,7 @@ async function fetchShopData(priceListId: string | undefined, lang: string | und
       description: product.description,
       rate: product.display_price || 0,
       available_stock: isAuthenticated ? (product.available_stock ?? 0) : ((product.available_stock ?? 0) > 0 ? 1 : 0),
-      image_url: product.image_url,
+      image_url: product.list_image_url || product.image_url,
       category_id: product.category_id,
       category_name: product.category_name,
       brand: product.brand,
@@ -74,7 +74,11 @@ async function fetchShopData(priceListId: string | undefined, lang: string | und
     const activeCategories = categories.filter(c => c.is_active);
 
     // Get LCP image URL (first product's image) for preloading
-    const lcpImageUrl = optimizedProducts[0]?.image_url || null;
+    const lcpImageUrl = optimizedProducts.find((product) =>
+      product.available_stock > 0
+      && Boolean(product.image_url)
+      && !product.image_url?.includes('/images/product-placeholder.svg')
+    )?.image_url || null;
 
     return {
       products: optimizedProducts,

@@ -5,6 +5,7 @@ import {
   filterAndSortShopProducts,
   hasProductImage,
   normalizeStockFilter,
+  selectImageReadyNewArrivals,
 } from '../src/lib/shop-product-list.ts';
 
 const products = [
@@ -104,4 +105,30 @@ test('search is applied together with the availability filter', () => {
   });
 
   assert.deepEqual(result, []);
+});
+
+test('new arrivals exclude products that are missing approved images', () => {
+  const arrivals = selectImageReadyNewArrivals([
+    {
+      ...products[1],
+      create_date: '2026-07-28 00:00:00',
+    },
+    {
+      ...products[0],
+      create_date: '2026-07-27 00:00:00',
+    },
+    {
+      ...products[2],
+      create_date: '2026-07-26 00:00:00',
+    },
+    {
+      ...products[3],
+      create_date: '2026-07-29 00:00:00',
+    },
+  ]);
+
+  assert.deepEqual(
+    arrivals.map((product) => product.item_id),
+    ['11', '10'],
+  );
 });

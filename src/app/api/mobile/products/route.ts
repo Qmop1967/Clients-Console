@@ -31,6 +31,7 @@ interface ProductWithPrice {
   in_price_list: boolean;
   image_version?: number;
   image_url?: string | null;
+  list_image_url?: string | null;
 }
 
 interface MobileProduct {
@@ -54,8 +55,9 @@ interface MobileProduct {
 function transformProductForMobile(item: ProductWithPrice, baseUrl: string, showExactStock: boolean): MobileProduct {
   const exactStock = item.available_stock ?? 0;
   const stock = showExactStock ? exactStock : (exactStock > 0 ? 1 : 0);
-  const imageUrl = item.image_url
-    ? item.image_url.startsWith('https://') ? item.image_url : `${baseUrl}${item.image_url}`
+  const sourceImageUrl = item.list_image_url || item.image_url;
+  const imageUrl = sourceImageUrl
+    ? sourceImageUrl.startsWith('https://') ? sourceImageUrl : `${baseUrl}${sourceImageUrl}`
     : null;
   return {
     id: item.item_id,

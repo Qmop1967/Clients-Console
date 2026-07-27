@@ -17,16 +17,21 @@ import { cache } from 'react';
 export interface ApprovedPublicProductImage {
   id: number;
   url: string;
+  thumbnailUrl: string;
   version: number;
   sequence: number;
   isMain: boolean;
 }
 
-export interface PublicCatalogProduct extends Product {
-  display_price: number;
-  in_price_list: boolean;
+export interface PublicImageProduct extends Product {
+  list_image_url?: string | null;
   public_image_id?: number;
   public_image_version?: number;
+}
+
+export interface PublicCatalogProduct extends PublicImageProduct {
+  display_price: number;
+  in_price_list: boolean;
 }
 
 // ============================================
@@ -305,6 +310,9 @@ export async function getApprovedPublicProductImages(
       result.set(templateId, {
         id: row.asset_id,
         url: row.url,
+        thumbnailUrl: isSafePublicDamImage(row.thumbnail_url)
+          ? String(row.thumbnail_url)
+          : row.url,
         version: Number(row.version || 1),
         sequence: Number(row.sequence || 99),
         isMain: Boolean(row.is_main),
@@ -320,12 +328,13 @@ export async function getApprovedPublicProductImages(
 function applyPublicImage(
   product: Product,
   image: ApprovedPublicProductImage | undefined
-): Product & { public_image_id?: number; public_image_version?: number } {
+): PublicImageProduct {
   return {
     ...product,
     sku: String(product.sku || '').trim() || `ODOO-PP-${product.item_id}`,
     // Never fall back to Odoo's raw product image for an anonymous page.
     image_url: image?.url || '/images/product-placeholder.svg',
+    list_image_url: image?.thumbnailUrl || '/images/product-placeholder.svg',
     image_version: undefined,
     public_image_id: image?.id,
     public_image_version: image?.version,
@@ -337,7 +346,7 @@ function applyPublicImage(
  * stock. This is deliberately separate from the WH1 purchasing list.
  */
 export async function getAllPublicProducts(lang?: string): Promise<
-  (Product & { public_image_id?: number; public_image_version?: number })[]
+  PublicImageProduct[]
 > {
   try {
     const products = await odooSearchRead<OdooProduct>(

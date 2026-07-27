@@ -46,6 +46,7 @@ export interface ApprovedPublicMediaRow {
   asset_id: number;
   product_template_id: number;
   url: string;
+  thumbnail_url?: string;
   is_main: boolean;
   sequence: number;
   mime_type: string;

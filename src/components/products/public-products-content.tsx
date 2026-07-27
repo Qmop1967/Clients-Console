@@ -28,6 +28,7 @@ import {
   filterAndSortShopProducts,
   matchesStockFilter,
   normalizeStockFilter,
+  selectImageReadyNewArrivals,
   type ShopSortOption,
   type StockFilter,
 } from "@/lib/shop-product-list";
@@ -607,18 +608,10 @@ export function PublicProductsContent({
       .sort((a, b) => (b.count ?? 0) - (a.count ?? 0));
   }, [allProducts, categories, stockFilter]);
 
-  // New Arrivals — newest in-stock products (create_date desc, fallback pp_id desc)
+  // New Arrivals should merchandise products, not photography work-in-progress.
+  // Missing-image items remain available at the end of the full product grid.
   const newArrivals = useMemo(() => {
-    return allProducts
-      .filter((p) => p.available_stock > 0)
-      .slice()
-      .sort((a, b) => {
-        const da = a.create_date ? Date.parse(a.create_date.replace(" ", "T") + "Z") : 0;
-        const db = b.create_date ? Date.parse(b.create_date.replace(" ", "T") + "Z") : 0;
-        if (db !== da) return db - da;
-        return parseInt(b.item_id, 10) - parseInt(a.item_id, 10);
-      })
-      .slice(0, 12);
+    return selectImageReadyNewArrivals(allProducts, 12);
   }, [allProducts]);
 
   // Pagination calculations
