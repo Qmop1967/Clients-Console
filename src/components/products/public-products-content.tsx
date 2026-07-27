@@ -24,6 +24,13 @@ import { Search, ShoppingCart, Check, Eye, ChevronRight, X, SlidersHorizontal, M
 import { NumberedPagination } from "@/components/ui/pagination";
 import { cn } from "@/lib/utils/cn";
 import { formatCurrency } from "@/lib/utils/format";
+import {
+  filterAndSortShopProducts,
+  matchesStockFilter,
+  normalizeStockFilter,
+  type ShopSortOption,
+  type StockFilter,
+} from "@/lib/shop-product-list";
 import { ShopHero } from "./shop-hero";
 import { CategoryStrip } from "./category-strip";
 import { NewArrivalsRail } from "./new-arrivals-rail";
@@ -53,7 +60,7 @@ function isProductNew(createDate?: string): boolean {
 }
 
 // Sort options
-type SortOption = "newest" | "name-asc" | "name-desc" | "price-asc" | "price-desc" | "stock-desc";
+type SortOption = ShopSortOption;
 
 // Product type from server
 interface PublicProduct {
@@ -471,18 +478,26 @@ export function PublicProductsContent({
   const pageFromUrl = parseInt(searchParams.get("page") || "1", 10);
   const searchFromUrl = searchParams.get("q") || "";
   const sortFromUrl = (searchParams.get("sort") as SortOption) || "newest";
+  const stockFromUrl = normalizeStockFilter(searchParams.get("stock"));
   const ppFromUrlRaw = parseInt(searchParams.get("pp") || String(DEFAULT_PER_PAGE), 10);
   const ppFromUrl = PER_PAGE_OPTIONS.includes(ppFromUrlRaw) ? ppFromUrlRaw : DEFAULT_PER_PAGE;
 
   const [searchQuery, setSearchQuery] = useState(searchFromUrl);
   const [currentPage, setCurrentPage] = useState(pageFromUrl);
   const [sortBy, setSortBy] = useState<SortOption>(sortFromUrl);
+  const [stockFilter, setStockFilter] = useState<StockFilter>(stockFromUrl);
   const [perPage, setPerPage] = useState<number>(ppFromUrl);
 
   const handlePerPageChange = (value: string) => {
     const pp = parseInt(value, 10);
     if (!PER_PAGE_OPTIONS.includes(pp)) return;
     setPerPage(pp);
+    setCurrentPage(1);
+  };
+
+  const handleStockFilterChange = (value: string) => {
+    const nextFilter = normalizeStockFilter(value);
+    setStockFilter(nextFilter);
     setCurrentPage(1);
   };
 
@@ -539,6 +554,12 @@ export function PublicProductsContent({
       params.delete("sort");
     }
 
+    if (stockFilter !== "in-stock") {
+      params.set("stock", stockFilter);
+    } else {
+      params.delete("stock");
+    }
+
     if (perPage !== DEFAULT_PER_PAGE) {
       params.set("pp", String(perPage));
     } else {
@@ -547,7 +568,7 @@ export function PublicProductsContent({
 
     const newUrl = params.toString() ? `${pathname}?${params.toString()}` : pathname;
     window.history.replaceState(null, "", newUrl);
-  }, [currentPage, searchQuery, sortBy, perPage, pathname, searchParams]);
+  }, [currentPage, searchQuery, sortBy, stockFilter, perPage, pathname, searchParams]);
 
   // Reset to page 1 when search or sort changes
   useEffect(() => {
@@ -557,45 +578,34 @@ export function PublicProductsContent({
   }, [searchQuery, searchFromUrl, sortBy, sortFromUrl]);
 
   // Filter and sort products
+  // Availability and image ordering happen before pagination. That guarantees the
+  // default grid contains only orderable stock and products awaiting photography
+  // are grouped at the very end of the complete result set, not mixed into each page.
   const filteredProducts = useMemo(() => {
-    // Out-of-stock products keep stable public pages and remain discoverable.
-    let filtered = products.slice();
-
-    // Search filter - uses deferred value for responsiveness
-    if (deferredSearchQuery) {
-      const query = deferredSearchQuery.toLowerCase();
-      filtered = filtered.filter(
-        (p) =>
-          p.name.toLowerCase().includes(query) ||
-          p.sku.toLowerCase().includes(query) ||
-          p.description?.toLowerCase().includes(query) ||
-          p.brand?.toLowerCase().includes(query)
-      );
-    }
-
-    // Sort based on selected option
-    filtered.sort((a, b) => {
-      switch (sortBy) {
-        case "newest":
-          // pp_id (item_id) is monotonic with creation → highest = newest product
-          return parseInt(b.item_id, 10) - parseInt(a.item_id, 10);
-        case "name-asc":
-          return a.name.localeCompare(b.name);
-        case "name-desc":
-          return b.name.localeCompare(a.name);
-        case "price-asc":
-          return a.rate - b.rate;
-        case "price-desc":
-          return b.rate - a.rate;
-        case "stock-desc":
-          return b.available_stock - a.available_stock;
-        default:
-          return parseInt(b.item_id, 10) - parseInt(a.item_id, 10);
-      }
+    return filterAndSortShopProducts(products, {
+      query: deferredSearchQuery,
+      sortBy,
+      stockFilter,
     });
+  }, [products, deferredSearchQuery, sortBy, stockFilter]);
 
-    return filtered;
-  }, [products, deferredSearchQuery, sortBy]);
+  // Keep category chips aligned with the selected availability mode. A category
+  // chip should never lead to an empty page merely because all of its items are
+  // outside the current stock filter.
+  const availabilityCategories = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const product of allProducts) {
+      if (!product.category_id || !matchesStockFilter(product, stockFilter)) continue;
+      counts.set(product.category_id, (counts.get(product.category_id) ?? 0) + 1);
+    }
+    return categories
+      .filter((category) => counts.has(category.category_id))
+      .map((category) => ({
+        ...category,
+        count: counts.get(category.category_id) ?? 0,
+      }))
+      .sort((a, b) => (b.count ?? 0) - (a.count ?? 0));
+  }, [allProducts, categories, stockFilter]);
 
   // New Arrivals — newest in-stock products (create_date desc, fallback pp_id desc)
   const newArrivals = useMemo(() => {
@@ -645,7 +655,7 @@ export function PublicProductsContent({
       <ShopHero />
 
       <CategoryStrip
-        categories={categories}
+        categories={availabilityCategories}
         selectedCategory={selectedCategory}
         onSelect={onCategorySelect}
         onClear={onClearCategory}
@@ -679,9 +689,20 @@ export function PublicProductsContent({
             />
           </div>
 
-          {/* Sort + per-page */}
-          <div className="flex items-center gap-2">
+          {/* Availability + sort + per-page */}
+          <div className="flex flex-wrap items-center gap-2">
             <SlidersHorizontal className="h-4 w-4 text-muted-foreground hidden sm:block" aria-hidden="true" />
+            <Select value={stockFilter} onValueChange={handleStockFilterChange}>
+              <SelectTrigger className="w-full sm:w-[150px]" aria-label={t("availability")}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="in-stock">{t("inStock")}</SelectItem>
+                <SelectItem value="all">{t("allProducts")}</SelectItem>
+                <SelectItem value="out-of-stock">{t("outOfStock")}</SelectItem>
+              </SelectContent>
+            </Select>
+
             <Select value={sortBy} onValueChange={(value) => setSortBy(value as SortOption)}>
               <SelectTrigger className="w-full sm:w-[180px]" aria-label={t("sortBy")}>
                 <SelectValue placeholder={t("sortBy")} />

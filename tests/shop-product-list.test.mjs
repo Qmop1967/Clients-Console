@@ -1,0 +1,100 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+
+import {
+  filterAndSortShopProducts,
+  normalizeStockFilter,
+} from '../src/lib/shop-product-list.ts';
+
+const products = [
+  {
+    item_id: '11',
+    name: 'Newest photographed item',
+    sku: 'TSH-0011',
+    rate: 11000,
+    available_stock: 3,
+    image_url: '/api/images/11',
+  },
+  {
+    item_id: '12',
+    name: 'Newest item but no image',
+    sku: 'TSH-0012',
+    rate: 12000,
+    available_stock: 8,
+    image_url: null,
+  },
+  {
+    item_id: '10',
+    name: 'Older photographed item',
+    sku: 'TSH-0010',
+    rate: 10000,
+    available_stock: 5,
+    image_url: '/api/images/10',
+  },
+  {
+    item_id: '13',
+    name: 'Unavailable photographed item',
+    sku: 'TSH-0013',
+    rate: 13000,
+    available_stock: 0,
+    image_url: '/api/images/13',
+  },
+];
+
+test('defaults missing and invalid stock parameters to in-stock', () => {
+  assert.equal(normalizeStockFilter(null), 'in-stock');
+  assert.equal(normalizeStockFilter('unexpected'), 'in-stock');
+  assert.equal(normalizeStockFilter('all'), 'all');
+  assert.equal(normalizeStockFilter('out-of-stock'), 'out-of-stock');
+});
+
+test('default mode excludes unavailable products', () => {
+  const result = filterAndSortShopProducts(products, {
+    query: '',
+    sortBy: 'newest',
+    stockFilter: 'in-stock',
+  });
+
+  assert.deepEqual(result.map((product) => product.item_id), ['11', '10', '12']);
+  assert.equal(result.some((product) => product.available_stock <= 0), false);
+});
+
+test('all-products mode includes unavailable products', () => {
+  const result = filterAndSortShopProducts(products, {
+    query: '',
+    sortBy: 'newest',
+    stockFilter: 'all',
+  });
+
+  assert.deepEqual(result.map((product) => product.item_id), ['13', '11', '10', '12']);
+});
+
+test('out-of-stock mode returns only unavailable products', () => {
+  const result = filterAndSortShopProducts(products, {
+    query: '',
+    sortBy: 'newest',
+    stockFilter: 'out-of-stock',
+  });
+
+  assert.deepEqual(result.map((product) => product.item_id), ['13']);
+});
+
+test('missing-image products stay last for every user-selected sort', () => {
+  const result = filterAndSortShopProducts(products, {
+    query: '',
+    sortBy: 'price-desc',
+    stockFilter: 'in-stock',
+  });
+
+  assert.deepEqual(result.map((product) => product.item_id), ['11', '10', '12']);
+});
+
+test('search is applied together with the availability filter', () => {
+  const result = filterAndSortShopProducts(products, {
+    query: 'unavailable',
+    sortBy: 'newest',
+    stockFilter: 'in-stock',
+  });
+
+  assert.deepEqual(result, []);
+});
