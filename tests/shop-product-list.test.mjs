@@ -3,6 +3,7 @@ import test from 'node:test';
 
 import {
   filterAndSortShopProducts,
+  hasProductImage,
   normalizeStockFilter,
 } from '../src/lib/shop-product-list.ts';
 
@@ -21,7 +22,7 @@ const products = [
     sku: 'TSH-0012',
     rate: 12000,
     available_stock: 8,
-    image_url: null,
+    image_url: '/images/product-placeholder.svg',
   },
   {
     item_id: '10',
@@ -46,6 +47,12 @@ test('defaults missing and invalid stock parameters to in-stock', () => {
   assert.equal(normalizeStockFilter('unexpected'), 'in-stock');
   assert.equal(normalizeStockFilter('all'), 'all');
   assert.equal(normalizeStockFilter('out-of-stock'), 'out-of-stock');
+});
+
+test('treats blank and branded placeholder URLs as missing images', () => {
+  assert.equal(hasProductImage({ image_url: null }), false);
+  assert.equal(hasProductImage({ image_url: '/images/product-placeholder.svg?v=1' }), false);
+  assert.equal(hasProductImage({ image_url: '/api/images/11' }), true);
 });
 
 test('default mode excludes unavailable products', () => {

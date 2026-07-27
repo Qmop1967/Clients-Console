@@ -42,7 +42,13 @@ export function matchesStockFilter(
 export function hasProductImage(
   product: Pick<ShopListProduct, "image_url">
 ): boolean {
-  return typeof product.image_url === "string" && product.image_url.trim().length > 0;
+  if (typeof product.image_url !== "string" || product.image_url.trim().length === 0) {
+    return false;
+  }
+
+  // Odoo maps missing DAM media to this public asset instead of returning null.
+  const imagePath = product.image_url.trim().toLocaleLowerCase().split(/[?#]/, 1)[0];
+  return !imagePath.endsWith("/images/product-placeholder.svg");
 }
 
 function compareNewest(a: ShopListProduct, b: ShopListProduct): number {
