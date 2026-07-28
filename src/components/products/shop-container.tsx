@@ -11,6 +11,8 @@ interface PublicProduct {
   // Already resolved to the active locale by the server (see resolveListName in
   // shop/page.tsx) — the client never needs the other three translations.
   name: string;
+  /** Canonical name, searchable only (see resolveSearchAlias). */
+  alt_name?: string;
   sku: string;
   description?: string;
   rate: number;

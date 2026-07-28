@@ -11,6 +11,8 @@ export type ShopSortOption =
 export interface ShopListProduct {
   item_id: string;
   name: string;
+  /** Canonical (usually English) name — searchable, never rendered. */
+  alt_name?: string;
   sku: string;
   description?: string;
   brand?: string;
@@ -137,7 +139,9 @@ export function filterAndSortShopProducts<T extends ShopListProduct>(
     if (!matchesStockFilter(product, options.stockFilter)) return false;
     if (!query) return true;
 
-    return [product.name, product.sku, product.description, product.brand].some(
+    // alt_name keeps English search working on the Arabic storefront: the card
+    // shows the Arabic name, but traders type "headphone" or a model number.
+    return [product.name, product.alt_name, product.sku, product.description, product.brand].some(
       (value) => value?.toLocaleLowerCase().includes(query)
     );
   });

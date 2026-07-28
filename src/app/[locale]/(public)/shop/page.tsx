@@ -26,6 +26,19 @@ function resolveListName(name: string, localized: LocalizedNames | undefined, lo
   return translated || name;
 }
 
+/**
+ * The canonical (usually English) name, kept ONLY when it differs from what the
+ * card renders — it is the search haystack, not display text.
+ *
+ * REGRESSION GUARD: Iraqi traders search this catalog in English constantly
+ * ("headphone", "switch", a model number) even while browsing in Arabic. Shipping
+ * just the Arabic display name made `?q=headphone` return zero results on /ar,
+ * because the English string had stopped reaching the browser at all.
+ */
+function resolveSearchAlias(display: string, name: string): string | undefined {
+  return display === name ? undefined : name;
+}
+
 // PERSONALIZED PRICING: Page is dynamic for logged-in users to show their assigned prices
 // Public visitors still get Consumer prices
 // This ensures customers see their negotiated wholesale/retail prices, not consumer prices
@@ -76,6 +89,10 @@ async function fetchShopData(
     const productsWithPrices = allProducts.map((product) => ({
       item_id: product.item_id,
       name: resolveListName(product.name, product.localized_names, locale),
+      alt_name: resolveSearchAlias(
+        resolveListName(product.name, product.localized_names, locale),
+        product.name
+      ),
       sku: product.sku,
       description: product.description,
       rate: product.display_price || 0,

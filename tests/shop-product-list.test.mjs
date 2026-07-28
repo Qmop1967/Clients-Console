@@ -128,6 +128,20 @@ test('gateway placeholders also sink to the end', () => {
   assert.deepEqual(result.map((product) => product.item_id), ['10', '20']);
 });
 
+test('search matches the canonical name even when the card shows a translation', () => {
+  const arabicCatalog = [
+    { ...products[0], item_id: '11', name: 'سماعة العاب', alt_name: 'Headphone Gaming V6S' },
+    { ...products[2], item_id: '10', name: 'كيبل شبكة', alt_name: 'Network Cable' },
+  ];
+  const result = filterAndSortShopProducts(arabicCatalog, {
+    query: 'headphone',
+    sortBy: 'newest',
+    stockFilter: 'in-stock',
+  });
+
+  assert.deepEqual(result.map((product) => product.item_id), ['11']);
+});
+
 test('search is applied together with the availability filter', () => {
   const result = filterAndSortShopProducts(products, {
     query: 'unavailable',

@@ -69,6 +69,8 @@ interface PublicProduct {
   item_id: string;
   /** Already resolved to the active locale server-side (see resolveListName). */
   name: string;
+  /** Canonical name, searchable only (see resolveSearchAlias). */
+  alt_name?: string;
   sku: string;
   description?: string;
   rate: number;
