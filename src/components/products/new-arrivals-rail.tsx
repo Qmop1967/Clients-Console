@@ -3,7 +3,6 @@
 import { useState, useCallback, useRef } from "react";
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
-import { getLocalizedName } from "@/lib/product-name";
 import { ProductImage } from "./product-image";
 import { formatCurrency } from "@/lib/utils/format";
 import { useCart } from "@/components/providers/cart-provider";
@@ -13,8 +12,8 @@ import { cn } from "@/lib/utils/cn";
 
 interface RailProduct {
   item_id: string;
+  /** Already localized server-side. */
   name: string;
-  localized_names?: { ar?: string; ckb?: string; kmr?: string; tm?: string };
   sku?: string;
   rate: number;
   image_url?: string | null;
@@ -46,7 +45,7 @@ function RailCard({
   const [added, setAdded] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const displayName = getLocalizedName(product, locale);
+  const displayName = product.name;
   const hasPrice = product.inPriceList !== false && product.rate > 0;
   const inStock = (product.available_stock ?? 0) > 0;
   const lowStock = inStock && (product.available_stock ?? 0) <= 5;
@@ -114,7 +113,7 @@ function RailCard({
             aria-label={t("addToCart")}
             title={t("addToCart")}
             className={cn(
-              "absolute bottom-2 end-2 flex h-8 w-8 items-center justify-center rounded-xl shadow-md transition-all native-press",
+              "absolute bottom-2 end-2 flex h-11 w-11 items-center justify-center rounded-xl shadow-md transition-all native-press",
               added
                 ? "bg-emerald-600 text-white"
                 : "bg-background/90 text-foreground backdrop-blur-sm border border-border/60 hover:bg-gold hover:text-white hover:border-gold"

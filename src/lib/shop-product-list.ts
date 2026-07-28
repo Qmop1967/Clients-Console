@@ -74,14 +74,36 @@ function getCreatedAt(product: Pick<ShopListProduct, "create_date">): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+/** Matches the gold "New" badge on the cards (public-products-content.tsx). */
+export const NEW_ARRIVAL_WINDOW_DAYS = 45;
+
+/** Below this the rail is not worth a whole row — the grid already shows them. */
+export const MIN_NEW_ARRIVALS = 4;
+
+/**
+ * Products for the New Arrivals rail.
+ *
+ * FIX: the rail used to take "the 12 newest in-stock photographed products",
+ * which is EXACTLY what the grid's default "Newest" sort puts on page 1 — the
+ * customer scrolled past twelve cards and then met the same twelve again 200px
+ * lower. It now only offers genuinely new products, using the same 45-day window
+ * as the "New" badge, and the caller drops the rail entirely when too few
+ * qualify. `now` is injected so the cutoff is testable.
+ */
 export function selectImageReadyNewArrivals<T extends ShopListProduct>(
   products: readonly T[],
-  limit = 12
+  limit = 12,
+  now: number = Date.now()
 ): T[] {
   if (limit <= 0) return [];
+  const cutoff = now - NEW_ARRIVAL_WINDOW_DAYS * 24 * 60 * 60 * 1000;
 
   return products
-    .filter((product) => product.available_stock > 0 && hasProductImage(product))
+    .filter((product) =>
+      product.available_stock > 0
+      && hasProductImage(product)
+      && getCreatedAt(product) >= cutoff
+    )
     .slice()
     .sort((a, b) => {
       const createdDifference = getCreatedAt(b) - getCreatedAt(a);

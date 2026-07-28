@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import { getTranslations } from "next-intl/server";
 import { notFound } from "next/navigation";
 import { ProductDetailContent } from "@/components/products/product-detail-content";
 import { getPublicProductByIdStrictCached } from "@/lib/odoo/products";
@@ -171,29 +172,29 @@ export default async function ProductPage({ params }: ProductPageProps) {
       notFound();
     }
 
-    // Show error page for rate limiting or other errors
+    // Error page. Every string here used to be hardcoded English while the rest of
+    // the screen was Arabic — a half-translated failure page, shown at the exact
+    // moment the customer is already frustrated.
+    const t = await getTranslations("products");
+    const isRateLimited = result.error === "rate_limited";
     return (
       <div className="flex min-h-[50vh] flex-col items-center justify-center space-y-4 px-4 text-center">
         <AlertCircle className="h-16 w-16 text-muted-foreground" />
         <h1 className="text-2xl font-bold">
-          {result.error === "rate_limited"
-            ? "Server Busy"
-            : "Unable to Load Product"}
+          {isRateLimited ? t("busyTitle") : t("loadErrorTitle")}
         </h1>
         <p className="max-w-md text-muted-foreground">
-          {result.error === "rate_limited"
-            ? "We're experiencing high traffic. Please wait a moment and try again."
-            : "Something went wrong while loading this product."}
+          {isRateLimited ? t("busyBody") : t("loadErrorBody")}
         </p>
-        <div className="flex gap-3">
+        <div className="flex flex-wrap justify-center gap-3">
           <Link href={`/shop/${id}`}>
-            <Button variant="default">
-              <RefreshCw className="mr-2 h-4 w-4" />
-              Try Again
+            <Button variant="default" className="h-11">
+              <RefreshCw className="me-2 h-4 w-4" />
+              {t("tryAgain")}
             </Button>
           </Link>
           <Link href="/shop">
-            <Button variant="outline">Back to Shop</Button>
+            <Button variant="outline" className="h-11">{t("backToShop")}</Button>
           </Link>
         </div>
       </div>

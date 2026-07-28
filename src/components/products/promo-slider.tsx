@@ -49,13 +49,23 @@ export function PromoSlider() {
     if (!hoverRef.current) setIndex((i) => (i + 1) % Math.max(slides.length, 1));
   }, [slides.length]);
 
+  // hoverRef only covered the mouse, so a keyboard or touch customer reading a
+  // slide lost it mid-sentence. Pause while anything inside has focus too.
+  const [hasFocus, setHasFocus] = useState(false);
+
   useEffect(() => {
-    if (slides.length <= 1) return;
+    if (slides.length <= 1 || hasFocus) return;
+    // Respect prefers-reduced-motion: auto-rotating carousels are a documented
+    // trigger for vestibular disorders, and the dots still allow manual paging.
+    if (typeof window !== "undefined"
+      && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
+      return;
+    }
     timerRef.current = setInterval(advance, 6000);
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [slides.length, advance]);
+  }, [slides.length, advance, hasFocus]);
 
   if (slides.length === 0) return null;
 
@@ -101,24 +111,40 @@ export function PromoSlider() {
         </span>
       )}
 
-      {/* Dots */}
+      {/* Dots.
+          FIX: the container was aria-hidden while holding focusable <button>s — an
+          ARIA violation (keyboard users could tab to controls hidden from assistive
+          tech). The 4px-tall bar is now a decorative child inside a 44px button. */}
       {slides.length > 1 && (
-        <div className="absolute bottom-2.5 start-5 flex items-center gap-1.5" aria-hidden="true">
+        <div
+          className="absolute bottom-0 start-3 flex items-center"
+          role="tablist"
+          aria-label={t("promoAria")}
+          onFocusCapture={() => setHasFocus(true)}
+          onBlurCapture={() => setHasFocus(false)}
+        >
           {slides.map((s, i) => (
             <button
               key={s.id || i}
               type="button"
+              role="tab"
+              aria-selected={i === index}
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
                 setIndex(i);
               }}
-              className={cn(
-                "h-1 rounded-full transition-all",
-                i === index ? "w-6 bg-white" : "w-3 bg-white/35 hover:bg-white/60"
-              )}
+              className="flex h-11 min-w-9 items-center justify-center"
               aria-label={`${i + 1}/${slides.length}`}
-            />
+            >
+              <span
+                aria-hidden="true"
+                className={cn(
+                  "h-1.5 rounded-full transition-all",
+                  i === index ? "w-6 bg-white" : "w-3 bg-white/35 hover:bg-white/60"
+                )}
+              />
+            </button>
           ))}
         </div>
       )}

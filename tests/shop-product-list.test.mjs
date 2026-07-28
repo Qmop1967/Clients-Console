@@ -4,9 +4,14 @@ import test from 'node:test';
 import {
   filterAndSortShopProducts,
   hasProductImage,
+  MIN_NEW_ARRIVALS,
   normalizeStockFilter,
   selectImageReadyNewArrivals,
 } from '../src/lib/shop-product-list.ts';
+
+// Fixed clock: the rail now has a 45-day window, so a wall-clock test would
+// start failing on its own 45 days after it was written.
+const NOW = Date.parse('2026-07-28T12:00:00Z');
 
 const products = [
   {
@@ -155,7 +160,23 @@ test('new arrivals exclude products that are missing approved images', () => {
     { ...products[0], create_date: '2026-07-27 00:00:00' },
     { ...products[2], create_date: '2026-07-26 00:00:00' },
     { ...products[3], create_date: '2026-07-29 00:00:00' },
-  ]);
+  ], 12, NOW);
 
   assert.deepEqual(arrivals.map((product) => product.item_id), ['11', '10']);
+});
+
+test('new arrivals only include products inside the 45-day window', () => {
+  const arrivals = selectImageReadyNewArrivals([
+    { ...products[0], item_id: '11', create_date: '2026-07-20 00:00:00' }, // 8 days
+    { ...products[2], item_id: '10', create_date: '2026-01-05 00:00:00' }, // ~6 months
+  ], 12, NOW);
+
+  // The rail used to be "the 12 newest in-stock photographed products", which is
+  // exactly what the grid's default sort already puts on page 1 — it re-showed
+  // the same twelve cards 200px lower. Only genuinely new products qualify now.
+  assert.deepEqual(arrivals.map((product) => product.item_id), ['11']);
+});
+
+test('the rail threshold is high enough to be worth a row', () => {
+  assert.ok(MIN_NEW_ARRIVALS >= 4);
 });

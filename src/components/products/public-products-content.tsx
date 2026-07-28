@@ -2,7 +2,6 @@
 
 import { useState, useMemo, useEffect, useCallback, memo, useRef, useDeferredValue } from "react";
 import { useTranslations, useLocale } from "next-intl";
-import { getLocalizedName } from "@/lib/product-name";
 import { useSearchParams, usePathname, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
@@ -21,6 +20,7 @@ import { ProductImage } from "./product-image";
 import { useCart } from "@/components/providers/cart-provider";
 import { useCatalogMode } from "@/components/providers/catalog-mode-provider";
 import { Search, ShoppingCart, Check, Eye, ChevronRight, X, SlidersHorizontal, MessageCircle, Copy } from "lucide-react";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { NumberedPagination } from "@/components/ui/pagination";
 import { cn } from "@/lib/utils/cn";
 import { formatCurrency } from "@/lib/utils/format";
@@ -29,6 +29,7 @@ import {
   matchesStockFilter,
   normalizeStockFilter,
   selectImageReadyNewArrivals,
+  MIN_NEW_ARRIVALS,
   type ShopSortOption,
   type StockFilter,
 } from "@/lib/shop-product-list";
@@ -66,8 +67,8 @@ type SortOption = ShopSortOption;
 // Product type from server
 interface PublicProduct {
   item_id: string;
+  /** Already resolved to the active locale server-side (see resolveListName). */
   name: string;
-  localized_names?: { ar?: string; ckb?: string; kmr?: string; tm?: string };
   sku: string;
   description?: string;
   rate: number;
@@ -125,7 +126,7 @@ const ProductCardWithCart = memo(function ProductCardWithCart({
   showExactStock: boolean;
   priority?: boolean;
 }) {
-  const displayName = getLocalizedName(product, locale);
+  const displayName = product.name;
   const t = useTranslations("products");
   const tCatalog = useTranslations("catalogMode");
   const { addItem, getItemQuantity } = useCart();
@@ -260,7 +261,7 @@ const ProductCardWithCart = memo(function ProductCardWithCart({
               <button
                 type="button"
                 onClick={handleCopySku}
-                className="group/sku flex min-w-0 items-center gap-1 native-press"
+                className="group/sku flex min-w-0 items-center gap-1 native-press min-h-11 -my-2.5 py-2.5"
                 aria-label={t("copySku")}
                 title={t("copySku")}
               >
@@ -445,6 +446,7 @@ export function PublicProductsContent({
   onCategorySelect,
 }: PublicProductsContentProps) {
   const t = useTranslations("products");
+  const tCommon = useTranslations("common");
   const locale = useLocale();
   const pathname = usePathname();
   const router = useRouter();
@@ -486,7 +488,12 @@ export function PublicProductsContent({
   const [searchQuery, setSearchQuery] = useState(searchFromUrl);
   const [currentPage, setCurrentPage] = useState(pageFromUrl);
   const [sortBy, setSortBy] = useState<SortOption>(sortFromUrl);
-  const [stockFilter, setStockFilter] = useState<StockFilter>(stockFromUrl);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+
+  // PAYLOAD: availability is NOT local state any more. The server now ships only
+  // the products matching it (in-stock by default), so changing it has to be a
+  // real navigation — the browser no longer holds the hidden products.
+  const stockFilter: StockFilter = stockFromUrl;
 
   // History strategy (BUGFIX: Back button used to leave the shop entirely).
   // Typing in the search box only ever REPLACES the current entry — one entry per
@@ -509,9 +516,13 @@ export function PublicProductsContent({
 
   const handleStockFilterChange = (value: string) => {
     const nextFilter = normalizeStockFilter(value);
-    historyModeRef.current = "push";
-    setStockFilter(nextFilter);
-    setCurrentPage(1);
+    if (nextFilter === stockFilter) return;
+    const params = new URLSearchParams(searchParams.toString());
+    if (nextFilter === "in-stock") params.delete("stock");
+    else params.set("stock", nextFilter);
+    params.delete("page");
+    setFiltersOpen(false);
+    router.push(params.toString() ? `${pathname}?${params.toString()}` : pathname, { scroll: false });
   };
 
   const handleSortChange = (value: string) => {
@@ -522,11 +533,16 @@ export function PublicProductsContent({
   // Clears every filter at once — used by the empty state so a customer can never
   // be stranded on "no products" with no way back to the catalog.
   const resetAllFilters = () => {
-    historyModeRef.current = "push";
     setSearchQuery("");
-    setStockFilter("in-stock");
     setCurrentPage(1);
     onClearCategory?.();
+    if (stockFilter !== "in-stock") {
+      const params = new URLSearchParams(searchParams.toString());
+      params.delete("stock");
+      params.delete("page");
+      params.delete("category");
+      router.push(params.toString() ? `${pathname}?${params.toString()}` : pathname, { scroll: false });
+    }
   };
 
   // BUGFIX (sticky pagination): switching category is a SOFT navigation — this
@@ -582,12 +598,6 @@ export function PublicProductsContent({
       params.delete("sort");
     }
 
-    if (stockFilter !== "in-stock") {
-      params.set("stock", stockFilter);
-    } else {
-      params.delete("stock");
-    }
-
     if (perPage !== DEFAULT_PER_PAGE) {
       params.set("pp", String(perPage));
     } else {
@@ -602,7 +612,7 @@ export function PublicProductsContent({
       window.history.replaceState(null, "", newUrl);
     }
     historyModeRef.current = "replace";
-  }, [currentPage, searchQuery, sortBy, stockFilter, perPage, pathname, searchParams]);
+  }, [currentPage, searchQuery, sortBy, perPage, pathname, searchParams]);
 
   // BUGFIX (header search was a no-op on the shop page): the site header pushes
   // /shop?q=... which is a SOFT navigation — this component never unmounts, so
@@ -675,6 +685,13 @@ export function PublicProductsContent({
     if (currentPage !== safePage) setCurrentPage(safePage);
   }, [currentPage, safePage]);
 
+  // Drives the count badge on the mobile "Filters" button so a customer can see
+  // that something is narrowing the list without opening the sheet.
+  const activeFilterCount =
+    (stockFilter !== "in-stock" ? 1 : 0) +
+    (sortBy !== "newest" ? 1 : 0) +
+    (perPage !== DEFAULT_PER_PAGE ? 1 : 0);
+
   // Pagination handlers
   const goToPage = (page: number) => {
     historyModeRef.current = "push";
@@ -705,34 +722,118 @@ export function PublicProductsContent({
           results further away. */}
       {!deferredSearchQuery && !selectedCategory && <PromoSlider />}
 
-      {!deferredSearchQuery && !selectedCategory && newArrivals.length > 0 && (
+      {!deferredSearchQuery && !selectedCategory && newArrivals.length >= MIN_NEW_ARRIVALS && (
         <NewArrivalsRail products={newArrivals} currencyCode={currencyCode} />
       )}
 
       {/* Filters Row */}
       <div className="flex flex-col gap-4">
-        {/* Search and Sort Row */}
+        {/* Search and Sort Row.
+            MOBILE: search + one "Filters" button. The three selects used to stack
+            as three full-width rows plus a stranded per-page row — roughly a
+            screen of chrome between the customer and the first product. They now
+            live in a sheet, which is also where the SlidersHorizontal icon finally
+            does something (it was `hidden sm:block` decoration). */}
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-          {/* Search Bar */}
+          {/* Filter-within-results box. Deliberately NOT the same thing as the
+              header search: that one searches the whole catalog and offers
+              suggestions, this one narrows what is already on screen. Same
+              placeholder on both read as a duplicated control. */}
           <div className="relative flex-1">
             <Search className={cn(
               "absolute left-3 rtl:left-auto rtl:right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground transition-opacity",
               isSearching && "animate-pulse"
             )} aria-hidden="true" />
             <Input
-              placeholder={t("searchPlaceholder")}
+              placeholder={t("filterResultsPlaceholder")}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="ps-10"
-              aria-label={t("searchPlaceholder")}
+              aria-label={t("filterResultsPlaceholder")}
             />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => { setSearchQuery(""); setCurrentPage(1); }}
+                aria-label={t("clearFilter")}
+                className="absolute end-1 top-1/2 -translate-y-1/2 flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground hover:bg-muted"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
           </div>
 
-          {/* Availability + sort + per-page */}
-          <div className="flex flex-wrap items-center gap-2">
-            <SlidersHorizontal className="h-4 w-4 text-muted-foreground hidden sm:block" aria-hidden="true" />
+          {/* Mobile: everything behind one 44px button */}
+          <Sheet open={filtersOpen} onOpenChange={setFiltersOpen}>
+            <SheetTrigger asChild>
+              <Button variant="outline" className="sm:hidden h-11 justify-between btn-press">
+                <span className="flex items-center gap-2">
+                  <SlidersHorizontal className="h-4 w-4" aria-hidden="true" />
+                  {t("filtersAndSort")}
+                </span>
+                {activeFilterCount > 0 && (
+                  <Badge variant="gold" className="ms-2">{activeFilterCount}</Badge>
+                )}
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="bottom" className="sm:hidden">
+              <SheetHeader>
+                <SheetTitle>{t("filtersAndSort")}</SheetTitle>
+              </SheetHeader>
+              <div className="grid gap-4 py-4">
+                <label className="grid gap-1.5">
+                  <span className="text-sm font-medium">{t("availability")}</span>
+                  <Select value={stockFilter} onValueChange={handleStockFilterChange}>
+                    <SelectTrigger className="h-11 w-full" aria-label={t("availability")}>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="in-stock">{t("inStock")}</SelectItem>
+                      <SelectItem value="all">{t("allProducts")}</SelectItem>
+                      <SelectItem value="out-of-stock">{t("outOfStock")}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </label>
+                <label className="grid gap-1.5">
+                  <span className="text-sm font-medium">{t("sortBy")}</span>
+                  <Select value={sortBy} onValueChange={(v) => { handleSortChange(v); setFiltersOpen(false); }}>
+                    <SelectTrigger className="h-11 w-full" aria-label={t("sortBy")}>
+                      <SelectValue placeholder={t("sortBy")} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="newest">{t("sortOptions.newest")}</SelectItem>
+                      <SelectItem value="name-asc">{t("sortOptions.nameAsc")}</SelectItem>
+                      <SelectItem value="name-desc">{t("sortOptions.nameDesc")}</SelectItem>
+                      <SelectItem value="price-asc">{t("sortOptions.priceAsc")}</SelectItem>
+                      <SelectItem value="price-desc">{t("sortOptions.priceDesc")}</SelectItem>
+                      <SelectItem value="stock-desc">{t("sortOptions.stockDesc")}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </label>
+                <label className="grid gap-1.5">
+                  <span className="text-sm font-medium">{t("perPage", { count: perPage })}</span>
+                  <Select value={String(perPage)} onValueChange={(v) => { handlePerPageChange(v); setFiltersOpen(false); }}>
+                    <SelectTrigger className="h-11 w-full" aria-label={t("perPage", { count: perPage })}>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {PER_PAGE_OPTIONS.map((pp) => (
+                        <SelectItem key={pp} value={String(pp)}>
+                          {t("perPage", { count: pp })}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </label>
+              </div>
+            </SheetContent>
+          </Sheet>
+
+          {/* Desktop: inline, where there is room for it */}
+          <div className="hidden sm:flex flex-wrap items-center gap-2">
+            <SlidersHorizontal className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
             <Select value={stockFilter} onValueChange={handleStockFilterChange}>
-              <SelectTrigger className="w-full sm:w-[150px]" aria-label={t("availability")}>
+              <SelectTrigger className="w-[150px]" aria-label={t("availability")}>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -743,7 +844,7 @@ export function PublicProductsContent({
             </Select>
 
             <Select value={sortBy} onValueChange={handleSortChange}>
-              <SelectTrigger className="w-full sm:w-[180px]" aria-label={t("sortBy")}>
+              <SelectTrigger className="w-[180px]" aria-label={t("sortBy")}>
                 <SelectValue placeholder={t("sortBy")} />
               </SelectTrigger>
               <SelectContent>
@@ -830,12 +931,35 @@ export function PublicProductsContent({
               })}
             </div>
 
-            {/* Pagination Above Products */}
-            <NumberedPagination
-              currentPage={safePage}
-              totalPages={totalPages}
-              onPageChange={goToPage}
-            />
+            {/* Above the grid: compact arrows only. Rendering the full widget
+                (seven buttons + the go-to-page row) here pushed the first product
+                another ~90px down on a phone; the full control is below the grid,
+                which is where a customer reaches for it. */}
+            {totalPages > 1 && (
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => safePage > 1 && goToPage(safePage - 1)}
+                  disabled={safePage <= 1}
+                  aria-label={tCommon("previous")}
+                  className="flex h-11 w-11 items-center justify-center rounded-full border border-border bg-background hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <ChevronRight className="h-5 w-5 ltr:rotate-180" />
+                </button>
+                <span className="text-sm text-muted-foreground tabular-nums" dir="ltr">
+                  {safePage} / {totalPages}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => safePage < totalPages && goToPage(safePage + 1)}
+                  disabled={safePage >= totalPages}
+                  aria-label={tCommon("next")}
+                  className="flex h-11 w-11 items-center justify-center rounded-full border border-border bg-background hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <ChevronRight className="h-5 w-5 rtl:rotate-180" />
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Product Grid */}

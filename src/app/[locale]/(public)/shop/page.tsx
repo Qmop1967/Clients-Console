@@ -7,6 +7,24 @@ import { getPublicProductsWithPricesCached as getProductsWithPrices, getCategori
 import { auth } from "@/lib/auth/auth";
 import { getConsumerPricelistId } from "@/lib/odoo/pricelists";
 import { localeToOdooLang } from "@/i18n/config";
+import { matchesStockFilter, normalizeStockFilter, type StockFilter } from "@/lib/shop-product-list";
+
+type LocalizedNames = { ar?: string; ckb?: string; kmr?: string; tm?: string };
+
+/**
+ * Resolve the ONE name this locale will render, server-side.
+ *
+ * PAYLOAD: shipping all four localized_names cost 243 KB of the 1.42 MB shop
+ * document — three languages nobody on this request can read. The client card
+ * only ever called getLocalizedName(product, locale), so the choice belongs on
+ * the server. The product DETAIL page still receives the full set (it renders
+ * the canonical name as a subtitle).
+ */
+function resolveListName(name: string, localized: LocalizedNames | undefined, locale: string): string {
+  if (locale === "en") return name;
+  const translated = localized?.[locale as keyof LocalizedNames];
+  return translated || name;
+}
 
 // PERSONALIZED PRICING: Page is dynamic for logged-in users to show their assigned prices
 // Public visitors still get Consumer prices
@@ -31,7 +49,13 @@ export async function generateMetadata() {
  *
  * @param priceListId - Customer's price list ID (from session) or undefined for Consumer
  */
-async function fetchShopData(priceListId: string | undefined, lang: string | undefined, isAuthenticated: boolean) {
+async function fetchShopData(
+  priceListId: string | undefined,
+  lang: string | undefined,
+  isAuthenticated: boolean,
+  locale: string,
+  stockFilter: StockFilter
+) {
   try {
     // Determine which price list to use
     const effectivePriceListId = priceListId || await getConsumerPricelistId();
@@ -51,8 +75,7 @@ async function fetchShopData(priceListId: string | undefined, lang: string | und
     // Map to display format - keep it minimal for faster serialization
     const productsWithPrices = allProducts.map((product) => ({
       item_id: product.item_id,
-      name: product.name,
-      localized_names: product.localized_names,
+      name: resolveListName(product.name, product.localized_names, locale),
       sku: product.sku,
       description: product.description,
       rate: product.display_price || 0,
@@ -68,9 +91,18 @@ async function fetchShopData(priceListId: string | undefined, lang: string | und
       carton_qty: product.carton_qty,
     }));
 
-    // All active sellable products stay visible. Out-of-stock items are marked
-    // unavailable instead of disappearing from public URLs and catalog sync.
-    const optimizedProducts = productsWithPrices;
+    // PAYLOAD: apply the availability filter HERE, not in the browser.
+    //
+    // The page used to serialize all ~1450 products into the RSC payload on every
+    // request (the page is force-dynamic, so nothing was cached) purely so the
+    // client could hide the out-of-stock ones — 1.42 MB of HTML to render 24 cards
+    // on a phone. The default view only ever shows in-stock items, and both the
+    // category counts and the New Arrivals rail were already scoped to the same
+    // filter, so nothing downstream needs the hidden products. Switching the
+    // availability selector is a real navigation (?stock=all) that re-renders here.
+    const optimizedProducts = productsWithPrices.filter((product) =>
+      matchesStockFilter(product, stockFilter)
+    );
     const activeCategories = categories.filter(c => c.is_active);
 
     // Get LCP image URL (first product's image) for preloading
@@ -103,7 +135,7 @@ async function fetchShopData(priceListId: string | undefined, lang: string | und
 }
 
 // Separate async component for products - enables streaming
-async function ShopLoader() {
+async function ShopLoader({ stockFilter }: { stockFilter: StockFilter }) {
   const t = await getTranslations("products");
 
   // Check if user is authenticated and get their price list
@@ -116,8 +148,15 @@ async function ShopLoader() {
   }
 
   // i18n: fetch catalog in the visitor's language (en → en_US, else → ar_001)
-  const odooLang = localeToOdooLang(await getLocale());
-  const { products, categories, currencyCode, lcpImageUrl, error } = await fetchShopData(priceListId, odooLang, isAuthenticated);
+  const locale = await getLocale();
+  const odooLang = localeToOdooLang(locale);
+  const { products, categories, currencyCode, lcpImageUrl, error } = await fetchShopData(
+    priceListId,
+    odooLang,
+    isAuthenticated,
+    locale,
+    stockFilter
+  );
 
   // Error State
   if (error && products.length === 0) {
@@ -132,9 +171,7 @@ async function ShopLoader() {
           {error === "rate_limit" ? t("rateLimitError") : t("noProducts")}
         </h3>
         <p className="text-sm text-muted-foreground mb-4 max-w-md mx-auto">
-          {error === "rate_limit"
-            ? t("rateLimitDescription")
-            : "Our product catalog is being updated. Please check back soon."}
+          {error === "rate_limit" ? t("rateLimitDescription") : t("catalogUpdating")}
         </p>
         <a
           href="?"
@@ -143,7 +180,7 @@ async function ShopLoader() {
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
           </svg>
-          Try Again
+          {t("tryAgain")}
         </a>
       </div>
     );
@@ -166,12 +203,24 @@ async function ShopLoader() {
 
 // PERSONALIZED PRICING: Authenticated users see their assigned price list
 // Public visitors see Consumer prices - their specific prices show after login
-export default async function PublicShopPage() {
+export default async function PublicShopPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const params = await searchParams;
+  const rawStock = params?.stock;
+  const stockFilter = normalizeStockFilter(
+    typeof rawStock === "string" ? rawStock : Array.isArray(rawStock) ? rawStock[0] ?? null : null
+  );
+
   return (
     <div className="space-y-6">
-      {/* Use Suspense to enable streaming - shows skeleton immediately */}
-      <Suspense fallback={<ProductsSkeleton />}>
-        <ShopLoader />
+      {/* Use Suspense to enable streaming - shows skeleton immediately.
+          `key` forces a fresh Suspense boundary per availability mode so switching
+          it shows the skeleton instead of the previous list frozen in place. */}
+      <Suspense key={stockFilter} fallback={<ProductsSkeleton />}>
+        <ShopLoader stockFilter={stockFilter} />
       </Suspense>
     </div>
   );

@@ -203,7 +203,7 @@
     "loginToAccount": "Login to Your Account",
     "productsAvailable": "{count} products available",
     "contactForPrice": "Contact for price",
-    "backToShop": "Back to Shop",
+    "backToShop": "Back to shop",
     "alreadyInCart": "{count} already in cart",
     "contactForPriceDescription": "This product requires a quote. Login or contact us for pricing.",
     "outOfStockDescription": "This product is currently out of stock. Please check back later.",
@@ -261,7 +261,18 @@
     "quickInvoicesHint": "Your invoices in detail",
     "noResultsFor": "No results for “{query}”",
     "decreaseQuantity": "Decrease quantity",
-    "increaseQuantity": "Increase quantity"
+    "increaseQuantity": "Increase quantity",
+    "filterResultsPlaceholder": "Filter these results...",
+    "filtersAndSort": "Filters & sorting",
+    "setQuantityTo": "Set quantity to {count}",
+    "setQuantityToMax": "Set to maximum quantity",
+    "zoomImage": "Zoom image",
+    "loadErrorTitle": "Unable to load product",
+    "loadErrorBody": "Something went wrong while loading this product.",
+    "busyTitle": "Server busy",
+    "busyBody": "We're experiencing high traffic. Please wait a moment and try again.",
+    "tryAgain": "Try again",
+    "catalogUpdating": "Our product catalog is being updated. Please check back soon."
   },
   "orders": {
     "title": "Orders",

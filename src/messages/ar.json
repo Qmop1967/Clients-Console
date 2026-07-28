@@ -261,7 +261,18 @@
     "quickInvoicesHint": "فواتيرك وتفاصيلها",
     "noResultsFor": "لا توجد نتائج لـ “{query}”",
     "decreaseQuantity": "تقليل الكمية",
-    "increaseQuantity": "زيادة الكمية"
+    "increaseQuantity": "زيادة الكمية",
+    "filterResultsPlaceholder": "تصفية النتائج الظاهرة...",
+    "filtersAndSort": "الفلاتر والترتيب",
+    "setQuantityTo": "ضبط الكمية على {count}",
+    "setQuantityToMax": "ضبط الكمية على الحد الأقصى",
+    "zoomImage": "تكبير الصورة",
+    "loadErrorTitle": "تعذّر تحميل المنتج",
+    "loadErrorBody": "حدث خطأ أثناء تحميل هذا المنتج.",
+    "busyTitle": "الخادم مشغول",
+    "busyBody": "هناك ضغط عالٍ حالياً. انتظر لحظة ثم أعد المحاولة.",
+    "tryAgain": "إعادة المحاولة",
+    "catalogUpdating": "جارٍ تحديث كتالوج المنتجات. تفقّد الصفحة بعد قليل."
   },
   "orders": {
     "title": "الطلبات",

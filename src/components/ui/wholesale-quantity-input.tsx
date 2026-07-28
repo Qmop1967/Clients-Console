@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { useState, useCallback, useEffect, useRef } from "react";
+import { useTranslations } from "next-intl";
 import { Minus, Plus, ChevronsUp, AlertCircle } from "lucide-react";
 import { Button } from "./button";
 import { cn } from "@/lib/utils/cn";
@@ -31,6 +32,9 @@ export function WholesaleQuantityInput({
   translations,
   onPreventNavigation,
 }: WholesaleQuantityInputProps) {
+  // a11y labels were hardcoded English on every purchase control. next-intl's
+  // client provider is available here even though the parent lazy-loads this.
+  const tA11y = useTranslations("products");
   const [inputValue, setInputValue] = useState(String(value));
   const [isFocused, setIsFocused] = useState(false);
   const [showExceededWarning, setShowExceededWarning] = useState(false);
@@ -205,7 +209,7 @@ export function WholesaleQuantityInput({
           className="h-11 w-11 shrink-0 rounded-lg"
           onClick={(e) => handleDecrement(e, 1)}
           disabled={disabled || value <= min}
-          aria-label="Decrease quantity"
+          aria-label={tA11y("decreaseQuantity")}
         >
           <Minus className="h-4 w-4" aria-hidden="true" />
         </Button>
@@ -223,7 +227,7 @@ export function WholesaleQuantityInput({
           onKeyDown={handleKeyDown}
           onClick={handleWrapperClick}
           disabled={disabled}
-          aria-label="Quantity"
+          aria-label={tA11y("quantity")}
           className={cn(
             "h-11 w-full min-w-[60px] flex-1 rounded-lg border bg-background px-2 text-center text-lg font-semibold tabular-nums",
             "transition-all duration-200",
@@ -241,7 +245,7 @@ export function WholesaleQuantityInput({
           className="h-11 w-11 shrink-0 rounded-lg"
           onClick={(e) => handleIncrement(e, 1)}
           disabled={disabled || value >= max}
-          aria-label="Increase quantity"
+          aria-label={tA11y("increaseQuantity")}
         >
           <Plus className="h-4 w-4" aria-hidden="true" />
         </Button>
@@ -254,7 +258,7 @@ export function WholesaleQuantityInput({
           type="button"
           onClick={(e) => handleSetQuantity(e, 10)}
           disabled={disabled || value >= max}
-          aria-label="Set quantity to 10"
+          aria-label={tA11y("setQuantityTo", { count: 10 })}
           className={cn(
             "h-10 px-2 rounded-xl text-sm font-bold tabular-nums whitespace-nowrap",
             "bg-gradient-to-b from-muted/90 to-muted",
@@ -275,7 +279,7 @@ export function WholesaleQuantityInput({
           type="button"
           onClick={(e) => handleSetQuantity(e, 100)}
           disabled={disabled || value >= max}
-          aria-label="Set quantity to 100"
+          aria-label={tA11y("setQuantityTo", { count: 100 })}
           className={cn(
             "h-10 px-2 rounded-xl text-sm font-bold tabular-nums whitespace-nowrap",
             "bg-gradient-to-b from-muted/90 to-muted",
@@ -296,7 +300,7 @@ export function WholesaleQuantityInput({
           type="button"
           onClick={handleSetMax}
           disabled={disabled || value >= max}
-          aria-label="Set to maximum quantity"
+          aria-label={tA11y("setQuantityToMax")}
           className={cn(
             "h-10 px-2 rounded-xl text-sm font-bold whitespace-nowrap",
             "inline-flex items-center justify-center gap-1",

@@ -18,7 +18,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import Image from "next/image";
 import { X, ChevronLeft, ChevronRight, FileText, Share2, ZoomIn, Download, Play } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useLocale } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { normalizeDocLang } from "@/lib/doc-i18n";
 
 interface MediaItem {
@@ -58,6 +58,9 @@ export function ProductGallery({
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const touchStart = useRef<number | null>(null);
   const locale = useLocale();
+  // a11y labels were hardcoded English on an Arabic-first storefront.
+  const t = useTranslations("products");
+  const tCommon = useTranslations("common");
 
   // Fetch media (reusable so we can re-run on focus/visibility for fresh image state).
   const fetchMedia = useCallback(async () => {
@@ -303,7 +306,7 @@ export function ProductGallery({
               <button
                 type="button"
                 className="absolute right-3 top-3 p-2 rounded-full bg-white/90 backdrop-blur shadow-sm opacity-0 group-hover:opacity-100 transition-opacity"
-                aria-label="Zoom image"
+                aria-label={t("zoomImage")}
               >
                 <ZoomIn className="h-4 w-4 text-gray-700" />
               </button>
@@ -433,7 +436,7 @@ export function ProductGallery({
             type="button"
             className="absolute top-4 right-4 p-2 text-white/80 hover:text-white z-10"
             onClick={() => setLightboxOpen(false)}
-            aria-label="Close"
+            aria-label={tCommon("close")}
           >
             <X className="h-6 w-6" />
           </button>
@@ -447,7 +450,7 @@ export function ProductGallery({
                   e.stopPropagation();
                   setActiveIdx((i) => (i - 1 + displayImages.length) % displayImages.length);
                 }}
-                aria-label="Previous"
+                aria-label={tCommon("previous")}
               >
                 <ChevronLeft className="h-6 w-6" />
               </button>
@@ -458,7 +461,7 @@ export function ProductGallery({
                   e.stopPropagation();
                   setActiveIdx((i) => (i + 1) % displayImages.length);
                 }}
-                aria-label="Next"
+                aria-label={tCommon("next")}
               >
                 <ChevronRight className="h-6 w-6" />
               </button>

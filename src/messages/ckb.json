@@ -210,7 +210,18 @@
     "uses": "بەکارهێنانەکان",
     "noResultsFor": "هیچ ئەنجامێک نییە بۆ “{query}”",
     "decreaseQuantity": "کەمکردنەوەی بڕ",
-    "increaseQuantity": "زیادکردنی بڕ"
+    "increaseQuantity": "زیادکردنی بڕ",
+    "filterResultsPlaceholder": "پاڵاوتنی ئەنجامەکان...",
+    "filtersAndSort": "پاڵاوتن و ڕیزکردن",
+    "setQuantityTo": "بڕ بکە بە {count}",
+    "setQuantityToMax": "زۆرترین بڕ",
+    "zoomImage": "گەورەکردنی وێنە",
+    "loadErrorTitle": "نەتوانرا بەرهەم باربکرێت",
+    "loadErrorBody": "هەڵەیەک ڕوویدا لە کاتی باركردنی ئەم بەرهەمە.",
+    "busyTitle": "ڕاژە سەرقاڵە",
+    "busyBody": "پەستانی زۆر هەیە. تکایە چاوەڕێ بکە و دووبارە هەوڵبدەوە.",
+    "tryAgain": "دووبارە هەوڵبدەوە",
+    "catalogUpdating": "کەتەلۆگی بەرهەمەکان نوێ دەکرێتەوە. تکایە دواتر سەردان بکە."
   },
   "orders": {
     "title": "داواکارییەکان",

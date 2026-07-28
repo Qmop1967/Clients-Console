@@ -33,7 +33,7 @@ export function CategoryStrip({
 
   const chip = (isActive: boolean) =>
     cn(
-      "shrink-0 rounded-full px-4 py-2 text-sm font-medium border transition-colors native-press whitespace-nowrap",
+      "shrink-0 rounded-full px-4 min-h-11 inline-flex items-center text-sm font-medium border transition-colors native-press whitespace-nowrap",
       isActive
         ? "bg-gold text-white border-gold shadow-sm"
         : "bg-card text-foreground/80 border-border hover:border-gold/40 hover:text-foreground"
