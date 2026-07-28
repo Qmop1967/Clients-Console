@@ -21,7 +21,6 @@ import {
   Box,
   ChevronRight,
   Share2,
-  Heart,
   Truck,
   Shield,
   Zap,
@@ -284,7 +283,7 @@ export function ProductDetailContent({ product, locale, canOrder, showExactStock
                 <Badge
                   variant={isInStock ? "success" : "destructive"}
                   className={cn(
-                    "absolute right-3 top-3 z-10 text-sm px-3 py-1 shadow-md",
+                    "absolute end-3 top-3 z-10 text-sm px-3 py-1 shadow-md",
                     isLowStock && "animate-pulse"
                   )}
                 >
@@ -292,17 +291,6 @@ export function ProductDetailContent({ product, locale, canOrder, showExactStock
                 </Badge>
               )}
 
-              {/* Wishlist overlay */}
-              <div className="absolute left-3 top-3 z-10">
-                <Button
-                  variant="secondary"
-                  size="icon"
-                  className="h-11 w-11 rounded-full shadow-md"
-                  aria-label="Add to wishlist"
-                >
-                  <Heart className="h-4 w-4" />
-                </Button>
-              </div>
             </div>
 
             {/* Trust Badges - Desktop: horizontal cards */}
@@ -814,8 +802,8 @@ export function ProductDetailContent({ product, locale, canOrder, showExactStock
                 type="button"
                 onClick={() => setQuantity(Math.max(1, quantity - 1))}
                 disabled={quantity <= 1}
-                className="h-8 w-8 flex items-center justify-center rounded-lg border bg-muted/50 text-foreground disabled:opacity-40 transition-colors active:bg-muted"
-                aria-label="Decrease"
+                className="h-11 w-11 flex items-center justify-center rounded-lg border bg-muted/50 text-foreground disabled:opacity-40 transition-colors active:bg-muted"
+                aria-label={t("decreaseQuantity")}
               >
                 <Minus className="h-3.5 w-3.5" />
               </button>
@@ -826,8 +814,8 @@ export function ProductDetailContent({ product, locale, canOrder, showExactStock
                 type="button"
                 onClick={() => setQuantity(Math.min(maxQuantity, quantity + 1))}
                 disabled={quantity >= maxQuantity}
-                className="h-8 w-8 flex items-center justify-center rounded-lg border bg-muted/50 text-foreground disabled:opacity-40 transition-colors active:bg-muted"
-                aria-label="Increase"
+                className="h-11 w-11 flex items-center justify-center rounded-lg border bg-muted/50 text-foreground disabled:opacity-40 transition-colors active:bg-muted"
+                aria-label={t("increaseQuantity")}
               >
                 <Plus className="h-3.5 w-3.5" />
               </button>

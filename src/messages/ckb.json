@@ -208,7 +208,9 @@
     "minimumOrder": "کەمترین بڕی داواکاری",
     "technicalSpecs": "تایبەتمەندییە تەکنیکییەکان",
     "uses": "بەکارهێنانەکان",
-    "noResultsFor": "هیچ ئەنجامێک نییە بۆ “{query}”"
+    "noResultsFor": "هیچ ئەنجامێک نییە بۆ “{query}”",
+    "decreaseQuantity": "کەمکردنەوەی بڕ",
+    "increaseQuantity": "زیادکردنی بڕ"
   },
   "orders": {
     "title": "داواکارییەکان",

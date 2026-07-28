@@ -208,7 +208,9 @@
     "minimumOrder": "کێمترین داخواز",
     "technicalSpecs": "تایبەتمەندیێن تەکنیکی",
     "uses": "بکارئینان",
-    "noResultsFor": "چ ئەنجام نینن بۆ “{query}”"
+    "noResultsFor": "چ ئەنجام نینن بۆ “{query}”",
+    "decreaseQuantity": "کێمکرنا هەژمارێ",
+    "increaseQuantity": "زێدەکرنا هەژمارێ"
   },
   "orders": {
     "title": "داخواز",

@@ -259,7 +259,9 @@
     "quickReorderHint": "تابع طلباتك وأعد الطلب",
     "quickStatementHint": "رصيدك وحركاتك",
     "quickInvoicesHint": "فواتيرك وتفاصيلها",
-    "noResultsFor": "لا توجد نتائج لـ “{query}”"
+    "noResultsFor": "لا توجد نتائج لـ “{query}”",
+    "decreaseQuantity": "تقليل الكمية",
+    "increaseQuantity": "زيادة الكمية"
   },
   "orders": {
     "title": "الطلبات",

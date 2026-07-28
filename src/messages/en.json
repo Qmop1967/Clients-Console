@@ -259,7 +259,9 @@
     "quickReorderHint": "Track orders & reorder",
     "quickStatementHint": "Balance & transactions",
     "quickInvoicesHint": "Your invoices in detail",
-    "noResultsFor": "No results for “{query}”"
+    "noResultsFor": "No results for “{query}”",
+    "decreaseQuantity": "Decrease quantity",
+    "increaseQuantity": "Increase quantity"
   },
   "orders": {
     "title": "Orders",

@@ -208,7 +208,9 @@
     "minimumOrder": "Minimum sipariş",
     "technicalSpecs": "Teknik özellikler",
     "uses": "Kullanım alanları",
-    "noResultsFor": "“{query}” üçin netije ýok"
+    "noResultsFor": "“{query}” üçin netije ýok",
+    "decreaseQuantity": "Mukdary azaltmak",
+    "increaseQuantity": "Mukdary artdyrmak"
   },
   "orders": {
     "title": "Siparişler",
