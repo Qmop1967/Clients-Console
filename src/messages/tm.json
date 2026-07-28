@@ -134,6 +134,10 @@
   "products": {
     "title": "Ürünler",
     "allProducts": "Tüm ürünler",
+    "photoAvailability": "Ürün fotoğrafları",
+    "withPhotos": "Fotoğraflı",
+    "allPhotoStatuses": "Tüm fotoğraf durumları",
+    "awaitingPhotos": "Fotoğraf bekliyor",
     "catalog": "Katalog",
     "searchPlaceholder": "Ürün ara...",
     "inStock": "Stokta var",

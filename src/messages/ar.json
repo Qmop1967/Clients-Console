@@ -157,6 +157,10 @@
   "products": {
     "title": "المنتجات",
     "allProducts": "جميع المنتجات",
+    "photoAvailability": "صور المنتجات",
+    "withPhotos": "مع صور",
+    "allPhotoStatuses": "جميع حالات الصور",
+    "awaitingPhotos": "بانتظار الصور",
     "catalog": "الكتالوج",
     "searchPlaceholder": "البحث عن منتجات...",
     "inStock": "متوفر",

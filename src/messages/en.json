@@ -157,6 +157,10 @@
   "products": {
     "title": "Products",
     "allProducts": "All Products",
+    "photoAvailability": "Product photos",
+    "withPhotos": "With photos",
+    "allPhotoStatuses": "All photo statuses",
+    "awaitingPhotos": "Awaiting photos",
     "catalog": "Catalog",
     "searchPlaceholder": "Search products...",
     "inStock": "In Stock",

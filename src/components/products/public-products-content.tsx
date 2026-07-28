@@ -26,9 +26,12 @@ import { cn } from "@/lib/utils/cn";
 import { formatCurrency } from "@/lib/utils/format";
 import {
   filterAndSortShopProducts,
+  matchesPhotoFilter,
   matchesStockFilter,
+  normalizePhotoFilter,
   normalizeStockFilter,
   selectImageReadyNewArrivals,
+  type PhotoFilter,
   type ShopSortOption,
   type StockFilter,
 } from "@/lib/shop-product-list";
@@ -480,6 +483,7 @@ export function PublicProductsContent({
   const searchFromUrl = searchParams.get("q") || "";
   const sortFromUrl = (searchParams.get("sort") as SortOption) || "newest";
   const stockFromUrl = normalizeStockFilter(searchParams.get("stock"));
+  const photosFromUrl = normalizePhotoFilter(searchParams.get("photos"));
   const ppFromUrlRaw = parseInt(searchParams.get("pp") || String(DEFAULT_PER_PAGE), 10);
   const ppFromUrl = PER_PAGE_OPTIONS.includes(ppFromUrlRaw) ? ppFromUrlRaw : DEFAULT_PER_PAGE;
 
@@ -487,6 +491,7 @@ export function PublicProductsContent({
   const [currentPage, setCurrentPage] = useState(pageFromUrl);
   const [sortBy, setSortBy] = useState<SortOption>(sortFromUrl);
   const [stockFilter, setStockFilter] = useState<StockFilter>(stockFromUrl);
+  const [photoFilter, setPhotoFilter] = useState<PhotoFilter>(photosFromUrl);
   const [perPage, setPerPage] = useState<number>(ppFromUrl);
 
   const handlePerPageChange = (value: string) => {
@@ -499,6 +504,12 @@ export function PublicProductsContent({
   const handleStockFilterChange = (value: string) => {
     const nextFilter = normalizeStockFilter(value);
     setStockFilter(nextFilter);
+    setCurrentPage(1);
+  };
+
+  const handlePhotoFilterChange = (value: string) => {
+    const nextFilter = normalizePhotoFilter(value);
+    setPhotoFilter(nextFilter);
     setCurrentPage(1);
   };
 
@@ -561,6 +572,12 @@ export function PublicProductsContent({
       params.delete("stock");
     }
 
+    if (photoFilter !== "with-images") {
+      params.set("photos", photoFilter);
+    } else {
+      params.delete("photos");
+    }
+
     if (perPage !== DEFAULT_PER_PAGE) {
       params.set("pp", String(perPage));
     } else {
@@ -569,7 +586,7 @@ export function PublicProductsContent({
 
     const newUrl = params.toString() ? `${pathname}?${params.toString()}` : pathname;
     window.history.replaceState(null, "", newUrl);
-  }, [currentPage, searchQuery, sortBy, stockFilter, perPage, pathname, searchParams]);
+  }, [currentPage, searchQuery, sortBy, stockFilter, photoFilter, perPage, pathname, searchParams]);
 
   // Reset to page 1 when search or sort changes
   useEffect(() => {
@@ -579,16 +596,17 @@ export function PublicProductsContent({
   }, [searchQuery, searchFromUrl, sortBy, sortFromUrl]);
 
   // Filter and sort products
-  // Availability and image ordering happen before pagination. That guarantees the
-  // default grid contains only orderable stock and products awaiting photography
-  // are grouped at the very end of the complete result set, not mixed into each page.
+  // Availability and photo readiness are applied before pagination. The default
+  // storefront therefore contains only orderable, photographed products. Buyers
+  // can explicitly switch to all products or the photography backlog.
   const filteredProducts = useMemo(() => {
     return filterAndSortShopProducts(products, {
       query: deferredSearchQuery,
       sortBy,
       stockFilter,
+      photoFilter,
     });
-  }, [products, deferredSearchQuery, sortBy, stockFilter]);
+  }, [products, deferredSearchQuery, sortBy, stockFilter, photoFilter]);
 
   // Keep category chips aligned with the selected availability mode. A category
   // chip should never lead to an empty page merely because all of its items are
@@ -597,6 +615,7 @@ export function PublicProductsContent({
     const counts = new Map<string, number>();
     for (const product of allProducts) {
       if (!product.category_id || !matchesStockFilter(product, stockFilter)) continue;
+      if (!matchesPhotoFilter(product, photoFilter)) continue;
       counts.set(product.category_id, (counts.get(product.category_id) ?? 0) + 1);
     }
     return categories
@@ -606,7 +625,7 @@ export function PublicProductsContent({
         count: counts.get(category.category_id) ?? 0,
       }))
       .sort((a, b) => (b.count ?? 0) - (a.count ?? 0));
-  }, [allProducts, categories, stockFilter]);
+  }, [allProducts, categories, stockFilter, photoFilter]);
 
   // New Arrivals should merchandise products, not photography work-in-progress.
   // Missing-image items remain available at the end of the full product grid.
@@ -693,6 +712,17 @@ export function PublicProductsContent({
                 <SelectItem value="in-stock">{t("inStock")}</SelectItem>
                 <SelectItem value="all">{t("allProducts")}</SelectItem>
                 <SelectItem value="out-of-stock">{t("outOfStock")}</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Select value={photoFilter} onValueChange={handlePhotoFilterChange}>
+              <SelectTrigger className="w-full sm:w-[170px]" aria-label={t("photoAvailability")}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="with-images">{t("withPhotos")}</SelectItem>
+                <SelectItem value="all">{t("allPhotoStatuses")}</SelectItem>
+                <SelectItem value="without-images">{t("awaitingPhotos")}</SelectItem>
               </SelectContent>
             </Select>
 

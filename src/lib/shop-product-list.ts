@@ -1,4 +1,5 @@
 export type StockFilter = "in-stock" | "all" | "out-of-stock";
+export type PhotoFilter = "with-images" | "all" | "without-images";
 
 export type ShopSortOption =
   | "newest"
@@ -24,11 +25,17 @@ interface ShopListOptions {
   query: string;
   sortBy: ShopSortOption;
   stockFilter: StockFilter;
+  photoFilter: PhotoFilter;
 }
 
 export function normalizeStockFilter(value: string | null): StockFilter {
   if (value === "all" || value === "out-of-stock") return value;
   return "in-stock";
+}
+
+export function normalizePhotoFilter(value: string | null): PhotoFilter {
+  if (value === "all" || value === "without-images") return value;
+  return "with-images";
 }
 
 export function matchesStockFilter(
@@ -50,6 +57,15 @@ export function hasProductImage(
   // Odoo maps missing DAM media to this public asset instead of returning null.
   const imagePath = product.image_url.trim().toLocaleLowerCase().split(/[?#]/, 1)[0];
   return !imagePath.endsWith("/images/product-placeholder.svg");
+}
+
+export function matchesPhotoFilter(
+  product: Pick<ShopListProduct, "image_url">,
+  photoFilter: PhotoFilter
+): boolean {
+  if (photoFilter === "all") return true;
+  const hasImage = hasProductImage(product);
+  return photoFilter === "with-images" ? hasImage : !hasImage;
 }
 
 function getCreatedAt(product: Pick<ShopListProduct, "create_date">): number {
@@ -88,6 +104,7 @@ export function filterAndSortShopProducts<T extends ShopListProduct>(
   const query = options.query.trim().toLocaleLowerCase();
   const filtered = products.filter((product) => {
     if (!matchesStockFilter(product, options.stockFilter)) return false;
+    if (!matchesPhotoFilter(product, options.photoFilter)) return false;
     if (!query) return true;
 
     return [product.name, product.sku, product.description, product.brand].some(

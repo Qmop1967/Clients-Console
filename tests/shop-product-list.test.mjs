@@ -4,6 +4,7 @@ import test from 'node:test';
 import {
   filterAndSortShopProducts,
   hasProductImage,
+  normalizePhotoFilter,
   normalizeStockFilter,
   selectImageReadyNewArrivals,
 } from '../src/lib/shop-product-list.ts';
@@ -50,20 +51,28 @@ test('defaults missing and invalid stock parameters to in-stock', () => {
   assert.equal(normalizeStockFilter('out-of-stock'), 'out-of-stock');
 });
 
+test('defaults missing and invalid photo parameters to products with images', () => {
+  assert.equal(normalizePhotoFilter(null), 'with-images');
+  assert.equal(normalizePhotoFilter('unexpected'), 'with-images');
+  assert.equal(normalizePhotoFilter('all'), 'all');
+  assert.equal(normalizePhotoFilter('without-images'), 'without-images');
+});
+
 test('treats blank and branded placeholder URLs as missing images', () => {
   assert.equal(hasProductImage({ image_url: null }), false);
   assert.equal(hasProductImage({ image_url: '/images/product-placeholder.svg?v=1' }), false);
   assert.equal(hasProductImage({ image_url: '/api/images/11' }), true);
 });
 
-test('default mode excludes unavailable products', () => {
+test('default mode excludes unavailable and missing-image products', () => {
   const result = filterAndSortShopProducts(products, {
     query: '',
     sortBy: 'newest',
     stockFilter: 'in-stock',
+    photoFilter: 'with-images',
   });
 
-  assert.deepEqual(result.map((product) => product.item_id), ['11', '10', '12']);
+  assert.deepEqual(result.map((product) => product.item_id), ['11', '10']);
   assert.equal(result.some((product) => product.available_stock <= 0), false);
 });
 
@@ -72,6 +81,7 @@ test('all-products mode includes unavailable products', () => {
     query: '',
     sortBy: 'newest',
     stockFilter: 'all',
+    photoFilter: 'all',
   });
 
   assert.deepEqual(result.map((product) => product.item_id), ['13', '11', '10', '12']);
@@ -82,6 +92,7 @@ test('out-of-stock mode returns only unavailable products', () => {
     query: '',
     sortBy: 'newest',
     stockFilter: 'out-of-stock',
+    photoFilter: 'with-images',
   });
 
   assert.deepEqual(result.map((product) => product.item_id), ['13']);
@@ -92,6 +103,7 @@ test('missing-image products stay last for every user-selected sort', () => {
     query: '',
     sortBy: 'price-desc',
     stockFilter: 'in-stock',
+    photoFilter: 'all',
   });
 
   assert.deepEqual(result.map((product) => product.item_id), ['11', '10', '12']);
@@ -102,9 +114,21 @@ test('search is applied together with the availability filter', () => {
     query: 'unavailable',
     sortBy: 'newest',
     stockFilter: 'in-stock',
+    photoFilter: 'with-images',
   });
 
   assert.deepEqual(result, []);
+});
+
+test('photography backlog mode returns only products without images', () => {
+  const result = filterAndSortShopProducts(products, {
+    query: '',
+    sortBy: 'newest',
+    stockFilter: 'in-stock',
+    photoFilter: 'without-images',
+  });
+
+  assert.deepEqual(result.map((product) => product.item_id), ['12']);
 });
 
 test('new arrivals exclude products that are missing approved images', () => {

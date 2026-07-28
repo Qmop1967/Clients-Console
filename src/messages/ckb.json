@@ -134,6 +134,10 @@
   "products": {
     "title": "بەرهەمەکان",
     "allProducts": "هەموو بەرهەمەکان",
+    "photoAvailability": "وێنەی بەرهەم",
+    "withPhotos": "لەگەڵ وێنە",
+    "allPhotoStatuses": "هەموو دۆخەکانی وێنە",
+    "awaitingPhotos": "چاوەڕوانی وێنە",
     "catalog": "کەتەلۆگ",
     "searchPlaceholder": "گەڕان بۆ بەرهەمەکان...",
     "inStock": "بەردەستە",

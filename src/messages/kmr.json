@@ -134,6 +134,10 @@
   "products": {
     "title": "بەرهەم",
     "allProducts": "هەمی بەرهەم",
+    "photoAvailability": "وێنەیێن بەرهەمی",
+    "withPhotos": "ب وێنە",
+    "allPhotoStatuses": "هەمی دۆخێن وێنەیان",
+    "awaitingPhotos": "چاڤەڕێیا وێنەیان",
     "catalog": "کاتالۆگ",
     "searchPlaceholder": "ل بەرهەمان بگەڕە...",
     "inStock": "بەردەست",
