@@ -2,7 +2,6 @@
 // Image Proxy for Odoo Product Images
 // ============================================
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@/lib/auth/auth';
 
 const GATEWAY_URL = process.env.API_GATEWAY_URL || 'http://localhost:3010';
 const API_KEY = process.env.API_KEY || '';
@@ -47,15 +46,11 @@ export async function GET(
     }
   }
 
-  // Raw Odoo product images are an internal fallback and may not have passed the
-  // public DAM approval workflow. Only a validated client session may fetch them.
-  const session = await auth();
-  if (!session?.user?.odooPartnerId) {
-    return new NextResponse(null, {
-      status: 404,
-      headers: { 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex' },
-    });
-  }
+  // CHANGED 2026-07-28: this route used to 404 for anonymous visitors, so the public
+  // shop could only ever render the 77 DAM-approved products. Odoo product imagery is
+  // now served to everyone (product owner's decision) — it is the same catalog the
+  // customer sees after logging in, so gating it only hid the shop from buyers.
+  // Third-party catalog feeds still require DAM approval (see applyPublicImage).
 
   try {
     // Forward the version (?v=) so the Gateway's Redis cache is version-keyed

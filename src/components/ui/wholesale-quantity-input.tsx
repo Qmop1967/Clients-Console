@@ -202,7 +202,7 @@ export function WholesaleQuantityInput({
           type="button"
           variant="outline"
           size="icon"
-          className="h-9 w-9 shrink-0 rounded-lg"
+          className="h-11 w-11 shrink-0 rounded-lg"
           onClick={(e) => handleDecrement(e, 1)}
           disabled={disabled || value <= min}
           aria-label="Decrease quantity"
@@ -225,7 +225,7 @@ export function WholesaleQuantityInput({
           disabled={disabled}
           aria-label="Quantity"
           className={cn(
-            "h-9 w-full min-w-[60px] flex-1 rounded-lg border bg-background px-2 text-center text-lg font-semibold tabular-nums",
+            "h-11 w-full min-w-[60px] flex-1 rounded-lg border bg-background px-2 text-center text-lg font-semibold tabular-nums",
             "transition-all duration-200",
             "focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary",
             "disabled:cursor-not-allowed disabled:opacity-50",
@@ -238,7 +238,7 @@ export function WholesaleQuantityInput({
           type="button"
           variant="outline"
           size="icon"
-          className="h-9 w-9 shrink-0 rounded-lg"
+          className="h-11 w-11 shrink-0 rounded-lg"
           onClick={(e) => handleIncrement(e, 1)}
           disabled={disabled || value >= max}
           aria-label="Increase quantity"

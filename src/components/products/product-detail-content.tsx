@@ -297,7 +297,7 @@ export function ProductDetailContent({ product, locale, canOrder, showExactStock
                 <Button
                   variant="secondary"
                   size="icon"
-                  className="h-9 w-9 rounded-full shadow-md"
+                  className="h-11 w-11 rounded-full shadow-md"
                   aria-label="Add to wishlist"
                 >
                   <Heart className="h-4 w-4" />

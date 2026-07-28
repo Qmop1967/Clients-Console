@@ -33,7 +33,8 @@
     "currency": {
       "iqd": "د.ع",
       "usd": "دۆلار"
-    }
+    },
+    "go": "بچە"
   },
   "auth": {
     "login": "چوونا ژوور",
@@ -134,10 +135,6 @@
   "products": {
     "title": "بەرهەم",
     "allProducts": "هەمی بەرهەم",
-    "photoAvailability": "وێنەیێن بەرهەمی",
-    "withPhotos": "ب وێنە",
-    "allPhotoStatuses": "هەمی دۆخێن وێنەیان",
-    "awaitingPhotos": "چاڤەڕێیا وێنەیان",
     "catalog": "کاتالۆگ",
     "searchPlaceholder": "ل بەرهەمان بگەڕە...",
     "inStock": "بەردەست",
@@ -210,7 +207,8 @@
     "brand": "براند",
     "minimumOrder": "کێمترین داخواز",
     "technicalSpecs": "تایبەتمەندیێن تەکنیکی",
-    "uses": "بکارئینان"
+    "uses": "بکارئینان",
+    "noResultsFor": "چ ئەنجام نینن بۆ “{query}”"
   },
   "orders": {
     "title": "داخواز",

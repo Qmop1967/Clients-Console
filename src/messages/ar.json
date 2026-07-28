@@ -37,7 +37,8 @@
     "brandStore": "المتجر الإلكتروني",
     "brandCompany": "شركة يد العنكبوت التقنية للتجارة العامة محدودة المسؤولية",
     "whatsappSales": "واتساب المبيعات",
-    "whatsappPrefill": "مرحباً، لدي استفسار عن منتجاتكم"
+    "whatsappPrefill": "مرحباً، لدي استفسار عن منتجاتكم",
+    "go": "اذهب"
   },
   "auth": {
     "login": "تسجيل الدخول",
@@ -157,10 +158,6 @@
   "products": {
     "title": "المنتجات",
     "allProducts": "جميع المنتجات",
-    "photoAvailability": "صور المنتجات",
-    "withPhotos": "مع صور",
-    "allPhotoStatuses": "جميع حالات الصور",
-    "awaitingPhotos": "بانتظار الصور",
     "catalog": "الكتالوج",
     "searchPlaceholder": "البحث عن منتجات...",
     "inStock": "متوفر",
@@ -261,7 +258,8 @@
     "promoAria": "عروض المتجر",
     "quickReorderHint": "تابع طلباتك وأعد الطلب",
     "quickStatementHint": "رصيدك وحركاتك",
-    "quickInvoicesHint": "فواتيرك وتفاصيلها"
+    "quickInvoicesHint": "فواتيرك وتفاصيلها",
+    "noResultsFor": "لا توجد نتائج لـ “{query}”"
   },
   "orders": {
     "title": "الطلبات",

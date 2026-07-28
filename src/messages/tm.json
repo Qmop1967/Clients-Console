@@ -33,7 +33,8 @@
     "currency": {
       "iqd": "IQD",
       "usd": "Dolar"
-    }
+    },
+    "go": "Git"
   },
   "auth": {
     "login": "Giriş yap",
@@ -134,10 +135,6 @@
   "products": {
     "title": "Ürünler",
     "allProducts": "Tüm ürünler",
-    "photoAvailability": "Ürün fotoğrafları",
-    "withPhotos": "Fotoğraflı",
-    "allPhotoStatuses": "Tüm fotoğraf durumları",
-    "awaitingPhotos": "Fotoğraf bekliyor",
     "catalog": "Katalog",
     "searchPlaceholder": "Ürün ara...",
     "inStock": "Stokta var",
@@ -210,7 +207,8 @@
     "brand": "Marka",
     "minimumOrder": "Minimum sipariş",
     "technicalSpecs": "Teknik özellikler",
-    "uses": "Kullanım alanları"
+    "uses": "Kullanım alanları",
+    "noResultsFor": "“{query}” üçin netije ýok"
   },
   "orders": {
     "title": "Siparişler",

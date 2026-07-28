@@ -189,6 +189,9 @@ interface NumberedPaginationProps {
   className?: string;
 }
 
+// Max page buttons rendered before the list collapses into ellipses.
+const MAX_VISIBLE_PAGES = 7;
+
 export function NumberedPagination({
   currentPage,
   totalPages,
@@ -198,12 +201,13 @@ export function NumberedPagination({
   const t = useTranslations("common");
   const [goToPage, setGoToPage] = useState("");
 
+  // Clamp rather than silently ignore: typing 99 used to do nothing at all, with no
+  // message and the value left sitting in the box.
   const handleGoToPage = useCallback(() => {
     const pageNum = parseInt(goToPage, 10);
-    if (pageNum >= 1 && pageNum <= totalPages) {
-      onPageChange(pageNum);
-      setGoToPage("");
-    }
+    if (!Number.isFinite(pageNum)) return;
+    onPageChange(Math.min(Math.max(pageNum, 1), totalPages));
+    setGoToPage("");
   }, [goToPage, totalPages, onPageChange]);
 
   const handleKeyDown = useCallback(
@@ -220,7 +224,7 @@ export function NumberedPagination({
   // Generate page numbers with ellipsis
   const getPageNumbers = (): (number | "...")[] => {
     const pages: (number | "...")[] = [];
-    const maxVisible = 7; // Max page buttons to show
+    const maxVisible = MAX_VISIBLE_PAGES; // Max page buttons to show
 
     if (totalPages <= maxVisible) {
       for (let i = 1; i <= totalPages; i++) {
@@ -261,21 +265,24 @@ export function NumberedPagination({
 
   return (
     <div className={cn("flex flex-col items-center justify-center gap-4 w-full", className)}>
-      {/* Main pagination row - centered, force LTR for consistent arrow direction */}
-      <div className="flex items-center justify-center gap-2" dir="ltr">
-        {/* Previous Arrow - Always on LEFT */}
+      {/* Main pagination row. FIX: this used to be dir="ltr", which put "previous" on
+          the physical left on an RTL page while Pagination/SimplePagination (orders,
+          invoices, payments) mirror correctly — two opposite conventions in one
+          session. Follow the DOM order and rotate the chevrons like they do. */}
+      <div className="flex items-center justify-center gap-2">
+        {/* Previous Arrow - leading edge (right in RTL, left in LTR) */}
         <button
           onClick={() => hasPrevious && onPageChange(currentPage - 1)}
           disabled={!hasPrevious}
           className={cn(
-            "flex h-10 w-10 items-center justify-center rounded-full transition-all border",
+            "flex h-11 w-11 items-center justify-center rounded-full transition-all border",
             hasPrevious
               ? "border-border bg-background hover:bg-muted cursor-pointer text-foreground"
               : "border-transparent bg-muted/50 text-muted-foreground/40 cursor-not-allowed"
           )}
           aria-label={t("previous")}
         >
-          <ChevronLeft className="h-5 w-5" strokeWidth={1} />
+          <ChevronLeft className="h-5 w-5 rtl:rotate-180" strokeWidth={1} />
         </button>
 
         {/* Page Numbers */}
@@ -284,7 +291,7 @@ export function NumberedPagination({
             page === "..." ? (
               <span
                 key={`ellipsis-${index}`}
-                className="flex h-10 w-10 items-center justify-center text-muted-foreground"
+                className="flex h-11 w-11 items-center justify-center text-muted-foreground"
               >
                 ...
               </span>
@@ -295,7 +302,7 @@ export function NumberedPagination({
                 aria-label={`${t("page")} ${page}`}
                 aria-current={currentPage === page ? "page" : undefined}
                 className={cn(
-                  "flex h-10 min-w-10 px-3 items-center justify-center rounded-full font-medium transition-all border",
+                  "flex h-11 min-w-11 px-3 items-center justify-center rounded-full font-medium transition-all border",
                   currentPage === page
                     ? "bg-primary text-primary-foreground border-primary shadow-md"
                     : "border-border bg-background hover:bg-muted text-foreground"
@@ -307,40 +314,61 @@ export function NumberedPagination({
           )}
         </div>
 
-        {/* Next Arrow - Always on RIGHT */}
+        {/* Next Arrow - trailing edge (left in RTL, right in LTR) */}
         <button
           onClick={() => hasNext && onPageChange(currentPage + 1)}
           disabled={!hasNext}
           className={cn(
-            "flex h-10 w-10 items-center justify-center rounded-full transition-all border",
+            "flex h-11 w-11 items-center justify-center rounded-full transition-all border",
             hasNext
               ? "border-border bg-background hover:bg-muted cursor-pointer text-foreground"
               : "border-transparent bg-muted/50 text-muted-foreground/40 cursor-not-allowed"
           )}
           aria-label={t("next")}
         >
-          <ChevronRight className="h-5 w-5" strokeWidth={1} />
+          <ChevronRight className="h-5 w-5 rtl:rotate-180" strokeWidth={1} />
         </button>
       </div>
 
-      {/* Go to Page Input - separate row for cleaner look */}
-      <div className="flex items-center gap-2">
-        <span className="text-sm text-muted-foreground whitespace-nowrap">
-          {t("goToPage")}
-        </span>
-        <Input
-          type="number"
-          min={1}
-          max={totalPages}
-          value={goToPage}
-          onChange={(e) => setGoToPage(e.target.value)}
-          onKeyDown={handleKeyDown}
-          className="w-16 h-9 text-center rounded-lg border-border"
-          placeholder="..."
-          aria-label={t("goToPage")}
-        />
-        <span className="text-sm text-muted-foreground">/ {totalPages}</span>
-      </div>
+      {/* Go to Page — only worth showing once the numbered buttons stop covering every
+          page (getPageNumbers renders all of them up to maxVisible = 7). Below that it
+          was pure noise: a "go to page" field directly under the buttons 1 2 3.
+          Wrapped in a <form> so iOS Safari shows a Go key on the numeric keypad —
+          onKeyDown="Enter" alone left the control unusable on phones. */}
+      {totalPages > MAX_VISIBLE_PAGES && (
+        <form
+          className="flex items-center gap-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            handleGoToPage();
+          }}
+        >
+          <span className="text-sm text-muted-foreground whitespace-nowrap">
+            {t("goToPage")}
+          </span>
+          <Input
+            type="number"
+            inputMode="numeric"
+            min={1}
+            max={totalPages}
+            value={goToPage}
+            onChange={(e) => setGoToPage(e.target.value)}
+            onKeyDown={handleKeyDown}
+            className="w-16 h-11 text-center text-base sm:text-sm rounded-lg border-border"
+            placeholder="..."
+            aria-label={t("goToPage")}
+          />
+          {/* dir="ltr": in an RTL paragraph the neutral "/" reorders to the right of
+              the digit, so Arabic customers saw a dangling "3 /". */}
+          <span className="text-sm text-muted-foreground" dir="ltr">/ {totalPages}</span>
+          <button
+            type="submit"
+            className="h-11 px-4 rounded-lg border border-border bg-background text-sm font-medium hover:bg-muted transition-colors"
+          >
+            {t("go")}
+          </button>
+        </form>
+      )}
     </div>
   );
 }

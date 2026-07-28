@@ -1344,3 +1344,15 @@
 html {
   font-size: calc(16px * var(--font-scale, 1)) !important;
 }
+
+/* iOS Safari zooms the viewport whenever a focused field's font-size is under 16px.
+   Every shadcn input/select is text-sm (14px), so tapping the shop search or the
+   go-to-page box jerked the page into a zoomed state the customer had to pinch out
+   of — on every single search. Desktop keeps the compact 14px. */
+@media (max-width: 767px) {
+  input:not([type="checkbox"]):not([type="radio"]),
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}

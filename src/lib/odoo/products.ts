@@ -325,6 +325,21 @@ export async function getApprovedPublicProductImages(
   return result;
 }
 
+/**
+ * Resolve the image a storefront card should show.
+ *
+ * Order: DAM-approved public media -> the product's own Odoo image -> the
+ * deterministic ?ph=1 SVG placeholder (already applied by odooProductToProduct).
+ *
+ * CHANGED 2026-07-28: this used to hard-refuse the Odoo image, which meant only the
+ * 77 templates carrying DAM media rendered a real photo — the other ~1370 sellable
+ * products all collapsed to product-placeholder.svg. Combined with the (now removed)
+ * photo filter, the public shop had shrunk to 3 pages.
+ *
+ * `public_image_id` is still set ONLY for DAM assets. External feeds (the TikTok
+ * catalog in api/catalog/tiktok/feed.csv) gate on that field, so raw Odoo imagery
+ * never leaks into a third-party catalog — it is on-site only.
+ */
 function applyPublicImage(
   product: Product,
   image: ApprovedPublicProductImage | undefined
@@ -332,10 +347,9 @@ function applyPublicImage(
   return {
     ...product,
     sku: String(product.sku || '').trim() || `ODOO-PP-${product.item_id}`,
-    // Never fall back to Odoo's raw product image for an anonymous page.
-    image_url: image?.url || '/images/product-placeholder.svg',
-    list_image_url: image?.thumbnailUrl || '/images/product-placeholder.svg',
-    image_version: undefined,
+    image_url: image?.url || product.image_url,
+    list_image_url: image?.thumbnailUrl || product.image_url,
+    image_version: image ? undefined : product.image_version,
     public_image_id: image?.id,
     public_image_version: image?.version,
   };
@@ -362,11 +376,16 @@ export async function getAllPublicProducts(lang?: string): Promise<
     const templateIds = products
       .map((p) => Array.isArray(p.product_tmpl_id) ? p.product_tmpl_id[0] : 0)
       .filter((id) => id > 0);
-    const imageMap = await getApprovedPublicProductImages(templateIds);
+    // Both lookups feed applyPublicImage: DAM media wins, the Odoo image_version is
+    // the fallback that keeps the rest of the catalog from rendering as placeholders.
+    const [imageMap, versionMap] = await Promise.all([
+      getApprovedPublicProductImages(templateIds),
+      fetchImageVersions(products),
+    ]);
 
     return products.map((p) => {
       const templateId = Array.isArray(p.product_tmpl_id) ? p.product_tmpl_id[0] : 0;
-      return applyPublicImage(odooProductToProduct(p), imageMap.get(templateId));
+      return applyPublicImage(odooProductToProduct(p, versionMap), imageMap.get(templateId));
     });
   } catch (error) {
     console.error('[Odoo Products] Error fetching public products:', error);
@@ -396,8 +415,11 @@ export async function getPublicProductByIdStrict(
   if (!products.length) return null;
   const raw = products[0];
   const templateId = Array.isArray(raw.product_tmpl_id) ? raw.product_tmpl_id[0] : 0;
-  const imageMap = await getApprovedPublicProductImages(templateId ? [templateId] : []);
-  return applyPublicImage(odooProductToProduct(raw), imageMap.get(templateId));
+  const [imageMap, versionMap] = await Promise.all([
+    getApprovedPublicProductImages(templateId ? [templateId] : []),
+    fetchImageVersions(products),
+  ]);
+  return applyPublicImage(odooProductToProduct(raw, versionMap), imageMap.get(templateId));
 }
 
 export const getPublicProductByIdStrictCached = cache(

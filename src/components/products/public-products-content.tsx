@@ -26,12 +26,9 @@ import { cn } from "@/lib/utils/cn";
 import { formatCurrency } from "@/lib/utils/format";
 import {
   filterAndSortShopProducts,
-  matchesPhotoFilter,
   matchesStockFilter,
-  normalizePhotoFilter,
   normalizeStockFilter,
   selectImageReadyNewArrivals,
-  type PhotoFilter,
   type ShopSortOption,
   type StockFilter,
 } from "@/lib/shop-product-list";
@@ -483,7 +480,6 @@ export function PublicProductsContent({
   const searchFromUrl = searchParams.get("q") || "";
   const sortFromUrl = (searchParams.get("sort") as SortOption) || "newest";
   const stockFromUrl = normalizeStockFilter(searchParams.get("stock"));
-  const photosFromUrl = normalizePhotoFilter(searchParams.get("photos"));
   const ppFromUrlRaw = parseInt(searchParams.get("pp") || String(DEFAULT_PER_PAGE), 10);
   const ppFromUrl = PER_PAGE_OPTIONS.includes(ppFromUrlRaw) ? ppFromUrlRaw : DEFAULT_PER_PAGE;
 
@@ -491,26 +487,46 @@ export function PublicProductsContent({
   const [currentPage, setCurrentPage] = useState(pageFromUrl);
   const [sortBy, setSortBy] = useState<SortOption>(sortFromUrl);
   const [stockFilter, setStockFilter] = useState<StockFilter>(stockFromUrl);
-  const [photoFilter, setPhotoFilter] = useState<PhotoFilter>(photosFromUrl);
+
+  // History strategy (BUGFIX: Back button used to leave the shop entirely).
+  // Typing in the search box only ever REPLACES the current entry — one entry per
+  // keystroke would make Back useless. Discrete actions (page, sort, availability,
+  // per-page) PUSH, so Back steps back through them like a customer expects.
+  const historyModeRef = useRef<"push" | "replace">("replace");
+  // Tracks the last `q` this component itself wrote into the URL, so the
+  // URL-to-state sync below can tell an external navigation (header search)
+  // apart from our own write echoing back.
+  const lastWrittenQueryRef = useRef(searchFromUrl);
   const [perPage, setPerPage] = useState<number>(ppFromUrl);
 
   const handlePerPageChange = (value: string) => {
     const pp = parseInt(value, 10);
     if (!PER_PAGE_OPTIONS.includes(pp)) return;
+    historyModeRef.current = "push";
     setPerPage(pp);
     setCurrentPage(1);
   };
 
   const handleStockFilterChange = (value: string) => {
     const nextFilter = normalizeStockFilter(value);
+    historyModeRef.current = "push";
     setStockFilter(nextFilter);
     setCurrentPage(1);
   };
 
-  const handlePhotoFilterChange = (value: string) => {
-    const nextFilter = normalizePhotoFilter(value);
-    setPhotoFilter(nextFilter);
+  const handleSortChange = (value: string) => {
+    historyModeRef.current = "push";
+    setSortBy(value as SortOption);
+  };
+
+  // Clears every filter at once — used by the empty state so a customer can never
+  // be stranded on "no products" with no way back to the catalog.
+  const resetAllFilters = () => {
+    historyModeRef.current = "push";
+    setSearchQuery("");
+    setStockFilter("in-stock");
     setCurrentPage(1);
+    onClearCategory?.();
   };
 
   // BUGFIX (sticky pagination): switching category is a SOFT navigation — this
@@ -572,12 +588,6 @@ export function PublicProductsContent({
       params.delete("stock");
     }
 
-    if (photoFilter !== "with-images") {
-      params.set("photos", photoFilter);
-    } else {
-      params.delete("photos");
-    }
-
     if (perPage !== DEFAULT_PER_PAGE) {
       params.set("pp", String(perPage));
     } else {
@@ -585,8 +595,25 @@ export function PublicProductsContent({
     }
 
     const newUrl = params.toString() ? `${pathname}?${params.toString()}` : pathname;
-    window.history.replaceState(null, "", newUrl);
-  }, [currentPage, searchQuery, sortBy, stockFilter, photoFilter, perPage, pathname, searchParams]);
+    lastWrittenQueryRef.current = searchQuery;
+    if (historyModeRef.current === "push") {
+      window.history.pushState(null, "", newUrl);
+    } else {
+      window.history.replaceState(null, "", newUrl);
+    }
+    historyModeRef.current = "replace";
+  }, [currentPage, searchQuery, sortBy, stockFilter, perPage, pathname, searchParams]);
+
+  // BUGFIX (header search was a no-op on the shop page): the site header pushes
+  // /shop?q=... which is a SOFT navigation — this component never unmounts, so
+  // `searchQuery` kept its mount-time value and the URL writer above then DELETED
+  // the query again. Adopt `q` whenever it changes to something we did not write.
+  useEffect(() => {
+    if (searchFromUrl === lastWrittenQueryRef.current) return;
+    lastWrittenQueryRef.current = searchFromUrl;
+    setSearchQuery(searchFromUrl);
+    setCurrentPage(1);
+  }, [searchFromUrl]);
 
   // Reset to page 1 when search or sort changes
   useEffect(() => {
@@ -595,18 +622,18 @@ export function PublicProductsContent({
     }
   }, [searchQuery, searchFromUrl, sortBy, sortFromUrl]);
 
-  // Filter and sort products
-  // Availability and photo readiness are applied before pagination. The default
-  // storefront therefore contains only orderable, photographed products. Buyers
-  // can explicitly switch to all products or the photography backlog.
+  // Filter and sort products.
+  // Availability is the ONLY catalog-narrowing filter. Photo readiness is a
+  // SORT signal, never a filter: filterAndSortShopProducts pushes products that
+  // are still awaiting photography to the end of the complete result set, so they
+  // land on the last pages instead of disappearing from the shop.
   const filteredProducts = useMemo(() => {
     return filterAndSortShopProducts(products, {
       query: deferredSearchQuery,
       sortBy,
       stockFilter,
-      photoFilter,
     });
-  }, [products, deferredSearchQuery, sortBy, stockFilter, photoFilter]);
+  }, [products, deferredSearchQuery, sortBy, stockFilter]);
 
   // Keep category chips aligned with the selected availability mode. A category
   // chip should never lead to an empty page merely because all of its items are
@@ -615,7 +642,6 @@ export function PublicProductsContent({
     const counts = new Map<string, number>();
     for (const product of allProducts) {
       if (!product.category_id || !matchesStockFilter(product, stockFilter)) continue;
-      if (!matchesPhotoFilter(product, photoFilter)) continue;
       counts.set(product.category_id, (counts.get(product.category_id) ?? 0) + 1);
     }
     return categories
@@ -625,7 +651,7 @@ export function PublicProductsContent({
         count: counts.get(category.category_id) ?? 0,
       }))
       .sort((a, b) => (b.count ?? 0) - (a.count ?? 0));
-  }, [allProducts, categories, stockFilter, photoFilter]);
+  }, [allProducts, categories, stockFilter]);
 
   // New Arrivals should merchandise products, not photography work-in-progress.
   // Missing-image items remain available at the end of the full product grid.
@@ -651,6 +677,7 @@ export function PublicProductsContent({
 
   // Pagination handlers
   const goToPage = (page: number) => {
+    historyModeRef.current = "push";
     setCurrentPage(page);
     // Land on the grid, not back up on the hero. #all-products already has scroll-mt-4.
     const anchor = document.getElementById("all-products");
@@ -715,18 +742,7 @@ export function PublicProductsContent({
               </SelectContent>
             </Select>
 
-            <Select value={photoFilter} onValueChange={handlePhotoFilterChange}>
-              <SelectTrigger className="w-full sm:w-[170px]" aria-label={t("photoAvailability")}>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="with-images">{t("withPhotos")}</SelectItem>
-                <SelectItem value="all">{t("allPhotoStatuses")}</SelectItem>
-                <SelectItem value="without-images">{t("awaitingPhotos")}</SelectItem>
-              </SelectContent>
-            </Select>
-
-            <Select value={sortBy} onValueChange={(value) => setSortBy(value as SortOption)}>
+            <Select value={sortBy} onValueChange={handleSortChange}>
               <SelectTrigger className="w-full sm:w-[180px]" aria-label={t("sortBy")}>
                 <SelectValue placeholder={t("sortBy")} />
               </SelectTrigger>
@@ -781,20 +797,21 @@ export function PublicProductsContent({
       </div>
 
       {/* Products Section */}
-      <div id="all-products" className="scroll-mt-4" />
+      <section id="all-products" className="scroll-mt-4" aria-labelledby="all-products-title">
+      <h2 id="all-products-title" className="sr-only">{t("allProducts")}</h2>
       {filteredProducts.length === 0 ? (
         <div className="py-12 flex flex-col items-center gap-4 text-center">
-          <p className="text-muted-foreground">{t("noProducts")}</p>
-          {/* Never a dead end: always offer the way back to the full catalog. */}
-          {(selectedCategory || searchQuery) && (
+          <p className="text-muted-foreground">
+            {searchQuery ? t("noResultsFor", { query: searchQuery }) : t("noProducts")}
+          </p>
+          {/* Never a dead end. The availability filter is included on purpose: with
+              it excluded, "Out of stock" + an empty result set stranded the customer
+              with no visible way back to the catalog. */}
+          {(selectedCategory || searchQuery || stockFilter !== "in-stock") && (
             <Button
               variant="outline"
               className="btn-press"
-              onClick={() => {
-                setSearchQuery("");
-                setCurrentPage(1);
-                onClearCategory?.();
-              }}
+              onClick={resetAllFilters}
             >
               <X className="h-4 w-4 me-1.5" />
               {t("clearFilter")}
@@ -845,6 +862,7 @@ export function PublicProductsContent({
           />
         </>
       )}
+      </section>
 
       {/* Login CTA - Only show for non-authenticated users */}
       {!isAuthenticated && (

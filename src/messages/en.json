@@ -37,7 +37,8 @@
     "brandStore": "Online Store",
     "brandCompany": "Tech Spider Hand Ltd Company",
     "whatsappSales": "Sales WhatsApp",
-    "whatsappPrefill": "Hello, I have a question about your products"
+    "whatsappPrefill": "Hello, I have a question about your products",
+    "go": "Go"
   },
   "auth": {
     "login": "Login",
@@ -157,10 +158,6 @@
   "products": {
     "title": "Products",
     "allProducts": "All Products",
-    "photoAvailability": "Product photos",
-    "withPhotos": "With photos",
-    "allPhotoStatuses": "All photo statuses",
-    "awaitingPhotos": "Awaiting photos",
     "catalog": "Catalog",
     "searchPlaceholder": "Search products...",
     "inStock": "In Stock",
@@ -261,7 +258,8 @@
     "promoAria": "Store promotions",
     "quickReorderHint": "Track orders & reorder",
     "quickStatementHint": "Balance & transactions",
-    "quickInvoicesHint": "Your invoices in detail"
+    "quickInvoicesHint": "Your invoices in detail",
+    "noResultsFor": "No results for “{query}”"
   },
   "orders": {
     "title": "Orders",

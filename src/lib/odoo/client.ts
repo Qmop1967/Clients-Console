@@ -167,20 +167,36 @@ export function getProductImageOrPlaceholderUrl(
  * GET /api/products/image-versions?ids=... -> { versions: { variantId: epochSeconds } }.
  * version 0 / absent => no image_1920 => placeholder. Non-fatal on error (returns {}).
  */
+// The gateway hard-caps ?ids= at 500 (`.slice(0, 500)` in tsh-api products.ts).
+// The full storefront catalog is ~1450 variants, so an unchunked call silently
+// dropped ~2/3 of the products to version 0 => placeholder. Chunk to stay inside
+// the cap (and to keep the query string well clear of the 16KB header limit).
+const IMAGE_VERSION_CHUNK = 500;
+
 export async function getImageVersions(productIds: number[]): Promise<Map<number, number>> {
   const out = new Map<number, number>();
   const ids = Array.from(new Set(productIds.filter((n) => Number.isInteger(n) && n > 0)));
   if (!ids.length) return out;
+
+  const chunks: number[][] = [];
+  for (let i = 0; i < ids.length; i += IMAGE_VERSION_CHUNK) {
+    chunks.push(ids.slice(i, i + IMAGE_VERSION_CHUNK));
+  }
+
   try {
-    const res = await fetch(`${GATEWAY_URL}/api/products/image-versions?ids=${ids.join(',')}`, {
-      method: 'GET',
-      headers: { 'x-api-key': requireApiKey() },
-      cache: 'no-store',
-    });
-    const data = await res.json();
-    if (data && data.success && data.versions) {
-      for (const [k, v] of Object.entries(data.versions as Record<string, number>)) {
-        if (v) out.set(parseInt(k, 10), v as number); // omit 0 => placeholder
+    const responses = await Promise.all(chunks.map(async (chunk) => {
+      const res = await fetch(`${GATEWAY_URL}/api/products/image-versions?ids=${chunk.join(',')}`, {
+        method: 'GET',
+        headers: { 'x-api-key': requireApiKey() },
+        cache: 'no-store',
+      });
+      return res.json();
+    }));
+    for (const data of responses) {
+      if (data && data.success && data.versions) {
+        for (const [k, v] of Object.entries(data.versions as Record<string, number>)) {
+          if (v) out.set(parseInt(k, 10), v as number); // omit 0 => placeholder
+        }
       }
     }
   } catch (err) {

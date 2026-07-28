@@ -1,5 +1,4 @@
 export type StockFilter = "in-stock" | "all" | "out-of-stock";
-export type PhotoFilter = "with-images" | "all" | "without-images";
 
 export type ShopSortOption =
   | "newest"
@@ -25,17 +24,11 @@ interface ShopListOptions {
   query: string;
   sortBy: ShopSortOption;
   stockFilter: StockFilter;
-  photoFilter: PhotoFilter;
 }
 
 export function normalizeStockFilter(value: string | null): StockFilter {
   if (value === "all" || value === "out-of-stock") return value;
   return "in-stock";
-}
-
-export function normalizePhotoFilter(value: string | null): PhotoFilter {
-  if (value === "all" || value === "without-images") return value;
-  return "with-images";
 }
 
 export function matchesStockFilter(
@@ -47,6 +40,17 @@ export function matchesStockFilter(
   return product.available_stock > 0;
 }
 
+/**
+ * True when the card will render a REAL product photo.
+ *
+ * Two distinct "no photo" shapes exist and both must be detected, otherwise the
+ * missing-photo products stop sinking to the last pages:
+ *   1. `/images/product-placeholder.svg` — the static asset used when a product has
+ *      neither DAM media nor an Odoo image.
+ *   2. `/api/images/<pp_id>?ph=1` — the gateway's deterministic colored SVG, returned
+ *      by getProductImageOrPlaceholderUrl() when the product has no image_1920.
+ *      This one LOOKS like a real image URL, so a suffix check alone misses it.
+ */
 export function hasProductImage(
   product: Pick<ShopListProduct, "image_url">
 ): boolean {
@@ -54,18 +58,14 @@ export function hasProductImage(
     return false;
   }
 
-  // Odoo maps missing DAM media to this public asset instead of returning null.
-  const imagePath = product.image_url.trim().toLocaleLowerCase().split(/[?#]/, 1)[0];
-  return !imagePath.endsWith("/images/product-placeholder.svg");
-}
+  const normalized = product.image_url.trim().toLocaleLowerCase();
+  const [pathAndQuery] = normalized.split("#");
+  const [path, query = ""] = pathAndQuery.split("?");
 
-export function matchesPhotoFilter(
-  product: Pick<ShopListProduct, "image_url">,
-  photoFilter: PhotoFilter
-): boolean {
-  if (photoFilter === "all") return true;
-  const hasImage = hasProductImage(product);
-  return photoFilter === "with-images" ? hasImage : !hasImage;
+  if (path.endsWith("/images/product-placeholder.svg")) return false;
+  if (/(?:^|&)ph=1(?:&|$)/.test(query)) return false;
+
+  return true;
 }
 
 function getCreatedAt(product: Pick<ShopListProduct, "create_date">): number {
@@ -86,15 +86,24 @@ export function selectImageReadyNewArrivals<T extends ShopListProduct>(
     .sort((a, b) => {
       const createdDifference = getCreatedAt(b) - getCreatedAt(a);
       if (createdDifference !== 0) return createdDifference;
-      return compareNewest(a, b);
+      return compareById(a, b);
     })
     .slice(0, limit);
 }
 
-function compareNewest(a: ShopListProduct, b: ShopListProduct): number {
+function compareById(a: ShopListProduct, b: ShopListProduct): number {
   const aId = Number.parseInt(a.item_id, 10);
   const bId = Number.parseInt(b.item_id, 10);
   return (Number.isFinite(bId) ? bId : 0) - (Number.isFinite(aId) ? aId : 0);
+}
+
+/**
+ * "Newest" must agree with the gold "New" badge, which is driven by create_date.
+ * Sorting by item_id alone put a freshly created product built on an OLD Odoo
+ * template near the bottom of "Newest" while still wearing the New badge.
+ */
+function compareNewest(a: ShopListProduct, b: ShopListProduct): number {
+  return (getCreatedAt(b) - getCreatedAt(a)) || compareById(a, b);
 }
 
 export function filterAndSortShopProducts<T extends ShopListProduct>(
@@ -104,7 +113,6 @@ export function filterAndSortShopProducts<T extends ShopListProduct>(
   const query = options.query.trim().toLocaleLowerCase();
   const filtered = products.filter((product) => {
     if (!matchesStockFilter(product, options.stockFilter)) return false;
-    if (!matchesPhotoFilter(product, options.photoFilter)) return false;
     if (!query) return true;
 
     return [product.name, product.sku, product.description, product.brand].some(
@@ -116,8 +124,9 @@ export function filterAndSortShopProducts<T extends ShopListProduct>(
     const aHasImage = hasProductImage(a);
     const bHasImage = hasProductImage(b);
 
-    // Image-ready products are always merchandised first. Because this comparator
-    // runs before pagination, missing-image cards naturally occupy the final pages.
+    // Photographed products are always merchandised first. Because this comparator
+    // runs BEFORE pagination, products still awaiting photography land on the final
+    // pages of the complete result set instead of being hidden or mixed into page 1.
     if (aHasImage !== bHasImage) return aHasImage ? -1 : 1;
 
     let result = 0;

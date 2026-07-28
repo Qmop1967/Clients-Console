@@ -33,7 +33,8 @@
     "currency": {
       "iqd": "د.ع",
       "usd": "دۆلار"
-    }
+    },
+    "go": "بڕۆ"
   },
   "auth": {
     "login": "چوونەژوورەوە",
@@ -134,10 +135,6 @@
   "products": {
     "title": "بەرهەمەکان",
     "allProducts": "هەموو بەرهەمەکان",
-    "photoAvailability": "وێنەی بەرهەم",
-    "withPhotos": "لەگەڵ وێنە",
-    "allPhotoStatuses": "هەموو دۆخەکانی وێنە",
-    "awaitingPhotos": "چاوەڕوانی وێنە",
     "catalog": "کەتەلۆگ",
     "searchPlaceholder": "گەڕان بۆ بەرهەمەکان...",
     "inStock": "بەردەستە",
@@ -210,7 +207,8 @@
     "brand": "براند",
     "minimumOrder": "کەمترین بڕی داواکاری",
     "technicalSpecs": "تایبەتمەندییە تەکنیکییەکان",
-    "uses": "بەکارهێنانەکان"
+    "uses": "بەکارهێنانەکان",
+    "noResultsFor": "هیچ ئەنجامێک نییە بۆ “{query}”"
   },
   "orders": {
     "title": "داواکارییەکان",
