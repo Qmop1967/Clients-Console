@@ -8,11 +8,23 @@ import {
   META_MEASUREMENT_CONSENT_MAX_AGE_SECONDS,
 } from '@/lib/analytics/meta-consent';
 import { isAllowedTshOrigin } from '@/lib/analytics/meta-policy';
+import { GEO_COUNTRY_HEADER, requiresPriorConsent } from '@/lib/analytics/consent-region';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const consentSchema = z.object({ status: z.enum(['accepted', 'rejected']) }).strict();
+/**
+ * `basis` says HOW the decision was reached:
+ *   explicit — the visitor clicked Accept/Reject.
+ *   implied  — legitimate interest, no click. Only honoured outside prior-consent regions.
+ * Omitted defaults to `explicit`, so older clients keep their exact previous behaviour.
+ */
+const consentSchema = z
+  .object({
+    status: z.enum(['accepted', 'rejected']),
+    basis: z.enum(['explicit', 'implied']).optional(),
+  })
+  .strict();
 
 export async function POST(request: NextRequest) {
   const origin = request.headers.get('origin');
@@ -26,7 +38,19 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid consent decision' }, { status: 400 });
   }
 
-  const response = NextResponse.json({ saved: true });
+  // Region gate. The server decides, not the browser: a client claiming `implied`
+  // from Frankfurt gets refused here even though it asked nicely.
+  const basis = parsed.data.basis ?? 'explicit';
+  if (
+    basis === 'implied' &&
+    parsed.data.status === 'accepted' &&
+    requiresPriorConsent(request.headers.get(GEO_COUNTRY_HEADER))
+  ) {
+    // Not an error — a lawful refusal. The client falls back to the opt-in banner.
+    return NextResponse.json({ saved: false, priorConsentRequired: true });
+  }
+
+  const response = NextResponse.json({ saved: true, basis });
   const cookieBase = {
     name: META_MEASUREMENT_CONSENT_COOKIE,
     httpOnly: true,
