@@ -3,7 +3,6 @@ import { auth } from '@/lib/auth/auth';
 import { createSalesOrder } from '@/lib/odoo/orders';
 import { z } from 'zod';
 import crypto from 'crypto';
-import { canSendMetaServerEvent, sendMetaServerEvent } from '@/lib/analytics/meta-server';
 import {
   hasValidMetaMeasurementConsent,
   META_MEASUREMENT_CONSENT_COOKIE,
@@ -12,6 +11,7 @@ import {
   buildAuthoritativeMetaPurchaseData,
   createOpaqueMetaPurchaseEventId,
 } from '@/lib/analytics/meta-purchase';
+import { enqueueMetaPurchase } from '@/lib/analytics/meta-purchase-outbox';
 import { normalizeTshMeasurementUrl } from '@/lib/analytics/meta-policy';
 
 export const maxDuration = 60;
@@ -170,23 +170,20 @@ export async function POST(request: NextRequest) {
           custom_data: customData,
         };
 
-        if (canSendMetaServerEvent('Purchase')) {
-          const userAgent = request.headers.get('user-agent')?.trim();
-          if (userAgent) {
-            try {
-              await sendMetaServerEvent({
-                eventName: 'Purchase',
-                eventId,
-                eventSourceUrl,
-                clientIp: undefined,
-                clientUserAgent: userAgent,
-                fbp: request.cookies.get('_fbp')?.value,
-                fbc: request.cookies.get('_fbc')?.value,
-                customData,
-              });
-            } catch {
-              console.error('[Checkout] Meta CAPI Purchase delivery failed safely');
-            }
+        const userAgent = request.headers.get('user-agent')?.trim();
+        if (userAgent) {
+          try {
+            await enqueueMetaPurchase({
+              eventId,
+              eventSourceUrl,
+              clientIp: undefined,
+              clientUserAgent: userAgent,
+              fbp: request.cookies.get('_fbp')?.value,
+              fbc: request.cookies.get('_fbc')?.value,
+              customData,
+            });
+          } catch {
+            console.error('[Checkout] Meta CAPI Purchase enqueue failed safely');
           }
         }
       } catch {

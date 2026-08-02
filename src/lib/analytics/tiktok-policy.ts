@@ -2,8 +2,9 @@
  * TikTok commerce-event payload policy for TSH.
  *
  * The policy is intentionally PII-free and keeps catalog identifiers exact. TikTok's
- * web-event currency list does not currently include IQD, so monetary fields are
- * omitted for IQD instead of sending an invalid currency or inventing a conversion.
+ * web-event currency list does not currently include IQD. IQD money is converted to
+ * USD only when a governed IQD-per-USD rate is explicitly configured; otherwise it is
+ * omitted instead of sending an invalid currency or inventing a conversion.
  */
 
 export interface TikTokContentItem {
@@ -38,11 +39,22 @@ function cleanText(value: unknown, maxLength: number): string | undefined {
 
 /**
  * TSH currently advertises from a USD TikTok ad account while the storefront is in
- * IQD. USD values may be sent as-is; IQD values are deliberately omitted until a
- * governed server-side FX source is introduced.
+ * IQD. The public rate is a non-secret build-time setting and must mirror the current
+ * governed Odoo rate. Invalid/missing rates fail closed by omitting monetary fields.
  */
-function supportsTikTokMoney(currency: unknown): currency is string {
-  return typeof currency === 'string' && currency.trim().toUpperCase() === 'USD';
+function configuredIqdPerUsd(): number | undefined {
+  const value = Number(process.env.NEXT_PUBLIC_TIKTOK_IQD_PER_USD || '');
+  return Number.isFinite(value) && value >= 100 && value <= 100_000 ? value : undefined;
+}
+
+function moneyConverter(currency: unknown): ((value: number) => number) | undefined {
+  if (typeof currency !== 'string') return undefined;
+  const normalized = currency.trim().toUpperCase();
+  if (normalized === 'USD') return (value) => value;
+  if (normalized !== 'IQD') return undefined;
+  const iqdPerUsd = configuredIqdPerUsd();
+  if (!iqdPerUsd) return undefined;
+  return (value) => Math.round((value / iqdPerUsd) * 100) / 100;
 }
 
 export function sanitizeTikTokProperties(
@@ -64,7 +76,7 @@ export function sanitizeTikTokProperties(
 
   properties.content_ids?.forEach(addContentId);
 
-  const allowMoney = supportsTikTokMoney(properties.currency);
+  const convertMoney = moneyConverter(properties.currency);
   const contents = properties.contents
     ?.filter(
       (item) =>
@@ -85,7 +97,7 @@ export function sanitizeTikTokProperties(
       const price = finiteNonNegative(item.price);
       if (name) content.content_name = name;
       if (category) content.content_category = category;
-      if (allowMoney && price !== undefined) content.price = price;
+      if (convertMoney && price !== undefined) content.price = convertMoney(price);
       return content;
     });
 
@@ -98,10 +110,10 @@ export function sanitizeTikTokProperties(
   if (contentName) clean.content_name = contentName;
   if (contentCategory) clean.content_category = contentCategory;
 
-  if (allowMoney) {
+  if (convertMoney) {
     clean.currency = 'USD';
     const value = finiteNonNegative(properties.value);
-    if (value !== undefined) clean.value = value;
+    if (value !== undefined) clean.value = convertMoney(value);
   }
 
   return clean;

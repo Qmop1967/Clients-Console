@@ -12,6 +12,7 @@
     "test:auth-routes": "node --experimental-strip-types --test tests/auth-route-policy.test.mjs",
     "test:shop-products": "node --experimental-strip-types --test tests/shop-product-list.test.mjs",
     "test:tiktok-analytics": "node --experimental-strip-types --test tests/tiktok-analytics-policy.test.mjs",
+    "test:meta-outbox": "node --experimental-strip-types --test tests/meta-purchase-outbox.test.mjs",
     "analyze": "ANALYZE=true next build",
     "verify-upstash": "node scripts/verify-upstash.js",
     "index-products": "node scripts/index-products.js",

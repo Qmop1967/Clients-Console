@@ -27,6 +27,7 @@ export interface MetaServerCustomData {
 export interface MetaServerEventInput {
   eventName: MetaServerEventName;
   eventId: string;
+  eventTime?: number;
   eventSourceUrl: string;
   customData?: MetaServerCustomData;
   clientIp?: string;
@@ -41,6 +42,8 @@ export interface MetaServerEventResult {
   sent: boolean;
   eventsReceived?: number;
 }
+
+export type MetaServerDeliveryOrigin = 'direct' | 'durable_outbox';
 
 const PIXEL_ID = process.env.META_PIXEL_ID || process.env.NEXT_PUBLIC_META_PIXEL_ID || '';
 const ACCESS_TOKEN = process.env.META_CAPI_ACCESS_TOKEN || '';
@@ -76,13 +79,16 @@ export function isMetaCapiConfigured(): boolean {
 
 export function canSendMetaServerEvent(
   eventName: MetaServerEventName,
-  testSessionAuthorized = false
+  testSessionAuthorized = false,
+  deliveryOrigin: MetaServerDeliveryOrigin = 'direct'
 ): boolean {
   if (!isMetaCapiConfigured()) return false;
-  // Purchase requires a durable outbox/retry ledger before it can be sent
-  // safely. Keep it hard-disabled even if an environment allowlist is edited.
   if (eventName === 'Purchase') {
-    return false;
+    return (
+      MODE === 'production' &&
+      deliveryOrigin === 'durable_outbox' &&
+      PRODUCTION_EVENTS.has('Purchase')
+    );
   }
   if (MODE === 'test') {
     return eventName === 'ViewContent' && testSessionAuthorized;
@@ -163,12 +169,19 @@ function cleanCustomData(
 }
 
 export async function sendMetaServerEvent(
-  input: MetaServerEventInput
+  input: MetaServerEventInput,
+  deliveryOrigin: MetaServerDeliveryOrigin = 'direct'
 ): Promise<MetaServerEventResult> {
   if (!isMetaCapiConfigured()) {
     return { configured: false, sent: false };
   }
-  if (!canSendMetaServerEvent(input.eventName, input.testSessionAuthorized === true)) {
+  if (
+    !canSendMetaServerEvent(
+      input.eventName,
+      input.testSessionAuthorized === true,
+      deliveryOrigin
+    )
+  ) {
     return { configured: true, sent: false };
   }
 
@@ -195,9 +208,19 @@ export async function sendMetaServerEvent(
   if (fbc) userData.fbc = fbc;
 
   const customData = cleanCustomData(input.customData);
+  const nowSeconds = Math.floor(Date.now() / 1000);
+  const eventTime = input.eventTime ?? nowSeconds;
+  if (
+    !Number.isSafeInteger(eventTime) ||
+    eventTime <= 0 ||
+    eventTime > nowSeconds + 5 * 60 ||
+    nowSeconds - eventTime > 7 * 24 * 60 * 60
+  ) {
+    throw new Error('Invalid Meta event time');
+  }
   const event = {
     event_name: input.eventName,
-    event_time: Math.floor(Date.now() / 1000),
+    event_time: eventTime,
     event_id: input.eventId,
     event_source_url: eventSourceUrl,
     action_source: 'website',
