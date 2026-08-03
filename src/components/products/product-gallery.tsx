@@ -269,6 +269,11 @@ export function ProductGallery({
               fill
               className="object-contain transition-transform duration-500 group-hover:scale-105"
               sizes="(max-width: 1024px) 100vw, 50vw"
+              // QUALITY(2026-08-03): next/image defaults to q75 and RE-ENCODES the
+              // CDN rendition, adding a third lossy generation on top of the DAM's
+              // own WebP. 90 is the point where that second pass stops being
+              // visible on product labels and Arabic spec text.
+              quality={90}
               priority={activeIdx === 0}
               onError={(e) => {
                 const target = e.currentTarget as HTMLImageElement;
@@ -491,6 +496,9 @@ export function ProductGallery({
                 fill
                 className="object-contain"
                 sizes="(max-width: 1280px) 100vw, 1280px"
+                // Zoom view: the customer opened this specifically to inspect
+                // detail, so spend the bytes.
+                quality={95}
                 priority
               />
             )}
