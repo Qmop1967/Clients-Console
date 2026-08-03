@@ -141,7 +141,12 @@ function odooProductToProduct(p: OdooProduct, versionMap?: Map<number, number>):
     // Versioned URL busts browser/edge cache on set-main/unset-main.
     // No version (no image_1920 attachment) => deterministic SVG placeholder (?ph=1),
     // instead of the old null => local gray box. Always pp_id (BAN-IMG-CLI-1).
-    image_url: getProductImageOrPlaceholderUrl(p.id, '256x256', imageVersion),
+    // FIX(2026-08-03): 256x256 -> 512x512. Cards render at ~150-200 CSS px, which is
+    // 300-600 device px on every phone the storefront actually runs on, so a 256px
+    // source was upscaled (and visibly soft) for literally every customer. 512 is the
+    // first size that survives a 2x screen; the gateway still Redis-caches it
+    // (its cache bound is <=512), so Odoo load is unchanged.
+    image_url: getProductImageOrPlaceholderUrl(p.id, '512x512', imageVersion),
     image_version: imageVersion,
     minimum_quantity: undefined,
     alias_name: p.x_alias_name ? String(p.x_alias_name) : undefined,
@@ -568,7 +573,7 @@ export function getProductImageUrl(item: Product): string | null {
   if (item.item_id) {
     // No image_version => deterministic SVG placeholder (?ph=1) rather than a real-image
     // request that 404s into the gray box. pp_id per gateway contract (BAN-IMG-CLI-1).
-    return getProductImageOrPlaceholderUrl(parseInt(item.item_id, 10), '256x256', item.image_version);
+    return getProductImageOrPlaceholderUrl(parseInt(item.item_id, 10), '512x512', item.image_version);
   }
   return null;
 }

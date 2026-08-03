@@ -41,6 +41,18 @@ import {
 } from "@/lib/analytics/meta";
 import { trackEvent as trackTikTokEvent } from "@/lib/analytics/tiktok";
 
+// FIX(2026-08-03): product.image_url is built at 256x256 — correct for a grid
+// tile, and the reason the product PAGE looked soft: a 256px Odoo image was being
+// stretched across a half-viewport gallery. This only bites products whose DAM
+// media is not `public`, because then ProductGallery falls back to this URL
+// instead of using the (full-resolution) DAM renditions.
+// Swapping the size token is enough — /api/images forwards it straight to Odoo's
+// /web/image resizer.
+function hiResImageUrl(url: string | null): string | null {
+  if (!url) return null;
+  return url.replace(/([?&]size=)\d+x\d+/, "$11920x1920");
+}
+
 interface ProductDetailProps {
   product: {
     item_id: string;
@@ -275,7 +287,7 @@ export function ProductDetailContent({ product, locale, canOrder, showExactStock
               <ProductGallery
                 productId={product.item_id}
                 productName={product.name}
-                fallbackImageUrl={product.image_url}
+                fallbackImageUrl={hiResImageUrl(product.image_url)}
               />
 
               {/* Stock Badge overlay */}
