@@ -188,6 +188,7 @@ export function MarketingFooter({ locale }: { locale: string }) {
             { href: "/contact-us", ar: "تواصل معنا", en: "Contact us" },
             { href: "/privacy", ar: "سياسة الخصوصية", en: "Privacy policy" },
             { href: "/terms", ar: "الشروط والأحكام", en: "Terms of service" },
+            { href: "/whatsapp-policy", ar: "سياسة رسائل واتساب", en: "WhatsApp policy" },
           ].map((l) => (
             <Link key={l.href} href={`/${locale}${l.href}`} className="flex min-h-11 items-center text-muted-foreground hover:text-foreground">
               {isAr ? l.ar : l.en}

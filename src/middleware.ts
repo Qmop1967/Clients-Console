@@ -18,7 +18,7 @@ const intlMiddleware = createIntlMiddleware({
 // shop-window and MUST stay reachable with no session. Trading stays gated.
 // Exact segment match at depth 2 only — publicPaths uses substring matching, which would
 // leak deeper routes.
-const PUBLIC_MARKETING = new Set(['about', 'catalog', 'contact-us', 'privacy', 'terms', 'wholesale']);
+const PUBLIC_MARKETING = new Set(['about', 'catalog', 'contact-us', 'privacy', 'terms', 'whatsapp-policy', 'wholesale']);
 const PUBLIC_MARKETING_NESTED = new Set(['wholesale/ac-adapters']);
 
 // BROWSER_LOCALE_DETECT_2026_07_22: pick the landing locale for the bare domain.
