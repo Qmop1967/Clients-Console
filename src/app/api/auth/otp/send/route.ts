@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { generateOTP, normalizePhone, whatsappNumber, isRateLimited, storeOTP } from '@/lib/otp-store';
-import { sendWhatsAppOTP, isDevMode } from '@/lib/whatsapp';
 
 // Search customer in Odoo by phone via Gateway
 async function findCustomerByPhone(phone: string): Promise<boolean> {
@@ -122,36 +121,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const otp = generateOTP();
-    storeOTP(cleaned, otp);
+    // WhatsApp OTP removed 2026-08-08: the unofficial WhatsApp API behind it was
+    // decommissioned for Meta ToS compliance and no official Cloud API sender exists yet.
+    // Reuse the pre-existing, already-handled email fallback contract so the login UI
+    // behaves exactly as it did whenever WhatsApp was down — no new client code needed.
+    return NextResponse.json({
+      success: false,
+      fallback: 'email',
+      phone: cleaned,
+      message: 'تسجيل الدخول عبر الواتساب غير متاح. يرجى تسجيل الدخول عبر البريد الإلكتروني',
+      errorCode: 'whatsapp_down',
+    }, { status: 200 });
 
-    const waNumber = whatsappNumber(cleaned);
-    const result = await sendWhatsAppOTP(waNumber, otp);
-
-    if (!result.success) {
-      console.error('[OTP Send] WhatsApp failed:', result.error);
-      // WhatsApp down — redirect to email login (Firebase SMS disabled: billing-not-enabled)
-      return NextResponse.json({
-        success: false,
-        fallback: 'email',
-        phone: cleaned,
-        message: 'خدمة الواتساب غير متاحة حالياً، يرجى تسجيل الدخول عبر البريد الإلكتروني',
-        errorCode: 'whatsapp_down',
-      }, { status: 200 });
-    }
-
-    console.log('[OTP Send] ✅ OTP sent to:', cleaned, isDevMode() ? `(DEV: ${otp})` : '');
-
-    const response: Record<string, unknown> = {
-      success: true,
-      message: 'تم إرسال رمز التحقق على الواتساب',
-    };
-
-    if (isDevMode()) {
-      response.devOtp = otp;
-    }
-
-    return NextResponse.json(response);
   } catch (error) {
     console.error('[OTP Send] Error:', error);
     return NextResponse.json(

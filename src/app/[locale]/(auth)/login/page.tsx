@@ -186,30 +186,16 @@ export default function LoginPage() {
   const [whatsappReason, setWhatsappReason] = useState<string | null>(null);
   const autoSwitchedRef = useRef(false);
 
-  // Poll WhatsApp health every 30s, auto-switch to email if degraded
+  // WhatsApp login removed 2026-08-08: the unofficial WhatsApp transport it relied on
+  // was decommissioned for Meta ToS compliance. No health endpoint is polled any more;
+  // phone/WhatsApp OTP is unavailable and the UI switches to email login on mount.
   useEffect(() => {
-    let cancelled = false;
-    const fetchHealth = async () => {
-      try {
-        const res = await fetch("/api/whatsapp/health", { cache: "no-store" });
-        if (!res.ok) return;
-        const data = await res.json();
-        if (cancelled) return;
-        const available = !!data?.ui?.whatsapp_available;
-        setWhatsappAvailable(available);
-        setWhatsappReason(data?.ui?.reason || null);
-        // Auto-switch to email ONCE when first detected as down (don't fight user)
-        if (!available && !autoSwitchedRef.current && method === "phone" && !smsFallback) {
-          autoSwitchedRef.current = true;
-          setMethod("email");
-        }
-      } catch {
-        // Silent fail — health endpoint not critical
-      }
-    };
-    fetchHealth();
-    const id = setInterval(fetchHealth, 30_000);
-    return () => { cancelled = true; clearInterval(id); };
+    setWhatsappAvailable(false);
+    setWhatsappReason('whatsapp_removed');
+    if (!autoSwitchedRef.current && method === "phone" && !smsFallback) {
+      autoSwitchedRef.current = true;
+      setMethod("email");
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
