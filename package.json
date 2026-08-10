@@ -9,6 +9,7 @@
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
+    "test:purchase-history": "node --test scripts/test-purchase-history.mjs",
     "analyze": "ANALYZE=true next build",
     "verify-upstash": "node scripts/verify-upstash.js",
     "index-products": "node scripts/index-products.js",

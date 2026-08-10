@@ -32,7 +32,10 @@ export async function getPricelists(): Promise<OdooPricelist[]> {
 /**
  * Get a single pricelist by ID
  */
-export async function getPricelistById(id: number | string): Promise<OdooPricelist | null> {
+export async function getPricelistById(
+  id: number | string,
+  options: { strict?: boolean } = {}
+): Promise<OdooPricelist | null> {
   try {
     const numId = typeof id === 'string' ? parseInt(id, 10) : id;
     if (isNaN(numId)) return null;
@@ -44,6 +47,7 @@ export async function getPricelistById(id: number | string): Promise<OdooPriceli
     return lists.length > 0 ? lists[0] : null;
   } catch (error) {
     console.error(`[Odoo Pricelists] Error fetching pricelist ${id}:`, error);
+    if (options.strict) throw error;
     return null;
   }
 }
@@ -51,7 +55,10 @@ export async function getPricelistById(id: number | string): Promise<OdooPriceli
 /**
  * Get pricelist items (pricing rules) for a pricelist
  */
-export async function getPricelistItems(pricelistId: number | string): Promise<OdooPricelistItem[]> {
+export async function getPricelistItems(
+  pricelistId: number | string,
+  options: { strict?: boolean } = {}
+): Promise<OdooPricelistItem[]> {
   try {
     const numId = typeof pricelistId === 'string' ? parseInt(pricelistId, 10) : pricelistId;
 
@@ -67,6 +74,7 @@ export async function getPricelistItems(pricelistId: number | string): Promise<O
     );
   } catch (error) {
     console.error(`[Odoo Pricelists] Error fetching pricelist items for ${pricelistId}:`, error);
+    if (options.strict) throw error;
     return [];
   }
 }
@@ -133,12 +141,13 @@ export async function getProductPrice(
 export async function getProductPrices(
   productIds: number[],
   pricelistId: number,
-  templateIdMap?: Map<number, number>
+  templateIdMap?: Map<number, number>,
+  options: { strict?: boolean } = {}
 ): Promise<Map<number, number>> {
   const priceMap = new Map<number, number>();
 
   try {
-    const items = await getPricelistItems(pricelistId);
+    const items = await getPricelistItems(pricelistId, options);
     const now = new Date();
 
     // Index items by type for fast lookup
@@ -177,6 +186,7 @@ export async function getProductPrices(
     }
   } catch (error) {
     console.error('[Odoo Pricelists] Error getting product prices:', error);
+    if (options.strict) throw error;
   }
 
   return priceMap;

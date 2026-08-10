@@ -14,6 +14,7 @@ import {
   Package,
   FileText,
   HeadphonesIcon,
+  History,
 } from "lucide-react";
 import type { SalesOrder, Invoice } from "@/types";
 
@@ -211,11 +212,17 @@ export function DashboardContent({
           <CardTitle>{t("quickActions")}</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid gap-3 sm:grid-cols-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <Link href="/shop">
               <Button variant="outline" className="w-full justify-start gap-2">
                 <Package className="h-4 w-4" />
                 {t("placeOrder")}
+              </Button>
+            </Link>
+            <Link href="/shop?scope=purchased">
+              <Button variant="outline" className="w-full justify-start gap-2">
+                <History className="h-4 w-4" />
+                {t("buyAgain")}
               </Button>
             </Link>
             <Link href="/account-statement">
