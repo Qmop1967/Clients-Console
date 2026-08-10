@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useTranslations, useLocale } from "next-intl";
 import { useSession } from "next-auth/react";
-import { BadgeCheck, ReceiptText, PackageSearch, FileText, ChevronLeft } from "lucide-react";
+import { BadgeCheck, ReceiptText, PackageSearch, FileText, ChevronLeft, History } from "lucide-react";
 
 /**
  * ShopHero — compact account strip (redesign 2026-07-17).
@@ -39,6 +39,7 @@ export function ShopHero() {
     "inline-flex items-center gap-1 rounded-full bg-background/70 border border-border/60 px-2.5 py-0.5 text-[11px] text-muted-foreground";
 
   const quickLinks = [
+    { href: `/${locale}/shop?scope=purchased`, label: t("purchaseHistory.buyAgain"), sub: t("purchaseHistory.buyAgainHint"), Icon: History },
     { href: `/${locale}/orders`, label: tNav("orders"), sub: t("quickReorderHint"), Icon: PackageSearch },
     { href: `/${locale}/account-statement`, label: tNav("accountStatement"), sub: t("quickStatementHint"), Icon: ReceiptText },
     { href: `/${locale}/invoices`, label: tNav("invoices"), sub: t("quickInvoicesHint"), Icon: FileText },
@@ -99,7 +100,7 @@ export function ShopHero() {
 
       {/* B2B quick actions — authenticated customers only */}
       {displayName && (
-        <div className="grid grid-cols-3 gap-2 sm:gap-3">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3">
           {quickLinks.map(({ href, label, sub, Icon }) => (
             <Link
               key={href}

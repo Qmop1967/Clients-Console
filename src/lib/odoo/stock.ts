@@ -102,7 +102,10 @@ export async function getAllStock(): Promise<Map<number, number>> {
  * Get stock for multiple products (batch)
  * Returns Map of productId → available quantity
  */
-export async function getStockBulk(productIds: number[]): Promise<Map<number, number>> {
+export async function getStockBulk(
+  productIds: number[],
+  options: { strict?: boolean } = {}
+): Promise<Map<number, number>> {
   const stockMap = new Map<number, number>();
 
   if (!productIds.length) return stockMap;
@@ -116,6 +119,7 @@ export async function getStockBulk(productIds: number[]): Promise<Map<number, nu
         ['location_id.usage', '=', 'internal'],
       ],
       ['product_id', 'quantity', 'reserved_quantity'],
+      { limit: 0 },
     );
 
     for (const q of quants) {
@@ -133,6 +137,7 @@ export async function getStockBulk(productIds: number[]): Promise<Map<number, nu
     }
   } catch (error) {
     console.error('[Odoo Stock] Error fetching stock bulk:', error);
+    if (options.strict) throw error;
     for (const pid of productIds) stockMap.set(pid, 0);
   }
 
@@ -147,6 +152,7 @@ export async function getUnifiedStock(
   productId: number | string,
   _options?: { fetchOnMiss?: boolean; context?: string }
 ): Promise<{ stock: number; source: string }> {
+  void _options;
   const result = await getProductStock(productId);
   return { stock: result.available, source: 'odoo' };
 }

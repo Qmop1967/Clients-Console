@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Search, Loader2, Package, LayoutGrid } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
@@ -37,6 +37,10 @@ interface SuggestResponse {
 export function HeaderSearch({ locale }: { locale: string }) {
   const t = useTranslations("products");
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const isShopRoot = pathname.replace(/\/$/, "").endsWith("/shop");
+  const isPurchasedScope = isShopRoot && searchParams.get("scope") === "purchased";
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -44,6 +48,11 @@ export function HeaderSearch({ locale }: { locale: string }) {
   const rootRef = useRef<HTMLDivElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    if (!isShopRoot) return;
+    setQuery(searchParams.get("q") || "");
+  }, [isShopRoot, searchParams]);
 
   // Close on outside tap
   useEffect(() => {
@@ -84,6 +93,13 @@ export function HeaderSearch({ locale }: { locale: string }) {
   const onChange = (value: string) => {
     setQuery(value);
     if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (isPurchasedScope) {
+      abortRef.current?.abort();
+      setLoading(false);
+      setResults(null);
+      setOpen(false);
+      return;
+    }
     const q = value.trim();
     if (q.length < 2) {
       setResults(null);
@@ -97,7 +113,11 @@ export function HeaderSearch({ locale }: { locale: string }) {
   const goToFullSearch = () => {
     const q = query.trim();
     setOpen(false);
-    router.push(q ? `/${locale}/shop?q=${encodeURIComponent(q)}` : `/${locale}/shop`);
+    const params = new URLSearchParams();
+    if (q) params.set("q", q);
+    if (isPurchasedScope) params.set("scope", "purchased");
+    const suffix = params.toString() ? `?${params.toString()}` : "";
+    router.push(`/${locale}/shop${suffix}`);
   };
 
   const hasResults =
@@ -122,9 +142,13 @@ export function HeaderSearch({ locale }: { locale: string }) {
           enterKeyHint="search"
           value={query}
           onChange={(e) => onChange(e.target.value)}
-          onFocus={() => query.trim().length >= 2 && setOpen(true)}
-          placeholder={t("headerSearchPlaceholder")}
-          aria-label={t("headerSearchPlaceholder")}
+          onFocus={() => !isPurchasedScope && query.trim().length >= 2 && setOpen(true)}
+          placeholder={isPurchasedScope
+            ? t("purchaseHistory.headerSearchPlaceholder")
+            : t("headerSearchPlaceholder")}
+          aria-label={isPurchasedScope
+            ? t("purchaseHistory.headerSearchPlaceholder")
+            : t("headerSearchPlaceholder")}
           className={cn(
             "h-10 w-full rounded-xl border border-border/60 bg-background/60 ps-9 pe-3 text-sm",
             "outline-none transition-colors placeholder:text-muted-foreground/70",

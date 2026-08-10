@@ -1,5 +1,6 @@
 "use client";
 
+import { Suspense } from "react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useSession } from "next-auth/react";
@@ -55,7 +56,9 @@ export function PublicHeader({ locale }: PublicHeaderProps) {
 
         {/* Search — order-last drops it to a full second row below lg */}
         <div className="order-last w-full min-w-0 flex-1 lg:order-none lg:mx-2 lg:w-auto lg:max-w-xl">
-          <HeaderSearch locale={locale} />
+          <Suspense fallback={<div className="h-10 w-full animate-pulse rounded-xl border bg-muted/40" aria-hidden="true" />}>
+            <HeaderSearch locale={locale} />
+          </Suspense>
         </div>
 
         {/* Actions */}

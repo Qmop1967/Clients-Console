@@ -511,6 +511,105 @@ export async function getProductsWithPrices(pricelistId: string, lang?: string):
 }
 
 /**
+ * Resolve current catalog data for an explicit set of product variants.
+ *
+ * Unlike getProductsWithPrices(), this intentionally does not apply the WH=1
+ * "has positive stock" catalog isolation. Purchase history must still be able
+ * to render products that are currently out of stock or archived, while the
+ * returned stock value remains scoped to WH=1 via getStockBulk().
+ *
+ * Historical products with no current pricelist rule are returned with
+ * display_price=0 and in_price_list=false. Callers must never expose list_price
+ * as a substitute for the customer's current contracted price.
+ */
+export async function getProductsWithPricesByIds(
+  productIds: number[],
+  pricelistId: string,
+  lang?: string
+): Promise<{
+  products: (Product & { display_price: number; in_price_list: boolean })[];
+  currency: string;
+}> {
+  const ids = Array.from(new Set(
+    productIds.filter((id) => Number.isInteger(id) && id > 0)
+  ));
+
+  if (!ids.length) return { products: [], currency: 'IQD' };
+
+  try {
+    const { getProductPrices, getPricelistById } = await import('./pricelists');
+    const { getStockBulk } = await import('./stock');
+
+    // Keep individual gateway payloads bounded for long-standing customers.
+    const chunks: number[][] = [];
+    for (let i = 0; i < ids.length; i += 250) {
+      chunks.push(ids.slice(i, i + 250));
+    }
+
+    const productChunks: OdooProduct[][] = [];
+    for (let i = 0; i < chunks.length; i += 3) {
+      productChunks.push(...await Promise.all(
+        chunks.slice(i, i + 3).map((chunk) =>
+          odooRead<OdooProduct>(
+            'product.product',
+            chunk,
+            PRODUCT_LIST_FIELDS,
+            lang ? { lang } : undefined
+          )
+        )
+      ));
+    }
+    const rawProducts = productChunks.flat();
+
+    const templateIdMap = new Map<number, number>();
+    for (const product of rawProducts) {
+      if (Array.isArray(product.product_tmpl_id)) {
+        templateIdMap.set(product.id, product.product_tmpl_id[0]);
+      }
+    }
+
+    const pricelistNumber = Number.parseInt(pricelistId, 10);
+    const [versionMap, stockMap, pricelist, priceMap] = await Promise.all([
+      fetchImageVersions(rawProducts),
+      getStockBulk(ids, { strict: true }),
+      Number.isInteger(pricelistNumber) && pricelistNumber > 0
+        ? getPricelistById(pricelistNumber, { strict: true })
+        : Promise.resolve(null),
+      Number.isInteger(pricelistNumber) && pricelistNumber > 0
+        ? getProductPrices(ids, pricelistNumber, templateIdMap, { strict: true })
+        : Promise.resolve(new Map<number, number>()),
+    ]);
+
+    if (!pricelist) {
+      throw new Error(`Pricelist ${pricelistId} was not found`);
+    }
+
+    const currency = Array.isArray(pricelist.currency_id)
+      ? pricelist.currency_id[1]
+      : 'IQD';
+
+    return {
+      products: rawProducts.map((raw) => {
+        const product = odooProductToProduct(raw, versionMap);
+        const currentPrice = priceMap.get(raw.id);
+        return {
+          ...product,
+          available_stock: stockMap.get(raw.id) ?? 0,
+          display_price: currentPrice ?? 0,
+          in_price_list: currentPrice !== undefined,
+        };
+      }),
+      currency,
+    };
+  } catch (error) {
+    console.error('[Odoo Products] Error getting purchased products by IDs:', error);
+    // Purchase history must distinguish a gateway/pricelist outage from truly
+    // archived products; otherwise every item would be mislabeled discontinued.
+    throw error;
+  }
+}
+
+/**
  * Get products with consumer (public) prices
  */
 export async function getProductsWithConsumerPrices(lang?: string): Promise<{

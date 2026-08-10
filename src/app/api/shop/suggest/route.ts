@@ -18,28 +18,12 @@ import { getProductsWithPricesCached, getCategoriesCached } from "@/lib/odoo/pro
 import { PRICE_LIST_IDS } from "@/lib/odoo/pricelists";
 import { localeToOdooLang } from "@/i18n/config";
 import { getLocalizedName } from "@/lib/product-name";
+import { normalizeProductSearch } from "@/lib/search-normalize";
 
 export const dynamic = "force-dynamic";
 
 const MAX_PRODUCTS = 8;
 const MAX_CATEGORIES = 3;
-
-/** Arabic-tolerant normalization for search matching. */
-function normalize(s: string): string {
-  return s
-    .toLowerCase()
-    .replace(/[أإآ]/g, "ا")
-    .replace(/ة/g, "ه")
-    .replace(/ى/g, "ي")
-    .replace(/[ڤﭬ]/g, "ف")
-    .replace(/[گݣ]/g, "ك")
-    .replace(/چ/g, "ج")
-    // Iraqi transliteration tolerance: ق and ك both used for the G sound
-    // (قيمنق/كيمنك). Folding ق→ك makes either spelling find the other.
-    .replace(/ق/g, "ك")
-    .replace(/\s+/g, " ")
-    .trim();
-}
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -57,7 +41,7 @@ export async function GET(request: NextRequest) {
       getCategoriesCached(odooLang),
     ]);
 
-    const nq = normalize(q);
+    const nq = normalizeProductSearch(q);
     const nqSku = q.toLowerCase();
 
     const inStock = productResult.products.filter(
@@ -69,7 +53,7 @@ export async function GET(request: NextRequest) {
     for (const p of inStock) {
       const sku = (p.sku || "").toLowerCase();
       const displayName = getLocalizedName(p, locale);
-      const nName = normalize(`${displayName} ${p.name}`);
+      const nName = normalizeProductSearch(`${displayName} ${p.name}`);
       let score = -1;
       if (sku && sku.startsWith(nqSku)) score = 3;
       else if (sku && sku.includes(nqSku)) score = 2;
@@ -91,7 +75,7 @@ export async function GET(request: NextRequest) {
         (c) =>
           c.is_active &&
           stockedCategoryIds.has(c.category_id) &&
-          normalize(c.name).includes(nq)
+          normalizeProductSearch(c.name).includes(nq)
       )
       .slice(0, MAX_CATEGORIES)
       .map((c) => ({ id: c.category_id, name: c.name }));

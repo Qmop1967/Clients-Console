@@ -20,10 +20,28 @@ import {
 import { ProductImage } from "./product-image";
 import { useCart } from "@/components/providers/cart-provider";
 import { useCatalogMode } from "@/components/providers/catalog-mode-provider";
-import { Search, ShoppingCart, Check, Eye, ChevronRight, X, SlidersHorizontal, MessageCircle, Copy } from "lucide-react";
+import {
+  Search,
+  ShoppingCart,
+  Check,
+  Eye,
+  ChevronRight,
+  X,
+  SlidersHorizontal,
+  MessageCircle,
+  Copy,
+  History,
+  CalendarDays,
+  ReceiptText,
+  Loader2,
+  AlertCircle,
+  RotateCcw,
+  PackageCheck,
+} from "lucide-react";
 import { NumberedPagination } from "@/components/ui/pagination";
 import { cn } from "@/lib/utils/cn";
 import { formatCurrency } from "@/lib/utils/format";
+import { normalizeProductSearch } from "@/lib/search-normalize";
 import { ShopHero } from "./shop-hero";
 import { CategoryStrip } from "./category-strip";
 import { NewArrivalsRail } from "./new-arrivals-rail";
@@ -37,6 +55,7 @@ const WholesaleQuantityInput = dynamic(
 
 // Session storage key for scroll position
 const SCROLL_POSITION_KEY = "shop_scroll_position";
+const PURCHASE_HISTORY_STALE_MS = 60_000;
 
 // Pagination configuration — default 24 items per page (6 rows of 4 on
 // desktop); wholesale buyers can widen to 48/96 via the per-page selector.
@@ -53,7 +72,48 @@ function isProductNew(createDate?: string): boolean {
 }
 
 // Sort options
-type SortOption = "newest" | "name-asc" | "name-desc" | "price-asc" | "price-desc" | "stock-desc";
+type SortOption =
+  | "newest"
+  | "name-asc"
+  | "name-desc"
+  | "price-asc"
+  | "price-desc"
+  | "stock-desc"
+  | "last-purchased"
+  | "purchase-frequency";
+
+type ShopScope = "all" | "purchased";
+type PurchasePeriod = "all" | "30" | "90" | "365";
+
+const COMMON_SORT_OPTIONS = new Set<SortOption>([
+  "name-asc", "name-desc", "price-asc", "price-desc", "stock-desc",
+]);
+
+function normalizeSortOption(scope: ShopScope, value: string | null): SortOption {
+  if (value && COMMON_SORT_OPTIONS.has(value as SortOption)) return value as SortOption;
+  if (scope === "purchased") {
+    return value === "last-purchased" ? "last-purchased" : "purchase-frequency";
+  }
+  return "newest";
+}
+
+interface ProductPurchaseHistory {
+  productId: string;
+  historicalName: string;
+  historicalSku: string;
+  unit: string;
+  purchaseCount: number;
+  invoiceNumbers: string[];
+  purchasedQuantity: number;
+  returnedQuantity: number;
+  netQuantity: number;
+  lastPurchaseDate: string;
+  lastInvoiceId: string;
+  lastInvoiceNumber: string;
+  lastQuantity: number;
+  lastUnitPrice: number;
+  lastCurrencyCode: string;
+}
 
 // Product type from server
 interface PublicProduct {
@@ -72,6 +132,23 @@ interface PublicProduct {
   inPriceList?: boolean; // Whether item has a price in the Consumer price list
   create_date?: string; // Odoo create_date (New badge / New Arrivals)
   carton_qty?: number; // product.packaging qty (smallest >1) — carton price hint
+  status?: "active" | "inactive" | "archived";
+  is_current_product?: boolean;
+  purchase?: ProductPurchaseHistory;
+}
+
+interface PurchaseHistoryResponse {
+  products: PublicProduct[];
+  currencyCode: string;
+  summary: {
+    totalProducts: number;
+    totalInvoices: number;
+    availableProducts: number;
+    unavailableProducts: number;
+    discontinuedProducts: number;
+    lastPurchaseDate: string | null;
+  };
+  asOf: string;
 }
 
 // Category type from server
@@ -98,6 +175,29 @@ interface PublicProductsContentProps {
 // On mobile, only 2 products are above-the-fold
 // Fewer priority images = less bandwidth contention = faster LCP
 const PRIORITY_PRODUCTS_COUNT = 2;
+
+function ProductDetailLink({
+  enabled,
+  href,
+  className,
+  onClick,
+  children,
+}: {
+  enabled: boolean;
+  href: string;
+  className?: string;
+  onClick?: React.MouseEventHandler<HTMLAnchorElement>;
+  children: React.ReactNode;
+}) {
+  if (!enabled) {
+    return <div className={className} aria-disabled="true">{children}</div>;
+  }
+  return (
+    <Link prefetch={false} href={href} onClick={onClick} className={className}>
+      {children}
+    </Link>
+  );
+}
 
 // Memoized Product Card Component with Add to Cart - Enhanced Design
 const ProductCardWithCart = memo(function ProductCardWithCart({
@@ -140,11 +240,15 @@ const ProductCardWithCart = memo(function ProductCardWithCart({
     [product.sku]
   );
 
-  const isInStock = product.available_stock > 0;
+  const isCurrentProduct = product.is_current_product !== false;
+  const isActiveProduct = product.status !== "inactive" && product.status !== "archived";
+  const isInStock = isCurrentProduct && isActiveProduct && product.available_stock > 0;
   const isLowStock = product.available_stock > 0 && product.available_stock <= 5;
   const hasPrice = product.inPriceList !== false && product.rate > 0;
   const cartQuantity = getItemQuantity(product.item_id);
   const maxQuantity = Math.max(0, product.available_stock - cartQuantity);
+  const requestedLastQuantity = Math.max(1, Math.round(product.purchase?.lastQuantity || 1));
+  const usableLastQuantity = Math.min(maxQuantity, requestedLastQuantity);
 
   // Memoized add to cart handler for better performance
   const handleAddToCart = useCallback((e: React.MouseEvent) => {
@@ -183,9 +287,31 @@ const ProductCardWithCart = memo(function ProductCardWithCart({
   }, []);
 
   // Save scroll position before navigating to product detail
-  const handleCardClick = useCallback(() => {
+  const handleCardClick = useCallback((event?: React.MouseEvent) => {
+    if (!isCurrentProduct) {
+      event?.preventDefault();
+      return;
+    }
     sessionStorage.setItem(SCROLL_POSITION_KEY, String(window.scrollY));
-  }, []);
+  }, [isCurrentProduct]);
+
+  const handleUseLastQuantity = useCallback((event: React.MouseEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setQuantity(usableLastQuantity);
+  }, [usableLastQuantity]);
+
+  const formattedLastPurchaseDate = useMemo(() => {
+    const raw = product.purchase?.lastPurchaseDate;
+    if (!raw) return "";
+    const parsed = new Date(`${raw}T00:00:00`);
+    if (Number.isNaN(parsed.getTime())) return raw;
+    return new Intl.DateTimeFormat(locale === "tm" ? "tk" : locale, {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    }).format(parsed);
+  }, [locale, product.purchase?.lastPurchaseDate]);
 
   return (
     <div
@@ -196,7 +322,12 @@ const ProductCardWithCart = memo(function ProductCardWithCart({
       )}
     >
       {/* Image navigates to detail */}
-      <Link prefetch={false} href={`/${locale}/shop/${product.item_id}`} onClick={handleCardClick} className="block">
+      <ProductDetailLink
+        enabled={isCurrentProduct}
+        href={`/${locale}/shop/${product.item_id}`}
+        onClick={handleCardClick}
+        className="block"
+      >
       <div className="relative overflow-hidden">
         {/* LCP OPTIMIZATION: sizes must match grid layout (grid-cols-2 on mobile = 50vw) */}
         <ProductImage
@@ -227,18 +358,31 @@ const ProductCardWithCart = memo(function ProductCardWithCart({
             </span>
           </div>
         )}
+
+        {!isActiveProduct && (
+          <div className="absolute bottom-2.5 start-2.5 z-10">
+            <span className="rounded-full bg-slate-950/80 px-2 py-0.5 text-[10px] font-semibold text-white backdrop-blur-sm">
+              {t("purchaseHistory.discontinued")}
+            </span>
+          </div>
+        )}
       </div>
-      </Link>
+      </ProductDetailLink>
 
       <div className="px-3 py-3.5 sm:p-4">
         {/* Product Info */}
         <div className="space-y-1.5 sm:space-y-2">
           {/* Product Name navigates to detail */}
-          <Link prefetch={false} href={`/${locale}/shop/${product.item_id}`} onClick={handleCardClick} className="block">
+          <ProductDetailLink
+            enabled={isCurrentProduct}
+            href={`/${locale}/shop/${product.item_id}`}
+            onClick={handleCardClick}
+            className="block"
+          >
             <h2 className="font-semibold text-xs sm:text-sm line-clamp-3 min-h-[2.75rem] sm:min-h-[3.75rem] group-hover:text-primary transition-colors duration-200">
               {displayName}
             </h2>
-          </Link>
+          </ProductDetailLink>
 
           {/* SKU (tap-to-copy) & Brand */}
           <div className="flex items-center justify-between gap-2 text-[11px] sm:text-xs text-muted-foreground">
@@ -264,6 +408,61 @@ const ProductCardWithCart = memo(function ProductCardWithCart({
               <span className="text-primary font-medium truncate">{product.brand}</span>
             )}
           </div>
+
+          {product.purchase && (
+            <div className="space-y-2 rounded-xl border border-gold/20 bg-gold/5 p-2.5 text-[10.5px] sm:text-xs">
+              <div className="flex items-center justify-between gap-2">
+                <span className="flex min-w-0 items-center gap-1.5 text-muted-foreground">
+                  <CalendarDays className="h-3.5 w-3.5 shrink-0 text-gold-dark dark:text-gold" aria-hidden="true" />
+                  <span className="truncate">
+                    {t("purchaseHistory.lastPurchase")}: <b className="text-foreground">{formattedLastPurchaseDate}</b>
+                  </span>
+                </span>
+                {product.purchase.lastInvoiceId && (
+                  <Link
+                    href={`/${locale}/invoices/${product.purchase.lastInvoiceId}`}
+                    prefetch={false}
+                    onClick={(event) => event.stopPropagation()}
+                    className="inline-flex shrink-0 items-center gap-1 font-mono text-primary hover:underline"
+                    title={t("purchaseHistory.viewInvoice")}
+                  >
+                    <ReceiptText className="h-3 w-3" aria-hidden="true" />
+                    {product.purchase.lastInvoiceNumber}
+                  </Link>
+                )}
+              </div>
+
+              <div className="flex flex-wrap items-center gap-1.5 text-muted-foreground">
+                <span className="rounded-full bg-background/80 px-2 py-0.5">
+                  {t("purchaseHistory.purchasedTimes", { count: product.purchase.purchaseCount })}
+                </span>
+                <span className="rounded-full bg-background/80 px-2 py-0.5">
+                  {t("purchaseHistory.netQuantity", { count: product.purchase.netQuantity })}
+                </span>
+                {product.purchase.returnedQuantity > 0 && (
+                  <span className="rounded-full bg-amber-500/10 px-2 py-0.5 text-amber-700 dark:text-amber-300">
+                    {t("purchaseHistory.returnedQuantity", { count: product.purchase.returnedQuantity })}
+                  </span>
+                )}
+              </div>
+
+              {isInStock && maxQuantity > 0 && product.purchase.lastQuantity > 0 && (
+                <button
+                  type="button"
+                  onClick={handleUseLastQuantity}
+                  className="inline-flex items-center gap-1 rounded-lg border border-gold/30 bg-background/80 px-2 py-1 font-semibold text-foreground transition-colors hover:border-gold/60 hover:bg-gold/10"
+                >
+                  <RotateCcw className="h-3 w-3 text-gold-dark dark:text-gold" aria-hidden="true" />
+                  {usableLastQuantity < requestedLastQuantity
+                    ? t("purchaseHistory.useLastQuantityClamped", {
+                      available: usableLastQuantity,
+                      last: requestedLastQuantity,
+                    })
+                    : t("purchaseHistory.useLastQuantity", { count: requestedLastQuantity })}
+                </button>
+              )}
+            </div>
+          )}
 
           {/* Price & Stock - Hidden in catalog mode */}
           {!isCatalogMode && (
@@ -399,16 +598,23 @@ const ProductCardWithCart = memo(function ProductCardWithCart({
         {/* View Details for non-purchasable items (hidden in catalog mode) */}
         {!isCatalogMode && (!hasPrice || !isInStock) && (
           <div className="mt-3 sm:mt-4 pt-2 sm:pt-3 border-t border-border/50">
-            <Link prefetch={false} href={`/${locale}/shop/${product.item_id}`} onClick={handleCardClick} className="block">
-            <Button
-              variant="outline"
-              className="w-full btn-press group/btn border-primary/30 hover:bg-primary/5"
-              size="sm"
-            >
-              <Eye className="h-3.5 w-3.5 me-1.5 group-hover/btn:scale-110 transition-transform" />
-              {t("viewDetails")}
-            </Button>
-            </Link>
+            {isCurrentProduct ? (
+              <Link prefetch={false} href={`/${locale}/shop/${product.item_id}`} onClick={handleCardClick} className="block">
+                <Button
+                  variant="outline"
+                  className="w-full btn-press group/btn border-primary/30 hover:bg-primary/5"
+                  size="sm"
+                >
+                  <Eye className="h-3.5 w-3.5 me-1.5 group-hover/btn:scale-110 transition-transform" />
+                  {t("viewDetails")}
+                </Button>
+              </Link>
+            ) : (
+              <Button disabled variant="outline" className="w-full" size="sm">
+                <AlertCircle className="h-3.5 w-3.5 me-1.5" />
+                {t("purchaseHistory.discontinued")}
+              </Button>
+            )}
           </div>
         )}
       </div>
@@ -454,13 +660,19 @@ export function PublicProductsContent({
   }, [router]);
 
   // PERFORMANCE: Check auth client-side to keep server render cacheable
-  const { data: session } = useSession();
+  const { data: session, status: sessionStatus } = useSession();
   const isAuthenticated = !!session?.user;
+  const purchaseHistoryOwnerId = session?.user?.odooPartnerId || null;
+  const canUsePurchaseHistory = isAuthenticated && !!purchaseHistoryOwnerId;
 
   // Get page from URL params, default to 1
-  const pageFromUrl = parseInt(searchParams.get("page") || "1", 10);
+  const parsedPageFromUrl = Number.parseInt(searchParams.get("page") || "1", 10);
+  const pageFromUrl = Number.isFinite(parsedPageFromUrl) && parsedPageFromUrl > 0
+    ? parsedPageFromUrl
+    : 1;
   const searchFromUrl = searchParams.get("q") || "";
-  const sortFromUrl = (searchParams.get("sort") as SortOption) || "newest";
+  const scopeFromUrl: ShopScope = searchParams.get("scope") === "purchased" ? "purchased" : "all";
+  const sortFromUrl = normalizeSortOption(scopeFromUrl, searchParams.get("sort"));
   const ppFromUrlRaw = parseInt(searchParams.get("pp") || String(DEFAULT_PER_PAGE), 10);
   const ppFromUrl = PER_PAGE_OPTIONS.includes(ppFromUrlRaw) ? ppFromUrlRaw : DEFAULT_PER_PAGE;
 
@@ -468,6 +680,180 @@ export function PublicProductsContent({
   const [currentPage, setCurrentPage] = useState(pageFromUrl);
   const [sortBy, setSortBy] = useState<SortOption>(sortFromUrl);
   const [perPage, setPerPage] = useState<number>(ppFromUrl);
+  const scope = scopeFromUrl;
+  const [purchasePeriod, setPurchasePeriod] = useState<PurchasePeriod>("all");
+  const [availableOnly, setAvailableOnly] = useState(false);
+  const [purchaseCategory, setPurchaseCategory] = useState("all");
+  const [purchaseHistory, setPurchaseHistory] = useState<PurchaseHistoryResponse | null>(null);
+  const [purchaseHistoryLoading, setPurchaseHistoryLoading] = useState(false);
+  const [purchaseHistoryError, setPurchaseHistoryError] = useState(false);
+  const pendingScopeRef = useRef<ShopScope | null>(null);
+  const observedUrlQueryRef = useRef(searchFromUrl);
+  const purchaseHistoryOwnerRef = useRef<string | null>(purchaseHistoryOwnerId);
+  const purchaseHistoryDataRef = useRef<PurchaseHistoryResponse | null>(null);
+  const purchaseHistoryRequestRef = useRef(0);
+  const [observedScopeSort, setObservedScopeSort] = useState({
+    scope: scopeFromUrl,
+    sort: sortFromUrl,
+  });
+
+  // A normal App Router navigation can retain this client component while
+  // replacing the shop query string (for example, clicking the shop logo from
+  // ?scope=purchased). Reconcile the controlled sort/page state during render
+  // so the URL-writing effect cannot first restore a stale, invalid sort.
+  if (
+    observedScopeSort.scope !== scopeFromUrl
+    || observedScopeSort.sort !== sortFromUrl
+  ) {
+    const scopeChanged = observedScopeSort.scope !== scopeFromUrl;
+    setObservedScopeSort({ scope: scopeFromUrl, sort: sortFromUrl });
+    setSortBy(sortFromUrl);
+    setCurrentPage(pageFromUrl);
+    if (scopeChanged) {
+      setPurchasePeriod("all");
+      setAvailableOnly(false);
+      setPurchaseCategory("all");
+    }
+  }
+
+  // HeaderSearch and other in-app navigation can change ?q without remounting
+  // this client component. Only react to an actually new URL value, so normal
+  // typing in the grid input is never overwritten by its previous URL value.
+  useEffect(() => {
+    if (observedUrlQueryRef.current === searchFromUrl) return;
+    observedUrlQueryRef.current = searchFromUrl;
+    setSearchQuery(searchFromUrl);
+    setCurrentPage(1);
+  }, [searchFromUrl]);
+
+  // Never paint one customer's invoice-derived data after an in-app session
+  // replacement (shared-device/session recovery edge case). Adjusting during
+  // render makes React rerender before commit, avoiding even a stale frame.
+  if (purchaseHistoryOwnerRef.current !== purchaseHistoryOwnerId) {
+    purchaseHistoryOwnerRef.current = purchaseHistoryOwnerId;
+    purchaseHistoryDataRef.current = null;
+    setPurchaseHistory(null);
+    setPurchaseHistoryError(false);
+    setPurchaseHistoryLoading(false);
+  }
+
+  const handleScopeChange = useCallback((nextScope: ShopScope) => {
+    if (nextScope === "purchased" && !canUsePurchaseHistory) return;
+    pendingScopeRef.current = nextScope;
+    setSortBy(nextScope === "purchased" ? "purchase-frequency" : "newest");
+    setCurrentPage(1);
+    setPurchasePeriod("all");
+    setAvailableOnly(false);
+    setPurchaseCategory("all");
+    const params = new URLSearchParams(searchParams.toString());
+    if (searchQuery) params.set("q", searchQuery);
+    else params.delete("q");
+    if (perPage !== DEFAULT_PER_PAGE) params.set("pp", String(perPage));
+    else params.delete("pp");
+    if (nextScope === "purchased") params.set("scope", "purchased");
+    else params.delete("scope");
+    params.delete("category");
+    params.delete("page");
+    params.delete("sort");
+    const nextUrl = params.toString() ? `${pathname}?${params.toString()}` : pathname;
+    router.push(nextUrl, { scroll: false });
+  }, [canUsePurchaseHistory, pathname, perPage, router, searchParams, searchQuery]);
+
+  const loadPurchaseHistory = useCallback((signal?: AbortSignal) => {
+    const requestedOwner = purchaseHistoryOwnerId;
+    if (!requestedOwner) return;
+    const requestId = ++purchaseHistoryRequestRef.current;
+    setPurchaseHistoryLoading(true);
+    setPurchaseHistoryError(false);
+    fetch(`/api/shop/purchases?locale=${encodeURIComponent(locale)}`, {
+      cache: "no-store",
+      signal,
+    })
+      .then(async (response) => {
+        if (!response.ok) throw new Error(`Purchase history failed (${response.status})`);
+        return response.json() as Promise<PurchaseHistoryResponse>;
+      })
+      .then((data) => {
+        if (
+          purchaseHistoryOwnerRef.current !== requestedOwner
+          || purchaseHistoryRequestRef.current !== requestId
+        ) return;
+        purchaseHistoryDataRef.current = data;
+        setPurchaseHistory(data);
+        setPurchaseHistoryLoading(false);
+      })
+      .catch((error) => {
+        if (error instanceof DOMException && error.name === "AbortError") return;
+        if (
+          purchaseHistoryOwnerRef.current !== requestedOwner
+          || purchaseHistoryRequestRef.current !== requestId
+        ) return;
+        // A failed freshness refresh must not replace still-useful history with
+        // a full-page error. The next focus/visibility event can try again.
+        if (!purchaseHistoryDataRef.current) setPurchaseHistoryError(true);
+        setPurchaseHistoryLoading(false);
+      });
+  }, [locale, purchaseHistoryOwnerId]);
+
+  useEffect(() => {
+    if (scope !== "purchased" || sessionStatus !== "authenticated" || !canUsePurchaseHistory) return;
+    if (purchaseHistory || purchaseHistoryLoading || purchaseHistoryError) return;
+    const controller = new AbortController();
+    loadPurchaseHistory(controller.signal);
+    return () => controller.abort();
+  }, [
+    canUsePurchaseHistory,
+    loadPurchaseHistory,
+    purchaseHistory,
+    purchaseHistoryError,
+    purchaseHistoryLoading,
+    purchaseHistoryOwnerId,
+    scope,
+    sessionStatus,
+  ]);
+
+  useEffect(() => {
+    if (scope !== "purchased" || !purchaseHistory || !canUsePurchaseHistory) return;
+    const refreshIfStale = () => {
+      if (document.visibilityState !== "visible" || purchaseHistoryLoading) return;
+      const fetchedAt = Date.parse(purchaseHistory.asOf);
+      if (Number.isNaN(fetchedAt) || Date.now() - fetchedAt >= PURCHASE_HISTORY_STALE_MS) {
+        loadPurchaseHistory();
+      }
+    };
+    document.addEventListener("visibilitychange", refreshIfStale);
+    window.addEventListener("focus", refreshIfStale);
+    return () => {
+      document.removeEventListener("visibilitychange", refreshIfStale);
+      window.removeEventListener("focus", refreshIfStale);
+    };
+  }, [
+    canUsePurchaseHistory,
+    loadPurchaseHistory,
+    purchaseHistory,
+    purchaseHistoryLoading,
+    scope,
+  ]);
+
+  useEffect(() => {
+    if (
+      scope === "purchased"
+      && (sessionStatus === "unauthenticated"
+        || (sessionStatus === "authenticated" && !canUsePurchaseHistory))
+    ) {
+      pendingScopeRef.current = "all";
+      setSortBy("newest");
+      const params = new URLSearchParams(searchParams.toString());
+      params.delete("scope");
+      params.delete("sort");
+      const nextUrl = params.toString() ? `${pathname}?${params.toString()}` : pathname;
+      router.replace(nextUrl, { scroll: false });
+    }
+  }, [canUsePurchaseHistory, pathname, router, scope, searchParams, sessionStatus]);
+
+  const retryPurchaseHistory = useCallback(() => {
+    loadPurchaseHistory();
+  }, [loadPurchaseHistory]);
 
   const handlePerPageChange = (value: string) => {
     const pp = parseInt(value, 10);
@@ -507,8 +893,12 @@ export function PublicProductsContent({
     }
   }, []);
 
-  // Update URL when page, search, or sort changes (without full navigation)
+  // Update URL when page, search, scope, or sort changes (without full navigation)
   useEffect(() => {
+    const pendingScope = pendingScopeRef.current;
+    if (pendingScope && pendingScope !== scope) return;
+    if (pendingScope === scope) pendingScopeRef.current = null;
+
     const params = new URLSearchParams(searchParams.toString());
 
     if (currentPage > 1) {
@@ -523,7 +913,15 @@ export function PublicProductsContent({
       params.delete("q");
     }
 
-    if (sortBy !== "newest") {
+    if (scope === "purchased") {
+      params.set("scope", "purchased");
+      params.delete("category");
+    } else {
+      params.delete("scope");
+    }
+
+    const scopeDefaultSort = scope === "purchased" ? "purchase-frequency" : "newest";
+    if (sortBy !== scopeDefaultSort) {
       params.set("sort", sortBy);
     } else {
       params.delete("sort");
@@ -537,29 +935,98 @@ export function PublicProductsContent({
 
     const newUrl = params.toString() ? `${pathname}?${params.toString()}` : pathname;
     window.history.replaceState(null, "", newUrl);
-  }, [currentPage, searchQuery, sortBy, perPage, pathname, searchParams]);
+  }, [currentPage, searchQuery, scope, sortBy, perPage, pathname, searchParams]);
 
   // Reset to page 1 when search or sort changes
   useEffect(() => {
-    if (searchQuery !== searchFromUrl || sortBy !== sortFromUrl) {
+    if (searchQuery !== searchFromUrl || sortBy !== sortFromUrl || scope !== scopeFromUrl) {
       setCurrentPage(1);
     }
-  }, [searchQuery, searchFromUrl, sortBy, sortFromUrl]);
+  }, [scope, scopeFromUrl, searchQuery, searchFromUrl, sortBy, sortFromUrl]);
+
+  // Native history replacement keeps typing responsive; explicitly restore
+  // controlled state when the customer uses browser back/forward.
+  useEffect(() => {
+    const restoreFromLocation = () => {
+      const params = new URLSearchParams(window.location.search);
+      const nextScope: ShopScope = params.get("scope") === "purchased" ? "purchased" : "all";
+      const nextSort = normalizeSortOption(nextScope, params.get("sort"));
+      setSearchQuery(params.get("q") || "");
+      setSortBy(nextSort);
+      setCurrentPage(Math.max(1, Number.parseInt(params.get("page") || "1", 10) || 1));
+      setPurchasePeriod("all");
+      setPurchaseCategory("all");
+      setAvailableOnly(false);
+    };
+    window.addEventListener("popstate", restoreFromLocation);
+    return () => window.removeEventListener("popstate", restoreFromLocation);
+  }, []);
+
+  const purchaseCategories = useMemo(() => {
+    const categoryMap = new Map<string, string>();
+    for (const product of purchaseHistory?.products ?? []) {
+      if (product.category_id && product.category_name) {
+        categoryMap.set(product.category_id, product.category_name);
+      }
+    }
+    return Array.from(categoryMap, ([id, name]) => ({ id, name }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [purchaseHistory]);
 
   // Filter and sort products
   const filteredProducts = useMemo(() => {
-    // First filter: ONLY products with stock > 0 (strict rule)
-    let filtered = products.filter((p) => p.available_stock > 0);
+    let filtered = scope === "purchased"
+      ? [...(purchaseHistory?.products ?? [])]
+      : products.filter((p) => p.available_stock > 0);
+
+    if (scope === "purchased") {
+      if (purchaseCategory !== "all") {
+        filtered = filtered.filter((product) => product.category_id === purchaseCategory);
+      }
+
+      if (availableOnly) {
+        filtered = filtered.filter((product) =>
+          product.is_current_product !== false
+          && product.status !== "inactive"
+          && product.status !== "archived"
+          && product.available_stock > 0
+          && product.inPriceList !== false
+          && product.rate > 0
+        );
+      }
+
+      if (purchasePeriod !== "all") {
+        const days = Number(purchasePeriod);
+        const thresholdDate = new Date();
+        thresholdDate.setHours(0, 0, 0, 0);
+        thresholdDate.setDate(thresholdDate.getDate() - days);
+        const threshold = thresholdDate.getTime();
+        filtered = filtered.filter((product) => {
+          const date = product.purchase?.lastPurchaseDate;
+          if (!date) return false;
+          const time = Date.parse(`${date}T00:00:00`);
+          return !Number.isNaN(time) && time >= threshold;
+        });
+      }
+    }
 
     // Search filter - uses deferred value for responsiveness
     if (deferredSearchQuery) {
-      const query = deferredSearchQuery.toLowerCase();
+      const query = normalizeProductSearch(deferredSearchQuery);
       filtered = filtered.filter(
         (p) =>
-          p.name.toLowerCase().includes(query) ||
-          p.sku.toLowerCase().includes(query) ||
-          p.description?.toLowerCase().includes(query) ||
-          p.brand?.toLowerCase().includes(query)
+          normalizeProductSearch(p.name).includes(query) ||
+          normalizeProductSearch(p.sku).includes(query) ||
+          normalizeProductSearch(p.description || "").includes(query) ||
+          normalizeProductSearch(p.brand || "").includes(query) ||
+          Object.values(p.localized_names ?? {}).some((name) =>
+            normalizeProductSearch(name || "").includes(query)
+          ) ||
+          normalizeProductSearch(p.purchase?.historicalName || "").includes(query) ||
+          normalizeProductSearch(p.purchase?.historicalSku || "").includes(query) ||
+          p.purchase?.invoiceNumbers.some((invoice) =>
+            normalizeProductSearch(invoice).includes(query)
+          )
       );
     }
 
@@ -579,13 +1046,31 @@ export function PublicProductsContent({
           return b.rate - a.rate;
         case "stock-desc":
           return b.available_stock - a.available_stock;
+        case "last-purchased":
+          return (b.purchase?.lastPurchaseDate || "").localeCompare(
+            a.purchase?.lastPurchaseDate || ""
+          );
+        case "purchase-frequency":
+          return (b.purchase?.purchaseCount || 0) - (a.purchase?.purchaseCount || 0)
+            || (b.purchase?.lastPurchaseDate || "").localeCompare(
+              a.purchase?.lastPurchaseDate || ""
+            );
         default:
           return parseInt(b.item_id, 10) - parseInt(a.item_id, 10);
       }
     });
 
     return filtered;
-  }, [products, deferredSearchQuery, sortBy]);
+  }, [
+    availableOnly,
+    deferredSearchQuery,
+    products,
+    purchaseCategory,
+    purchaseHistory,
+    purchasePeriod,
+    scope,
+    sortBy,
+  ]);
 
   // New Arrivals — newest in-stock products (create_date desc, fallback pp_id desc)
   const newArrivals = useMemo(() => {
@@ -611,6 +1096,24 @@ export function PublicProductsContent({
   const startIndex = (safePage - 1) * perPage;
   const endIndex = startIndex + perPage;
   const paginatedProducts = filteredProducts.slice(startIndex, endIndex);
+  const hasPurchaseResultFilters = scope === "purchased" && (
+    !!deferredSearchQuery.trim()
+    || purchasePeriod !== "all"
+    || purchaseCategory !== "all"
+    || availableOnly
+  );
+
+  const formattedHistoryDate = useMemo(() => {
+    const raw = purchaseHistory?.summary.lastPurchaseDate;
+    if (!raw) return t("purchaseHistory.notAvailable");
+    const parsed = new Date(`${raw}T00:00:00`);
+    if (Number.isNaN(parsed.getTime())) return raw;
+    return new Intl.DateTimeFormat(locale === "tm" ? "tk" : locale, {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    }).format(parsed);
+  }, [locale, purchaseHistory?.summary.lastPurchaseDate, t]);
 
   // Keep state (and therefore the URL) honest whenever the page had to be clamped.
   useEffect(() => {
@@ -634,19 +1137,60 @@ export function PublicProductsContent({
       {/* Merchandising header — hero + category strip + promos + new arrivals */}
       <ShopHero />
 
-      <CategoryStrip
-        categories={categories}
-        selectedCategory={selectedCategory}
-        onSelect={onCategorySelect}
-        onClear={onClearCategory}
-      />
+      {sessionStatus === "authenticated" && canUsePurchaseHistory && (
+        <div
+          role="tablist"
+          aria-label={t("purchaseHistory.scopeLabel")}
+          className="grid grid-cols-2 gap-1 rounded-2xl border bg-muted/50 p-1.5 sm:max-w-xl"
+        >
+          <button
+            type="button"
+            role="tab"
+            aria-selected={scope === "all"}
+            onClick={() => handleScopeChange("all")}
+            className={cn(
+              "flex min-h-11 items-center justify-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold transition-all",
+              scope === "all"
+                ? "bg-background text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            <PackageCheck className="h-4 w-4" aria-hidden="true" />
+            {t("purchaseHistory.allProducts")}
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={scope === "purchased"}
+            onClick={() => handleScopeChange("purchased")}
+            className={cn(
+              "flex min-h-11 items-center justify-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold transition-all",
+              scope === "purchased"
+                ? "bg-background text-primary shadow-sm ring-1 ring-gold/25"
+                : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            <History className="h-4 w-4" aria-hidden="true" />
+            {t("purchaseHistory.purchasedProducts")}
+          </button>
+        </div>
+      )}
+
+      {scope === "all" && (
+        <CategoryStrip
+          categories={categories}
+          selectedCategory={selectedCategory}
+          onSelect={onCategorySelect}
+          onClear={onClearCategory}
+        />
+      )}
 
       {/* Admin-managed promo band lives in the space the old hero wasted.
           Hidden while searching/filtering — merchandising must never push
           results further away. */}
-      {!deferredSearchQuery && !selectedCategory && <PromoSlider />}
+      {scope === "all" && !deferredSearchQuery && !selectedCategory && <PromoSlider />}
 
-      {!deferredSearchQuery && !selectedCategory && newArrivals.length > 0 && (
+      {scope === "all" && !deferredSearchQuery && !selectedCategory && newArrivals.length > 0 && (
         <NewArrivalsRail products={newArrivals} currencyCode={currencyCode} />
       )}
 
@@ -661,11 +1205,15 @@ export function PublicProductsContent({
               isSearching && "animate-pulse"
             )} aria-hidden="true" />
             <Input
-              placeholder={t("searchPlaceholder")}
+              placeholder={scope === "purchased"
+                ? t("purchaseHistory.searchPlaceholder")
+                : t("searchPlaceholder")}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="ps-10"
-              aria-label={t("searchPlaceholder")}
+              aria-label={scope === "purchased"
+                ? t("purchaseHistory.searchPlaceholder")
+                : t("searchPlaceholder")}
             />
           </div>
 
@@ -677,7 +1225,14 @@ export function PublicProductsContent({
                 <SelectValue placeholder={t("sortBy")} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="newest">{t("sortOptions.newest")}</SelectItem>
+                {scope === "purchased" ? (
+                  <>
+                    <SelectItem value="purchase-frequency">{t("purchaseHistory.sortMostPurchased")}</SelectItem>
+                    <SelectItem value="last-purchased">{t("purchaseHistory.sortLastPurchased")}</SelectItem>
+                  </>
+                ) : (
+                  <SelectItem value="newest">{t("sortOptions.newest")}</SelectItem>
+                )}
                 <SelectItem value="name-asc">{t("sortOptions.nameAsc")}</SelectItem>
                 <SelectItem value="name-desc">{t("sortOptions.nameDesc")}</SelectItem>
                 <SelectItem value="price-asc">{t("sortOptions.priceAsc")}</SelectItem>
@@ -701,8 +1256,62 @@ export function PublicProductsContent({
           </div>
         </div>
 
+        {scope === "purchased" && (
+          <div className="flex flex-col gap-2 rounded-2xl border bg-card p-3 sm:flex-row sm:items-center">
+            <Select
+              value={purchasePeriod}
+              onValueChange={(value) => {
+                setPurchasePeriod(value as PurchasePeriod);
+                setCurrentPage(1);
+              }}
+            >
+              <SelectTrigger className="w-full sm:w-[180px]" aria-label={t("purchaseHistory.periodLabel")}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">{t("purchaseHistory.allHistory")}</SelectItem>
+                <SelectItem value="30">{t("purchaseHistory.last30Days")}</SelectItem>
+                <SelectItem value="90">{t("purchaseHistory.last90Days")}</SelectItem>
+                <SelectItem value="365">{t("purchaseHistory.last365Days")}</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Select
+              value={purchaseCategory}
+              onValueChange={(value) => {
+                setPurchaseCategory(value);
+                setCurrentPage(1);
+              }}
+            >
+              <SelectTrigger className="w-full sm:w-[220px]" aria-label={t("category")}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">{t("allCategories")}</SelectItem>
+                {purchaseCategories.map((category) => (
+                  <SelectItem key={category.id} value={category.id}>{category.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Button
+              type="button"
+              variant={availableOnly ? "default" : "outline"}
+              onClick={() => {
+                setAvailableOnly((value) => !value);
+                setCurrentPage(1);
+              }}
+              className="sm:ms-auto"
+              aria-pressed={availableOnly}
+            >
+              <PackageCheck className="h-4 w-4 me-1.5" aria-hidden="true" />
+              {t("purchaseHistory.availableOnly")}
+            </Button>
+          </div>
+        )}
+
         {/* Active Category Badge */}
-        {selectedCategory && selectedCategoryName && onClearCategory && (
+        {scope === "all" && selectedCategory && selectedCategoryName && onClearCategory && (
           <div className="flex items-center gap-2">
             <span className="text-sm text-muted-foreground">{t("activeFilters")}:</span>
             <Badge
@@ -726,13 +1335,112 @@ export function PublicProductsContent({
         )}
       </div>
 
+      {scope === "purchased" && purchaseHistory && !purchaseHistoryError && (
+        <section
+          aria-label={t("purchaseHistory.summaryLabel")}
+          className="rounded-2xl border border-gold/20 bg-gradient-to-br from-gold/10 via-card to-card p-4 sm:p-5"
+        >
+          {purchaseHistoryLoading && (
+            <div className="mb-3 flex items-center gap-1.5 text-xs text-muted-foreground" role="status">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+              {t("purchaseHistory.updating")}
+            </div>
+          )}
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <div>
+              <p className="text-xs text-muted-foreground">
+                {hasPurchaseResultFilters
+                  ? t("purchaseHistory.matchingSummaryLabel")
+                  : t("purchaseHistory.productsSummaryLabel")}
+              </p>
+              <p className="mt-1 text-xl font-bold">
+                {hasPurchaseResultFilters
+                  ? `${filteredProducts.length} / ${purchaseHistory.summary.totalProducts}`
+                  : purchaseHistory.summary.totalProducts}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">{t("purchaseHistory.invoicesSummaryLabel")}</p>
+              <p className="mt-1 text-xl font-bold">{purchaseHistory.summary.totalInvoices}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">{t("purchaseHistory.availableSummaryLabel")}</p>
+              <p className="mt-1 text-xl font-bold text-emerald-600 dark:text-emerald-400">
+                {purchaseHistory.summary.availableProducts}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">{t("purchaseHistory.lastPurchase")}</p>
+              <p className="mt-1 text-sm font-bold">{formattedHistoryDate}</p>
+            </div>
+          </div>
+          <p className="mt-3 border-t border-border/60 pt-3 text-xs text-muted-foreground">
+            {t("purchaseHistory.availabilityBreakdown", {
+              available: purchaseHistory.summary.availableProducts,
+              unavailable: purchaseHistory.summary.unavailableProducts,
+              discontinued: purchaseHistory.summary.discontinuedProducts,
+            })}
+          </p>
+        </section>
+      )}
+
       {/* Products Section */}
       <div id="all-products" className="scroll-mt-4" />
-      {filteredProducts.length === 0 ? (
+      {scope === "purchased" && (
+        sessionStatus === "loading"
+        || (sessionStatus === "authenticated" && !purchaseHistory && !purchaseHistoryError)
+        || (purchaseHistoryLoading && !purchaseHistory)
+      ) ? (
+        <div className="flex min-h-56 flex-col items-center justify-center gap-3 rounded-2xl border bg-card text-center">
+          <Loader2 className="h-7 w-7 animate-spin text-primary" aria-hidden="true" />
+          <p className="font-medium">{t("purchaseHistory.loading")}</p>
+          <p className="text-sm text-muted-foreground">{t("purchaseHistory.loadingHint")}</p>
+        </div>
+      ) : scope === "purchased" && purchaseHistoryError ? (
+        <div className="flex min-h-56 flex-col items-center justify-center gap-3 rounded-2xl border border-amber-500/30 bg-amber-500/5 p-6 text-center">
+          <AlertCircle className="h-7 w-7 text-amber-600" aria-hidden="true" />
+          <p className="font-semibold">{t("purchaseHistory.loadError")}</p>
+          <p className="max-w-lg text-sm text-muted-foreground">{t("purchaseHistory.loadErrorHint")}</p>
+          <Button type="button" variant="outline" onClick={retryPurchaseHistory}>
+            <RotateCcw className="h-4 w-4 me-1.5" aria-hidden="true" />
+            {t("purchaseHistory.retry")}
+          </Button>
+        </div>
+      ) : filteredProducts.length === 0 ? (
         <div className="py-12 flex flex-col items-center gap-4 text-center">
-          <p className="text-muted-foreground">{t("noProducts")}</p>
+          <History className={cn("h-9 w-9 text-muted-foreground/60", scope === "all" && "hidden")} aria-hidden="true" />
+          <p className="font-medium text-muted-foreground">
+            {scope === "purchased"
+              ? purchaseHistory?.summary.totalProducts
+                ? t("purchaseHistory.noMatchingProducts")
+                : t("purchaseHistory.noPurchaseHistory")
+              : t("noProducts")}
+          </p>
           {/* Never a dead end: always offer the way back to the full catalog. */}
-          {(selectedCategory || searchQuery) && (
+          {scope === "purchased" ? (
+            <div className="flex flex-wrap justify-center gap-2">
+              {(searchQuery || purchasePeriod !== "all" || purchaseCategory !== "all" || availableOnly) && (
+                <Button
+                  variant="outline"
+                  className="btn-press"
+                  onClick={() => {
+                    setSearchQuery("");
+                    setPurchasePeriod("all");
+                    setPurchaseCategory("all");
+                    setAvailableOnly(false);
+                    setCurrentPage(1);
+                  }}
+                >
+                  <X className="h-4 w-4 me-1.5" />
+                  {t("clearFilter")}
+                </Button>
+              )}
+              <Button className="btn-press" onClick={() => handleScopeChange("all")}>
+                <Search className="h-4 w-4 me-1.5" />
+                {t("purchaseHistory.searchAllProducts")}
+              </Button>
+            </div>
+          ) : (selectedCategory || searchQuery) && (
             <Button
               variant="outline"
               className="btn-press"
@@ -773,7 +1481,9 @@ export function PublicProductsContent({
               <ProductCardWithCart
                 key={product.item_id}
                 product={product}
-                currencyCode={currencyCode}
+                currencyCode={scope === "purchased"
+                  ? purchaseHistory?.currencyCode || currencyCode
+                  : currencyCode}
                 locale={locale}
                 priority={safePage === 1 && index < PRIORITY_PRODUCTS_COUNT}
               />
