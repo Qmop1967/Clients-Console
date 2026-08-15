@@ -9,11 +9,11 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { partnerId, error } = await getSessionPartnerId();
+    const { partnerId, actorToken, error } = await getSessionPartnerId();
     if (error) return error;
     const { id } = await params;
 
-    const res = await gwFetch(`/api/client/consignments/${id}/document`, { partnerId });
+    const res = await gwFetch(`/api/client/consignments/${id}/document`, { partnerId, actorToken });
     if (!res.ok) {
       const data = await res.json().catch(() => ({ error: "Gateway error" }));
       return NextResponse.json(data, { status: res.status });

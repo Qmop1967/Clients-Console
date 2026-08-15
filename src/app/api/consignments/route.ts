@@ -6,7 +6,7 @@ export const revalidate = 0;
 
 export async function GET(req: NextRequest) {
   try {
-    const { partnerId, error } = await getSessionPartnerId();
+    const { partnerId, actorToken, error } = await getSessionPartnerId();
     if (error) return error;
 
     const sp = req.nextUrl.searchParams;
@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
     let path = `/api/client/consignments?limit=${limit}&offset=${offset}`;
     if (state) path += `&state=${state}`;
 
-    const res = await gwFetch(path, { partnerId });
+    const res = await gwFetch(path, { partnerId, actorToken });
     const data = await res.json();
     if (!res.ok) return NextResponse.json(data, { status: res.status });
     return NextResponse.json(data);

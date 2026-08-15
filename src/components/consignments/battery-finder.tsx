@@ -10,7 +10,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
   Search, Camera, Sparkles, ChevronDown, CheckCircle2, Loader2,
-  Package, Send, Zap, TriangleAlert, ScanLine, Info,
+  Package, Zap, TriangleAlert, ScanLine, Info,
 } from "lucide-react";
 import { ProductImageSmall } from "@/components/products";
 import { getOdooImageUrl } from "@/lib/odoo/client";
@@ -29,13 +29,43 @@ interface FinderProduct {
   multi_option: boolean;
   custody: Custody | null;
 }
+export interface FinderReplenishmentProduct {
+  product_id: number; name: string; code: string | null; confidence: "confirmed" | "likely";
+}
 interface Suggestion { type: "laptop" | "pn"; label: string; laptop_id?: number; pp_id?: number; pns?: string[] }
 interface TreeBrand { brand: string; families: Array<{ family: string; models: Array<{ id: number; model: string }> }> }
 interface Extracted { device: string; brand: string; family: string; model: string; part_numbers: string[]; confidence: string }
 
+function aggregateFinderProducts(items: FinderProduct[]): FinderProduct[] {
+  const grouped = new Map<number, FinderProduct>();
+  for (const item of items) {
+    const existing = grouped.get(item.pp_id);
+    if (!existing) {
+      grouped.set(item.pp_id, item);
+      continue;
+    }
+    const custody = existing.custody && item.custody ? {
+      ...existing.custody,
+      qty_remaining: existing.custody.qty_remaining + item.custody.qty_remaining,
+      reportable_qty: existing.custody.reportable_qty + item.custody.reportable_qty,
+    } : existing.custody || item.custody;
+    const compatible = [...existing.compatible, ...item.compatible].filter((row, index, all) =>
+      all.findIndex((candidate) => candidate.brand === row.brand && candidate.family === row.family && candidate.model === row.model) === index,
+    );
+    grouped.set(item.pp_id, {
+      ...existing,
+      custody,
+      compatible,
+      multi_option: existing.multi_option || item.multi_option,
+      confidence: existing.confidence === "confirmed" && item.confidence === "confirmed" ? "confirmed" : "likely",
+    });
+  }
+  return Array.from(grouped.values());
+}
+
 const AI_STEP_DELAYS = [0, 900, 2100, 3300];
 
-export function BatteryFinder({ firstConsignmentId }: { firstConsignmentId: number | null }) {
+export function BatteryFinder({ onAddToReplenishment }: { onAddToReplenishment: (product: FinderReplenishmentProduct) => void }) {
   const t = useTranslations("consignments");
   const router = useRouter();
   const [q, setQ] = useState("");
@@ -51,7 +81,6 @@ export function BatteryFinder({ firstConsignmentId }: { firstConsignmentId: numb
   const [extracted, setExtracted] = useState<Extracted | null>(null);
   const [noResult, setNoResult] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
-  const [sendingReq, setSendingReq] = useState(false);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const debTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const aiTimers = useRef<Array<ReturnType<typeof setTimeout>>>([]);
@@ -79,7 +108,7 @@ export function BatteryFinder({ firstConsignmentId }: { firstConsignmentId: numb
   }, []);
 
   const applyResponse = useCallback((d: { suggestions?: Suggestion[]; results?: FinderProduct[] }, fromPick: boolean) => {
-    const res = d.results || [];
+    const res = aggregateFinderProducts(d.results || []);
     setResults(res);
     setNoResult(res.length === 0 && fromPick);
     if (!fromPick) {
@@ -125,7 +154,7 @@ export function BatteryFinder({ firstConsignmentId }: { firstConsignmentId: numb
     setTreeVisible(v => !v);
     if (!tree) {
       try {
-        const res = await fetch("/api/consignments/finder/tree");
+        const res = await fetch("/api/consignments/finder/tree", { cache: "no-store", headers: { "Cache-Control": "no-store" } });
         if (res.ok) { const d = await res.json(); setTree(d.brands || []); }
       } catch { /* silent */ }
     }
@@ -166,7 +195,8 @@ export function BatteryFinder({ firstConsignmentId }: { firstConsignmentId: numb
       const { b64, mime } = await compress(file);
       const res = await fetch("/api/consignments/finder/analyze", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
+        cache: "no-store",
         body: JSON.stringify({ image: b64, media_type: mime }),
       });
       const d = await res.json();
@@ -204,34 +234,6 @@ export function BatteryFinder({ firstConsignmentId }: { firstConsignmentId: numb
       : r));
   };
 
-  const orderFromRep = async (p: FinderProduct) => {
-    if (!firstConsignmentId || sendingReq) return;
-    setSendingReq(true);
-    try {
-      const res = await fetch(`/api/consignments/${firstConsignmentId}/request-topup`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ product_id: p.pp_id, note: "طلب توفير من مكتشف البطارية" }),
-      });
-      showToast(res.ok ? t("finderOrderSent") : t("errorGeneric"));
-    } catch { showToast(t("errorGeneric")); }
-    finally { setSendingReq(false); }
-  };
-
-  const sendSearchRequest = async () => {
-    if (!firstConsignmentId || sendingReq) return;
-    setSendingReq(true);
-    try {
-      const res = await fetch(`/api/consignments/${firstConsignmentId}/request-topup`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ note: "طلب بحث توافق: " + q.slice(0, 200) }),
-      });
-      if (res.ok) { showToast(t("finderRequestSent")); setNoResult(false); }
-      else showToast(t("errorGeneric"));
-    } catch { showToast(t("errorGeneric")); }
-    finally { setSendingReq(false); }
-  };
 
   const fmt = (v: number, cur: number) => cur === 1
     ? v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -390,21 +392,24 @@ export function BatteryFinder({ firstConsignmentId }: { firstConsignmentId: numb
         {/* Results */}
         {results.map(p => {
           const cur = p.custody?.currency_id || 87;
-          const curLabel = cur === 1 ? "USD" : "IQD";
           const retail = p.custody?.suggested_retail_price || 0;
           const cost = p.custody?.invoice_unit_price || 0;
           const profit = retail > 0 && cost > 0 ? retail - cost : 0;
           const inStock = (p.custody?.reportable_qty || 0) > 0;
           const compat = p.compatible.map(c2 => (c2.brand + " " + c2.family + " " + c2.model).replace(/\s+/g, " ")).slice(0, 8);
           return (
-            <div key={p.pp_id} className="rounded-xl border-2 border-emerald-200 dark:border-emerald-800/60 bg-emerald-50/50 dark:bg-emerald-950/20 p-3.5 space-y-2.5">
-              <div className="flex items-center gap-1.5 text-[11.5px] font-bold text-emerald-700 dark:text-emerald-400">
-                <CheckCircle2 className="h-4 w-4 shrink-0" />
-                {p.matched.type === "laptop" && p.matched.model
-                  ? <>{t("finderFoundFor")} <span dir="ltr">{(p.matched.brand || "") + " " + p.matched.model}</span></>
-                  : t("finderFound")}
-                {p.confidence === "likely" && (
-                  <span className="ms-auto rounded-full bg-amber-100 dark:bg-amber-900/40 px-2 py-0.5 text-[9.5px] font-bold text-amber-700 dark:text-amber-400">{t("finderLikelyNote").split(" — ")[0]}</span>
+            <div key={p.pp_id} className={"rounded-xl border-2 p-3.5 space-y-2.5 " + (p.confidence === "likely" ? "border-amber-300 bg-amber-50/60 dark:border-amber-800 dark:bg-amber-950/30" : "border-emerald-200 bg-emerald-50/50 dark:border-emerald-800/60 dark:bg-emerald-950/20")}>
+              <div className={"flex items-start gap-1.5 text-[11.5px] font-bold " + (p.confidence === "likely" ? "text-amber-800 dark:text-amber-300" : "text-emerald-700 dark:text-emerald-400")}>
+                {p.confidence === "likely" ? (
+                  <>
+                    <TriangleAlert className="h-4 w-4 shrink-0" />
+                    <span>{t("finderLikelyNote")}</span>
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 className="h-4 w-4 shrink-0" />
+                    <span>{p.matched.type === "laptop" && p.matched.model ? <>{t("finderFoundFor")} <span dir="ltr">{(p.matched.brand || "") + " " + p.matched.model}</span></> : t("finderFound")}</span>
+                  </>
                 )}
               </div>
               <div className="flex items-start gap-3">
@@ -445,45 +450,45 @@ export function BatteryFinder({ firstConsignmentId }: { firstConsignmentId: numb
               <p className="flex items-start gap-1.5 text-[10.5px] text-amber-600 dark:text-amber-500">
                 <TriangleAlert className="h-3.5 w-3.5 shrink-0 mt-0.5" /> {t("finderCheckNote")}
               </p>
-              {p.custody && inStock ? (
-                <SellOneButton
-                  consignmentId={p.custody.consignment_id}
-                  lineId={p.custody.line_id}
-                  productId={p.pp_id}
-                  labels={{ sell: t("finderSellNow"), undo: t("undo"), sold: t("soldOneToast"), error: t("errorGeneric") }}
-                  className="w-full"
-                  showToast={showToast}
-                  onOptimistic={() => decrementCustody(p.pp_id)}
-                  onUndo={() => incrementCustody(p.pp_id)}
-                  onCommitted={() => router.refresh()}
-                />
-              ) : (
-                firstConsignmentId && (
-                  <Button size="sm" className="w-full bg-blue-600 hover:bg-blue-700 text-white" disabled={sendingReq}
-                    onClick={() => void orderFromRep(p)}>
-                    <Package className="h-3.5 w-3.5 me-1" /> {t("finderOrderFromRep")}
-                  </Button>
-                )
-              )}
+              <div className="space-y-2">
+                {p.custody && inStock && (
+                  <SellOneButton
+                    consignmentId={p.custody.consignment_id}
+                    lineId={p.custody.line_id}
+                    productId={p.pp_id}
+                    labels={{ sell: t("finderSellNow"), undo: t("undo"), sold: t("soldOneToast"), error: t("errorGeneric") }}
+                    className="w-full"
+                    showToast={showToast}
+                    onOptimistic={() => decrementCustody(p.pp_id)}
+                    onUndo={() => incrementCustody(p.pp_id)}
+                    onCommitted={() => router.refresh()}
+                  />
+                )}
+                <Button
+                  size="sm"
+                  className="w-full bg-violet-600 text-white hover:bg-violet-700"
+                  onClick={() => onAddToReplenishment({
+                    product_id: p.pp_id,
+                    name: p.name,
+                    code: p.code,
+                    confidence: p.confidence,
+                  })}
+                >
+                  <Package className="h-3.5 w-3.5 me-1" /> {t("requestTopup")}
+                </Button>
+              </div>
             </div>
           );
         })}
 
-        {/* No result */}
+        {/* No result: never create an unverified product or compatibility request. */}
         {noResult && results.length === 0 && aiStep < 0 && (
           <div className="rounded-xl border-2 border-dashed border-amber-300 dark:border-amber-700 bg-amber-50/60 dark:bg-amber-950/20 p-4 text-center space-y-2">
             <p className="text-sm font-bold">😕 {t("finderNoResult")}</p>
-            <p className="text-[11.5px] text-muted-foreground">{t("finderNoResultDesc")}</p>
-            {firstConsignmentId && (
-              <Button size="sm" className="w-full bg-emerald-600 hover:bg-emerald-700 text-white" disabled={sendingReq}
-                onClick={() => void sendSearchRequest()}>
-                <Send className="h-3.5 w-3.5 me-1" /> {t("finderSendRequest")}
-              </Button>
-            )}
+            <p className="text-[11.5px] text-muted-foreground">{t("finderCheckNote")}</p>
           </div>
         )}
 
-        {/* Toast */}
         {toast && (
           <div className="fixed bottom-5 inset-x-0 z-50 flex justify-center px-4 pointer-events-none">
             <div className="rounded-xl bg-foreground text-background px-4 py-2.5 text-xs font-bold shadow-xl max-w-[92vw]">

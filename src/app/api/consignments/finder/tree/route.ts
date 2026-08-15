@@ -5,9 +5,9 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    const { partnerId, error } = await getSessionPartnerId();
+    const { partnerId, actorToken, error } = await getSessionPartnerId();
     if (error) return error;
-    const res = await gwFetch(`/api/client/battery-finder/tree`, { partnerId });
+    const res = await gwFetch(`/api/client/battery-finder/tree`, { partnerId, actorToken });
     const data = await res.json();
     return NextResponse.json(data, { status: res.status });
   } catch (e) {

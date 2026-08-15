@@ -17,7 +17,8 @@
     "verify-upstash": "node scripts/verify-upstash.js",
     "index-products": "node scripts/index-products.js",
     "format": "prettier --write \"src/**/*.{ts,tsx,css}\"",
-    "format:check": "prettier --check \"src/**/*.{ts,tsx,css}\""
+    "format:check": "prettier --check \"src/**/*.{ts,tsx,css}\"",
+    "test:consignments": "node --experimental-strip-types --test tests/consignment-replenishment.test.mjs"
   },
   "dependencies": {
     "@auth/core": "^0.41.0",

@@ -18,7 +18,7 @@
  * static asset delivery and lets iOS treat the install as a real PWA.
  */
 
-const CACHE_VERSION = 'v-image-quality-20260803-1';
+const CACHE_VERSION = 'v-consignment-no-store-20260815-1';
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 
@@ -75,6 +75,9 @@ self.addEventListener('fetch', (event) => {
   // Letting the SW handle them could break session cookies, OTP flows,
   // and cart mutations. Auth is the #1 reason to be conservative here.
   if (url.pathname.startsWith('/api/')) return;
+  // Consignment screens contain customer-scoped custody and pending mutations.
+  // Never cache their HTML/RSC payloads or serve an offline snapshot.
+  if (/^\/(?:ar|en|ckb|kmr|tm)\/consignments(?:\/|$)/.test(url.pathname)) return;
 
   // Rule 4a: Hashed/immutable assets — cache-first (URL changes when content does).
   if (

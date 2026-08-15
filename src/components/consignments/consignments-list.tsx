@@ -9,7 +9,7 @@ import { Link } from "@/i18n/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Package, ChevronRight, ChevronDown, Inbox, BookOpen } from "lucide-react";
-import { BatteryFinder } from "./battery-finder";
+import { ReplenishmentCatalogue } from "./replenishment-catalogue";
 import { ConsignmentSummary, type ConsignmentSummaryData } from "./consignment-summary";
 
 interface Consignment {
@@ -26,6 +26,9 @@ interface Props {
   consignments: Consignment[];
   total: number;
   summary?: ConsignmentSummaryData | null;
+  partnerId: string;
+  initialCatalogue: unknown;
+  initialReplenishments: unknown;
 }
 
 const stateColors: Record<string, string> = {
@@ -64,9 +67,8 @@ function Guide() {
   );
 }
 
-export function ConsignmentsList({ consignments, total, summary }: Props) {
+export function ConsignmentsList({ consignments, total, summary, partnerId, initialCatalogue, initialReplenishments }: Props) {
   const t = useTranslations("consignments");
-  const firstActive = consignments.find(c => c.x_state === "active" || c.x_state === "delivered");
 
   return (
     <div className="space-y-4">
@@ -77,7 +79,7 @@ export function ConsignmentsList({ consignments, total, summary }: Props) {
       </div>
 
       {/* Battery Finder — always first, even with zero consignments */}
-      <BatteryFinder firstConsignmentId={firstActive?.id || null} />
+      <ReplenishmentCatalogue partnerId={partnerId} initialCatalogue={initialCatalogue} initialReplenishments={initialReplenishments} />
 
       {/* Goal + KPIs */}
       <ConsignmentSummary summary={summary || null} />

@@ -8,7 +8,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { partnerId, error } = await getSessionPartnerId();
+    const { partnerId, actorToken, error } = await getSessionPartnerId();
     if (error) return error;
     const { id } = await params;
     const body = await req.json();
@@ -27,6 +27,7 @@ export async function POST(
       method: "POST",
       body: payload,
       partnerId,
+      actorToken,
     });
     const data = await res.json();
     if (!res.ok) return NextResponse.json(data, { status: res.status });

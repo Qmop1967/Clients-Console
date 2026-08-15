@@ -4,20 +4,33 @@ import Credentials from 'next-auth/providers/credentials';
 import { getCustomerByPhone, getCustomerById } from '@/lib/odoo/customers';
 import { consumeAuthTicket } from '@/lib/auth-tickets';
 import { normalizePhone } from '@/lib/otp-store';
+import { actorTokenNeedsRefresh } from '@/lib/consignments/actor-token';
+export { actorTokenNeedsRefresh };
 
 // M2-clients (S-exec-3B): mint a gateway-signed Actor Token for this OTP-authenticated
 // client session. Server-side only; non-fatal — absent token keeps legacy_bridge.
-async function mintActorToken(partnerId: string | number, name?: string | null): Promise<string | null> {
+const actorMintRetryAfter = new Map<string, number>();
+export async function mintActorToken(partnerId: string | number, name?: string | null): Promise<string | null> {
+  const retryKey = String(partnerId);
+  if ((actorMintRetryAfter.get(retryKey) || 0) > Date.now()) return null;
   try {
     const gw = process.env.API_GATEWAY_URL || 'http://127.0.0.1:3010';
     const res = await fetch(`${gw}/api/auth/actor-token`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.API_KEY || '' },
       body: JSON.stringify({ partner_id: partnerId, name }),
+      cache: 'no-store',
     });
     const data = await res.json();
-    if (data.success && data.data?.token) return data.data.token as string;
-  } catch (err) { console.warn('[Auth] actor token mint failed (non-fatal):', err); }
+    if (res.ok && data.success && data.data?.token) {
+      actorMintRetryAfter.delete(retryKey);
+      return data.data.token as string;
+    }
+    actorMintRetryAfter.set(retryKey, Date.now() + 60_000);
+  } catch (err) {
+    actorMintRetryAfter.set(retryKey, Date.now() + 60_000);
+    console.warn('[Auth] actor token mint failed (non-fatal):', err);
+  }
   return null;
 }
 
@@ -159,13 +172,18 @@ export const {
     async jwt({ token, user }) {
       if (user) {
         token.id = user.id;
-        token.actorToken = await mintActorToken((user as any).odooContactId || user.id, user.name);
+        token.actorToken = (await mintActorToken((user as any).odooContactId || user.id, user.name)) || undefined;
         token.odooContactId = (user as any).odooContactId;
         token.priceListId = (user as any).priceListId;
         token.currencyCode = (user as any).currencyCode;
         token.delegateContactId = (user as any).delegateContactId || '';
         token.delegateName = (user as any).delegateName || '';
         token.companyName = (user as any).companyName || '';
+      } else if (token.odooContactId && actorTokenNeedsRefresh(token.actorToken)) {
+        token.actorToken = (await mintActorToken(
+          token.odooContactId,
+          typeof token.name === 'string' ? token.name : null,
+        )) || undefined;
       }
       return token;
     },
@@ -241,6 +259,7 @@ declare module 'next-auth' {
     delegateContactId?: string;
     delegateName?: string;
     companyName?: string;
+      actorToken?: string;
   }
 
   interface Session {
@@ -254,6 +273,7 @@ declare module 'next-auth' {
       delegateContactId?: string;
       delegateName?: string;
       companyName?: string;
+      actorToken?: string;
     };
   }
 }
@@ -267,5 +287,6 @@ declare module '@auth/core/jwt' {
     delegateContactId?: string;
     delegateName?: string;
     companyName?: string;
+      actorToken?: string;
   }
 }

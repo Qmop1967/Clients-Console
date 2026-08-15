@@ -9,11 +9,11 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { partnerId, error } = await getSessionPartnerId();
+    const { partnerId, actorToken, error } = await getSessionPartnerId();
     if (error) return error;
     const { id } = await params;
 
-    const res = await gwFetch(`/api/client/consignments/${id}`, { partnerId });
+    const res = await gwFetch(`/api/client/consignments/${id}`, { partnerId, actorToken });
     const data = await res.json();
 
     // Defense in depth: strip sensitive fields even if gateway doesn't return them

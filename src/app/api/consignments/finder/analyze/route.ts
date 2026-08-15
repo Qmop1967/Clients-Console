@@ -6,7 +6,7 @@ export const maxDuration = 60;
 
 export async function POST(req: NextRequest) {
   try {
-    const { partnerId, error } = await getSessionPartnerId();
+    const { partnerId, actorToken, error } = await getSessionPartnerId();
     if (error) return error;
     const body = await req.json();
     if (!body?.image || typeof body.image !== "string" || body.image.length > 8_000_000) {
@@ -16,6 +16,7 @@ export async function POST(req: NextRequest) {
       method: "POST",
       body: { image: body.image, media_type: body.media_type || "image/jpeg" },
       partnerId,
+      actorToken,
     });
     const data = await res.json();
     return NextResponse.json(data, { status: res.status });
