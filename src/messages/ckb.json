@@ -915,6 +915,9 @@
     "eventDelivered": "تم التسليم",
     "eventSold": "بيع",
     "eventReplenished": "تعويض مُسلّم",
-    "reportStateInvoiced": "مفوتر"
+    "reportStateInvoiced": "مفوتر",
+    "requestTopup": "Add to replenishment basket",
+    "topupAddedToBasket": "Added to the separate consignment replenishment basket",
+    "topupBasketLocked": "The replenishment basket is locked while the previous request is verified"
   }
 }

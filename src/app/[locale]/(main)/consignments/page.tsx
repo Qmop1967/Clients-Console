@@ -24,39 +24,31 @@ export default async function ConsignmentsPage() {
   const actor = await getConsignmentActor();
   if (!actor) redirect("/login");
 
-  let data: { data?: unknown[]; total?: number } = { data: [], total: 0 };
-  let summary: ConsignmentSummaryData | null = null;
-  let catalogue: unknown = { data: [], total: 0 };
-  let replenishments: unknown = { data: [], total: 0 };
+  const [listResponse, summaryResponse, catalogueResponse, replenishmentResponse] = await Promise.all([
+    consignmentGatewayFetch("/api/client/consignments?limit=50&offset=0", { actor }),
+    consignmentGatewayFetch("/api/client/consignments/summary", { actor }),
+    consignmentGatewayFetch("/api/client/consignments/catalogue", { actor }),
+    consignmentGatewayFetch("/api/client/consignments/replenishments", { actor }),
+  ]);
 
-  try {
-    const [listResult, summaryResult, catalogueResult, replenishmentResult] =
-      await Promise.allSettled([
-        consignmentGatewayFetch("/api/client/consignments?limit=50&offset=0", {
-          actor,
-        }),
-        consignmentGatewayFetch("/api/client/consignments/summary", {
-          actor,
-        }),
-        consignmentGatewayFetch("/api/client/consignments/catalogue", { actor }),
-        consignmentGatewayFetch("/api/client/consignments/replenishments", { actor }),
-      ]);
-
-    if (listResult.status === "fulfilled") {
-      data = (await payload(listResult.value) || data) as typeof data;
-    }
-    if (summaryResult.status === "fulfilled") {
-      summary = await payload(summaryResult.value) as ConsignmentSummaryData | null;
-    }
-    if (catalogueResult.status === "fulfilled") {
-      catalogue = await payload(catalogueResult.value) || catalogue;
-    }
-    if (replenishmentResult.status === "fulfilled") {
-      replenishments = await payload(replenishmentResult.value) || replenishments;
-    }
-  } catch (error) {
-    console.error("[Consignments Page] fetch error:", error);
+  if ([listResponse, summaryResponse, catalogueResponse, replenishmentResponse]
+    .some((response) => response.status === 401 || response.status === 403)) {
+    redirect("/login?callbackUrl=/consignments&reason=session_expired");
   }
+
+  // The list and catalogue are the page's primary truth. Never render a false
+  // empty state when either failed upstream.
+  if (!listResponse.ok || !catalogueResponse.ok) {
+    throw new Error(`Consignment page gateway failed (list=${listResponse.status}, catalogue=${catalogueResponse.status})`);
+  }
+
+  const data = (await payload(listResponse) || { data: [], total: 0 }) as {
+    data?: unknown[];
+    total?: number;
+  };
+  const summary = await payload(summaryResponse) as ConsignmentSummaryData | null;
+  const catalogue = await payload(catalogueResponse) || { data: [], total: 0 };
+  const replenishments = await payload(replenishmentResponse) || { data: [], total: 0 };
 
   return (
     <div className="container mx-auto px-4 py-6">

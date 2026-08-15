@@ -13,11 +13,25 @@ import {
   createReplenishmentCart,
   parseReplenishmentCart,
   readReplenishmentAcknowledgements,
+  reconcileReplenishmentCart,
+  replenishmentHistoryMatchesCart,
   replenishmentStorageKey,
   replenishmentSubmissionHash,
+  isDefiniteReplenishmentFailure,
   setReplenishmentQuantity,
   unlockAfterConfirmedFailure,
 } from "../src/lib/consignments/replenishment-cart.ts";
+import { actorTokenNeedsRefresh } from "../src/lib/consignments/actor-claims.ts";
+import {
+  normalizeFinderCustody,
+  isLatestFinderRequest,
+  selectReportableCustodySource,
+} from "../src/lib/consignments/finder-custody.ts";
+import {
+  getOrCreateMutationKey,
+  isConfirmedMutationFailure,
+  mutationOperationStorageKey,
+} from "../src/lib/consignments/operation-key.ts";
 
 test("catalogue keeps central stock separate from replenishment eligibility", () => {
   const [blocked, available] = normalizeCatalogue({
@@ -106,6 +120,47 @@ test("cart is partner namespaced and locks submitted payload", async () => {
   assert.equal(setReplenishmentQuantity(unlocked, 42, 7).lines[0].qty, 7);
 });
 
+test("cart caps live availability, removes stale products and unlocks business 409", () => {
+  const initial = addReplenishmentLine(
+    createReplenishmentCart("11111111-1111-4111-8111-111111111111"),
+    { product_id: 42, name: "Battery 42", qty: 8 },
+  );
+  const withStale = addReplenishmentLine(initial, { product_id: 99, name: "Stale", qty: 2 });
+  const reconciled = reconcileReplenishmentCart(withStale, [
+    { product_id: 42, can_replenish: true, available_qty: 3 },
+    { product_id: 99, can_replenish: false, available_qty: 10 },
+  ]);
+  assert.deepEqual(reconciled.lines.map(({ product_id, qty }) => ({ product_id, qty })), [
+    { product_id: 42, qty: 3 },
+  ]);
+  assert.equal(isDefiniteReplenishmentFailure(409, { code: "INSUFFICIENT_STOCK" }), true);
+  assert.equal(isDefiniteReplenishmentFailure(409, { code: "NO_ACTIVE_ANCHOR" }), true);
+  assert.equal(isDefiniteReplenishmentFailure(409, { code: "PROFILE_DISABLED" }), true);
+  assert.equal(isDefiniteReplenishmentFailure(409, { code: "CONSIGNMENT_LIMIT_EXCEEDED" }), true);
+  assert.equal(isDefiniteReplenishmentFailure(409, { code: "IDEMPOTENCY_PAYLOAD_MISMATCH" }), true);
+  assert.equal(isDefiniteReplenishmentFailure(409, { code: "ANCHOR_CURRENCY_MISMATCH" }), true);
+  assert.equal(isDefiniteReplenishmentFailure(409, { code: "MISSING_PRICE" }), true);
+  assert.equal(isDefiniteReplenishmentFailure(409, { code: "IDEMPOTENCY_IN_PROGRESS" }), false);
+});
+
+test("history acknowledgement must match key and exact aggregate lines", () => {
+  const cart = addReplenishmentLine(
+    addReplenishmentLine(
+      createReplenishmentCart("11111111-1111-4111-8111-111111111111"),
+      { product_id: 42, name: "Battery 42", qty: 3 },
+    ),
+    { product_id: 43, name: "Battery 43", qty: 2 },
+  );
+  const history = [
+    { group_key: cart.idempotencyKey, lines: [{ product_id: 42, qty: 1 }] },
+    { group_key: cart.idempotencyKey, lines: [{ product_id: 42, qty: 2 }, { product_id: 43, qty: 2 }] },
+  ];
+  assert.equal(replenishmentHistoryMatchesCart(history, cart), true);
+  assert.equal(replenishmentHistoryMatchesCart([
+    { group_key: cart.idempotencyKey, lines: [{ product_id: 42, qty: 3 }] },
+  ], cart), false);
+});
+
 test("acknowledgement requires traceable id, reference and state for every split", () => {
   assert.deepEqual(readReplenishmentAcknowledgements({
     data: [
@@ -149,4 +204,88 @@ test("strict consignment gateway never emits raw partner identity headers", () =
   const serviceWorker = readFileSync(new URL("../public/sw.js", import.meta.url), "utf8");
   assert.equal(serviceWorker.includes("n  // Consignment screens"), false);
   assert.match(serviceWorker, /consignments/);
+});
+
+test("client actor claims bind cached token to partner, role and human actor", () => {
+  const now = 2_000_000_000;
+  const token = (claims) => [
+    Buffer.from(JSON.stringify({ alg: "none", typ: "JWT" })).toString("base64url"),
+    Buffer.from(JSON.stringify(claims)).toString("base64url"),
+    "signature",
+  ].join(".");
+  const valid = token({ exp: now + 3600, partner_id: 42, role: "client", type: "human" });
+  assert.equal(actorTokenNeedsRefresh(valid, "42", now), false);
+  assert.equal(actorTokenNeedsRefresh(valid, "43", now), true);
+  assert.equal(actorTokenNeedsRefresh(token({ exp: now + 3600, partner_id: 42, role: "admin", type: "human" }), 42, now), true);
+  assert.equal(actorTokenNeedsRefresh(token({ exp: now + 3600, partner_id: 42, role: "client", type: "service" }), 42, now), true);
+});
+
+test("mutation keys survive retry/reload without Math.random", () => {
+  const values = new Map();
+  const storage = {
+    getItem: (key) => values.get(key) || null,
+    setItem: (key, value) => values.set(key, value),
+    removeItem: (key) => values.delete(key),
+  };
+  const key = mutationOperationStorageKey("sale-one", { consignmentId: 7, lineId: 9, qty: 1 });
+  const first = getOrCreateMutationKey(storage, key, () => "11111111-1111-4111-8111-111111111111");
+  const retry = getOrCreateMutationKey(storage, key, () => "22222222-2222-4222-8222-222222222222");
+  assert.equal(first, retry);
+  assert.equal(isConfirmedMutationFailure(409, { code: "NOT_ACTIVE" }), true);
+  assert.equal(isConfirmedMutationFailure(409, { code: "IDEMPOTENCY_IN_PROGRESS" }), false);
+});
+
+test("finder always chooses an actually reportable custody allocation", () => {
+  const custody = normalizeFinderCustody({
+    consignment_id: 1,
+    consignment_name: "C1",
+    line_id: 10,
+    qty_remaining: 6,
+    reportable_qty: 2,
+    invoice_unit_price: 1,
+    suggested_retail_price: 2,
+    currency_id: 1,
+    source_count: 2,
+    mixed_currency: true,
+    sources: [
+      { consignment_id: 1, consignment_name: "C1", line_id: 10, qty_remaining: 4, reportable_qty: 0, invoice_unit_price: 1, suggested_retail_price: 2, currency_id: 1 },
+      { consignment_id: 2, consignment_name: "C2", line_id: 20, qty_remaining: 2, reportable_qty: 2, invoice_unit_price: 1500, suggested_retail_price: 2000, currency_id: 87 },
+    ],
+  });
+  const selected = selectReportableCustodySource(custody?.sources || []);
+  assert.equal(selected?.line_id, 20);
+  assert.equal(custody?.mixed_currency, true);
+  assert.equal(custody?.reportable_qty, 2);
+  assert.equal(isLatestFinderRequest(4, 5), false);
+  assert.equal(isLatestFinderRequest(5, 5), true);
+});
+
+test("detail and return flows use strict actor and exact gateway payload", () => {
+  const detailPage = readFileSync(new URL("../src/app/[locale]/(main)/consignments/[id]/page.tsx", import.meta.url), "utf8");
+  const detailComponent = readFileSync(new URL("../src/components/consignments/consignment-detail.tsx", import.meta.url), "utf8");
+  const returnForm = readFileSync(new URL("../src/components/consignments/request-return-form.tsx", import.meta.url), "utf8");
+  const returnProxy = readFileSync(new URL("../src/app/api/consignments/[id]/request-return/route.ts", import.meta.url), "utf8");
+  const saleProxy = readFileSync(new URL("../src/app/api/consignments/[id]/report-sale/route.ts", import.meta.url), "utf8");
+  const saleButton = readFileSync(new URL("../src/components/consignments/sell-one-button.tsx", import.meta.url), "utf8");
+  const reportSaleForm = readFileSync(new URL("../src/components/consignments/report-sale-form.tsx", import.meta.url), "utf8");
+  const authSource = readFileSync(new URL("../src/lib/auth/auth.ts", import.meta.url), "utf8");
+  const sessionCallback = authSource.slice(authSource.indexOf("async session"), authSource.indexOf("session: {"));
+
+  assert.match(detailPage, /getConsignmentActor/);
+  assert.match(detailPage, /consignmentGatewayFetch/);
+  assert.equal(detailPage.includes("x-partner-id"), false);
+  assert.equal(detailComponent.includes("/request-topup"), false);
+  assert.match(detailComponent, /replenishmentStorageKey/);
+  assert.match(returnForm, /qty_returning:\s*qtyNum/);
+  assert.equal(/\bqty:\s*qtyNum/.test(returnForm), false);
+  assert.match(returnProxy, /qty_returning:\s*Number\(row\.qty_returning\)/);
+  assert.match(returnProxy, /idempotencyKey:\s*payload\.idempotency_key/);
+  assert.match(saleProxy, /idempotencyKey:\s*payload\.idempotency_key/);
+  assert.equal(saleButton.includes("Math.random"), false);
+  assert.match(saleButton, /phase === "pending"/);
+  assert.match(saleButton, /Keep both the optimistic quantity and operation key/);
+  assert.equal(reportSaleForm.includes("Math.random"), false);
+  assert.match(reportSaleForm, /getOrCreateMutationKey/);
+  assert.equal(returnForm.includes("Math.random"), false);
+  assert.equal(sessionCallback.includes("actorToken"), false);
 });

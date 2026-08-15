@@ -13,13 +13,37 @@ export async function POST(
     const { id } = await params;
     const body = await req.json();
 
+    const lines: Array<{
+      consignment_line_id: number;
+      product_id: number;
+      qty_returning: number;
+    }> = Array.isArray(body.lines) ? body.lines.map((line: unknown) => {
+      const row = line && typeof line === "object" ? line as Record<string, unknown> : {};
+      return {
+        consignment_line_id: Number(row.consignment_line_id),
+        product_id: Number(row.product_id),
+        qty_returning: Number(row.qty_returning),
+      };
+    }) : [];
+
     const payload = {
-      lines: body.lines,
+      lines,
       notes: body.notes || "",
       idempotency_key: body.idempotency_key,
     };
 
-    if (!payload.lines || !Array.isArray(payload.lines) || payload.lines.length === 0 || !payload.idempotency_key) {
+    const invalidLine = lines.some((line) =>
+      !Number.isInteger(line.consignment_line_id) || line.consignment_line_id <= 0 ||
+      !Number.isInteger(line.product_id) || line.product_id <= 0 ||
+      !Number.isInteger(line.qty_returning) || line.qty_returning <= 0
+    );
+    if (
+      !lines.length ||
+      invalidLine ||
+      typeof payload.idempotency_key !== "string" ||
+      payload.idempotency_key.length < 16 ||
+      payload.idempotency_key.length > 128
+    ) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
 
@@ -28,6 +52,7 @@ export async function POST(
       body: payload,
       partnerId,
       actorToken,
+      idempotencyKey: payload.idempotency_key,
     });
     const data = await res.json();
     if (!res.ok) return NextResponse.json(data, { status: res.status });

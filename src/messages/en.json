@@ -1060,6 +1060,8 @@
     "undoDone": "Report cancelled ↩",
     "requestTopup": "Request Replenishment",
     "topupSent": "Replenishment requested — arrives with the rep's visit 🔄",
+    "topupAddedToBasket": "Added to the separate consignment replenishment basket",
+    "topupBasketLocked": "This replenishment basket is locked while its previous request is being verified",
     "consignmentBadge": "Consignment",
     "guideTitle": "How does consignment work?",
     "guideStep1": "You receive stock without paying — it stays TSH property, held at your shop",

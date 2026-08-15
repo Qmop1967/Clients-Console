@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useEffect, useState } from "react";
@@ -10,6 +11,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { AlertCircle, CheckCircle2, Loader2, Info, Minus, Plus, Wallet } from "lucide-react";
 import { ProductImageSmall } from "@/components/products";
 import { getOdooImageUrl } from "@/lib/odoo/client";
+import {
+  clearMutationKey,
+  getOrCreateMutationKey,
+  isConfirmedMutationFailure,
+  mutationOperationStorageKey,
+} from "@/lib/consignments/operation-key";
 
 interface Line {
   id: number;
@@ -102,14 +109,24 @@ export function ReportSaleForm({ consignmentId, lines, currency, fmt, initialLin
     setLoading(true);
     setError("");
 
-    const idempotencyKey = typeof crypto !== "undefined" && crypto.randomUUID
-      ? crypto.randomUUID()
-      : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const operationStorageKey = mutationOperationStorageKey("report-sale", {
+      consignmentId,
+      consignmentLineId: selectedLine.id,
+      productId: selectedLine.x_product_id,
+      qtySold: qtyNum,
+      notes: notes.trim(),
+    });
 
     try {
+      const idempotencyKey = getOrCreateMutationKey(window.localStorage, operationStorageKey);
       const res = await fetch(`/api/consignments/${consignmentId}/report-sale`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "Cache-Control": "no-store",
+          "Idempotency-Key": idempotencyKey,
+        },
+        cache: "no-store",
         body: JSON.stringify({
           consignment_line_id: selectedLine.id,
           product_id: selectedLine.x_product_id,
@@ -121,10 +138,14 @@ export function ReportSaleForm({ consignmentId, lines, currency, fmt, initialLin
       const data = await res.json();
       if (!res.ok) {
         const code = String(data?.code || "");
+        if (isConfirmedMutationFailure(res.status, data)) {
+          clearMutationKey(window.localStorage, operationStorageKey);
+        }
         setError(t((ERROR_KEYS[code] || "errorGeneric") as Parameters<typeof t>[0]));
         setConfirming(false);
         return;
       }
+      clearMutationKey(window.localStorage, operationStorageKey);
       setSuccess(true);
       setTimeout(onSuccess, 1500);
     } catch {

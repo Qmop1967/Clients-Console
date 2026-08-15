@@ -79,7 +79,12 @@ export function ConsignmentsList({ consignments, total, summary, partnerId, init
       </div>
 
       {/* Battery Finder — always first, even with zero consignments */}
-      <ReplenishmentCatalogue partnerId={partnerId} initialCatalogue={initialCatalogue} initialReplenishments={initialReplenishments} />
+      <ReplenishmentCatalogue
+        partnerId={partnerId}
+        hasActiveAnchor={consignments.some((consignment) => consignment.x_state === "active")}
+        initialCatalogue={initialCatalogue}
+        initialReplenishments={initialReplenishments}
+      />
 
       {/* Goal + KPIs */}
       <ConsignmentSummary summary={summary || null} />

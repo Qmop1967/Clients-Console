@@ -915,6 +915,9 @@
     "eventDelivered": "Delivered",
     "eventSold": "Sold",
     "eventReplenished": "Replenished",
-    "reportStateInvoiced": "Invoiced"
+    "reportStateInvoiced": "Invoiced",
+    "requestTopup": "Add to replenishment basket",
+    "topupAddedToBasket": "Added to the separate consignment replenishment basket",
+    "topupBasketLocked": "The replenishment basket is locked while the previous request is verified"
   }
 }

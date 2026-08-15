@@ -8,6 +8,12 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AlertCircle, CheckCircle2, Loader2 } from "lucide-react";
+import {
+  clearMutationKey,
+  getOrCreateMutationKey,
+  isConfirmedMutationFailure,
+  mutationOperationStorageKey,
+} from "@/lib/consignments/operation-key";
 
 interface Line {
   id: number;
@@ -50,26 +56,44 @@ export function RequestReturnForm({ consignmentId, lines, onSuccess, onCancel }:
     setLoading(true);
     setError("");
 
-    const idempotencyKey = typeof crypto !== "undefined" && crypto.randomUUID
-      ? crypto.randomUUID()
-      : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const operationStorageKey = mutationOperationStorageKey("request-return", {
+      consignmentId,
+      consignmentLineId: selectedLine.id,
+      productId: selectedLine.x_product_id,
+      qtyReturning: qtyNum,
+      notes: reason.trim(),
+    });
 
     try {
+      const idempotencyKey = getOrCreateMutationKey(window.localStorage, operationStorageKey);
       const res = await fetch(`/api/consignments/${consignmentId}/request-return`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "Cache-Control": "no-store",
+          "Idempotency-Key": idempotencyKey,
+        },
+        cache: "no-store",
         body: JSON.stringify({
-          lines: [{ consignment_line_id: selectedLine.id, product_id: selectedLine.x_product_id, qty: qtyNum }],
+          lines: [{
+            consignment_line_id: selectedLine.id,
+            product_id: selectedLine.x_product_id,
+            qty_returning: qtyNum,
+          }],
           notes: reason,
           idempotency_key: idempotencyKey,
         }),
       });
       const data = await res.json();
       if (!res.ok) {
+        if (isConfirmedMutationFailure(res.status, data)) {
+          clearMutationKey(window.localStorage, operationStorageKey);
+        }
         setError(data?.message || t("errorGeneric"));
         setConfirming(false);
         return;
       }
+      clearMutationKey(window.localStorage, operationStorageKey);
       setSuccess(true);
       setTimeout(onSuccess, 1500);
     } catch {

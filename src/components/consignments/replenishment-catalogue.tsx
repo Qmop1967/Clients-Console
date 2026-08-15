@@ -43,7 +43,10 @@ import {
   createReplenishmentCart,
   parseReplenishmentCart,
   readReplenishmentAcknowledgements,
+  reconcileReplenishmentCart,
   removeReplenishmentLine,
+  replenishmentHistoryMatchesCart,
+  isDefiniteReplenishmentFailure,
   replenishmentStorageKey,
   replenishmentSubmissionHash,
   replenishmentSubmissionPayload,
@@ -56,6 +59,7 @@ import {
 
 interface Props {
   partnerId: string;
+  hasActiveAnchor: boolean;
   initialCatalogue: unknown;
   initialReplenishments: unknown;
 }
@@ -81,6 +85,7 @@ function statusIcon(status: CatalogueStatus) {
 
 export function ReplenishmentCatalogue({
   partnerId,
+  hasActiveAnchor,
   initialCatalogue,
   initialReplenishments,
 }: Props) {
@@ -128,6 +133,10 @@ export function ReplenishmentCatalogue({
     noHistory: "لا توجد طلبات تعزيز سابقة",
     pieces: "قطعة",
     profileDisabled: "ملف التعزيز غير مفعّل لهذا المنتج",
+    noActiveAnchor: "لا توجد عهدة نشطة يمكن ربط طلب التعزيز بها",
+    increase: "زيادة الكمية",
+    decrease: "تقليل الكمية",
+    remove: "حذف من سلة التعزيز",
   } : {
     finderAdded: "Battery added to the consignment replenishment basket",
     notAvailable: "This product is not currently available for replenishment",
@@ -170,6 +179,10 @@ export function ReplenishmentCatalogue({
     noHistory: "No previous replenishment requests",
     pieces: "units",
     profileDisabled: "Replenishment is not enabled for this product",
+    noActiveAnchor: "There is no active consignment to receive this replenishment",
+    increase: "Increase quantity",
+    decrease: "Decrease quantity",
+    remove: "Remove from replenishment basket",
   };
 
   const products = useMemo(
@@ -191,12 +204,22 @@ export function ReplenishmentCatalogue({
   const [message, setMessage] = useState<string | null>(null);
   const [lastAcknowledgements, setLastAcknowledgements] = useState<ReplenishmentAcknowledgement[]>([]);
   const storageKey = replenishmentStorageKey(partnerId);
+  const availability = useMemo(() => products.map((product) => ({
+    product_id: product.product_id,
+    can_replenish: hasActiveAnchor && product.can_replenish,
+    available_qty: product.available_qty,
+  })), [hasActiveAnchor, products]);
 
   useEffect(() => {
     const saved = parseReplenishmentCart(window.localStorage.getItem(storageKey));
-    setCart(saved || createReplenishmentCart());
+    setCart(reconcileReplenishmentCart(saved || createReplenishmentCart(), availability));
     setHydrated(true);
-  }, [storageKey]);
+  }, [availability, storageKey]);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    setCart((current) => reconcileReplenishmentCart(current, availability));
+  }, [availability, hydrated]);
 
   useEffect(() => {
     if (!hydrated) return;
@@ -226,8 +249,8 @@ export function ReplenishmentCatalogue({
 
   const addProduct = (source: CatalogueProduct | FinderReplenishmentProduct) => {
     const catalogueProduct = products.find((product) => product.product_id === source.product_id);
-    if (!catalogueProduct?.can_replenish) {
-      flash(copy.notAvailable);
+    if (!catalogueProduct?.can_replenish || !hasActiveAnchor) {
+      flash(hasActiveAnchor ? copy.notAvailable : copy.noActiveAnchor);
       return;
     }
     const next = addReplenishmentLine(cart, {
@@ -235,7 +258,7 @@ export function ReplenishmentCatalogue({
       name: catalogueProduct.name,
       code: catalogueProduct.code,
       confidence: source.confidence || catalogueProduct.confidence,
-    });
+    }, catalogueProduct.available_qty);
     if (next === cart) return;
     setCart(next);
     setUndoCart(null);
@@ -244,7 +267,13 @@ export function ReplenishmentCatalogue({
   };
 
   const changeQty = (productId: number, qty: number) => {
-    setCart((current) => setReplenishmentQuantity(current, productId, qty));
+    const product = products.find((item) => item.product_id === productId);
+    setCart((current) => setReplenishmentQuantity(
+      current,
+      productId,
+      qty,
+      product?.available_qty || 1,
+    ));
   };
 
   const removeLine = (productId: number) => {
@@ -324,15 +353,23 @@ export function ReplenishmentCatalogue({
       const acknowledgements = readReplenishmentAcknowledgements(payload);
 
       if (response.ok && acknowledgements) {
-        completeAcknowledgedRequest(acknowledgements);
+        const latest = await fetchHistory();
+        if (latest && replenishmentHistoryMatchesCart(latest, locked)) {
+          const matches = latest.filter((item) => item.group_key === locked.idempotencyKey);
+          completeAcknowledgedRequest(matches.map((item) => ({
+            id: item.id,
+            name: item.name,
+            state: item.state,
+          })));
+        } else {
+          flash(copy.invalidAck);
+        }
         return;
       }
 
-      const definitelyRejected = response.status >= 400 &&
-        response.status < 500 &&
-        ![408, 409, 425, 429].includes(response.status);
+      const definitelyRejected = isDefiniteReplenishmentFailure(response.status, payload);
       if (definitelyRejected) {
-        setCart(unlockAfterConfirmedFailure(locked));
+        setCart(reconcileReplenishmentCart(unlockAfterConfirmedFailure(locked), availability));
         flash(response.status === 401 ? copy.rejected : copy.rejected);
       } else {
         flash(response.ok ? copy.invalidAck : copy.timeout);
@@ -350,7 +387,7 @@ export function ReplenishmentCatalogue({
     setChecking(true);
     const latest = await fetchHistory();
     const matches = latest?.filter((item) => item.group_key === cart.idempotencyKey) || [];
-    if (matches.length) {
+    if (latest && replenishmentHistoryMatchesCart(latest, cart)) {
       completeAcknowledgedRequest(matches.map((item) => ({
         id: item.id,
         name: item.name,
@@ -402,6 +439,8 @@ export function ReplenishmentCatalogue({
               type="button"
               size="sm"
               onClick={() => setBasketOpen((open) => !open)}
+              aria-label={copy.basket}
+              aria-expanded={basketOpen}
               className="relative shrink-0 bg-white text-violet-950 hover:bg-violet-50"
             >
               <ShoppingBasket className="me-1 h-4 w-4" />
@@ -430,6 +469,7 @@ export function ReplenishmentCatalogue({
                 size="sm"
                 variant={view === "grid" ? "default" : "ghost"}
                 onClick={() => setView("grid")}
+                aria-pressed={view === "grid"}
                 className="h-8 flex-1 sm:flex-none"
               >
                 <Grid2X2 className="me-1 h-3.5 w-3.5" /> {copy.grid}
@@ -439,6 +479,7 @@ export function ReplenishmentCatalogue({
                 size="sm"
                 variant={view === "list" ? "default" : "ghost"}
                 onClick={() => setView("list")}
+                aria-pressed={view === "list"}
                 className="h-8 flex-1 sm:flex-none"
               >
                 <List className="me-1 h-3.5 w-3.5" /> {copy.list}
@@ -452,6 +493,7 @@ export function ReplenishmentCatalogue({
                 type="button"
                 key={value}
                 onClick={() => setFilter(value)}
+                aria-pressed={filter === value}
                 className={"whitespace-nowrap rounded-full border px-3 py-1.5 text-[11px] font-bold transition-colors " +
                   (filter === value
                     ? "border-violet-600 bg-violet-600 text-white"
@@ -539,16 +581,16 @@ export function ReplenishmentCatalogue({
                     <Button
                       type="button"
                       size="sm"
-                      disabled={!product.can_replenish || cart.submissionPending}
+                      disabled={!hasActiveAnchor || !product.can_replenish || cart.submissionPending || (inCart?.qty || 0) >= product.available_qty}
                       onClick={() => addProduct(product)}
                       className={"mt-3 w-full " +
                         (view === "list" ? "sm:mt-0 sm:w-44" : "") +
-                        (product.can_replenish ? " bg-violet-600 text-white hover:bg-violet-700" : "")}
-                      variant={product.can_replenish ? "default" : "secondary"}
-                      title={product.can_replenish ? copy.add : copy.profileDisabled}
+                        (hasActiveAnchor && product.can_replenish ? " bg-violet-600 text-white hover:bg-violet-700" : "")}
+                      variant={hasActiveAnchor && product.can_replenish ? "default" : "secondary"}
+                      title={!hasActiveAnchor ? copy.noActiveAnchor : product.can_replenish ? copy.add : copy.profileDisabled}
                     >
-                      {product.can_replenish ? <Plus className="me-1 h-4 w-4" /> : <CircleOff className="me-1 h-4 w-4" />}
-                      {inCart ? inCart.qty.toLocaleString("en-US") + " · " + copy.add : product.can_replenish ? copy.add : copy.blocked}
+                      {hasActiveAnchor && product.can_replenish ? <Plus className="me-1 h-4 w-4" /> : <CircleOff className="me-1 h-4 w-4" />}
+                      {inCart ? inCart.qty.toLocaleString("en-US") + " · " + copy.add : hasActiveAnchor && product.can_replenish ? copy.add : copy.blocked}
                     </Button>
                   </div>
                 );
@@ -572,7 +614,7 @@ export function ReplenishmentCatalogue({
             </div>
 
             {cart.submissionPending && (
-              <div className="flex items-start gap-2 rounded-xl border border-orange-300 bg-orange-50 p-3 text-xs text-orange-800 dark:border-orange-800 dark:bg-orange-950/40 dark:text-orange-300">
+              <div role="status" className="flex items-start gap-2 rounded-xl border border-orange-300 bg-orange-50 p-3 text-xs text-orange-800 dark:border-orange-800 dark:bg-orange-950/40 dark:text-orange-300">
                 <LockKeyhole className="mt-0.5 h-4 w-4 shrink-0" />
                 <span>{copy.locked}</span>
               </div>
@@ -584,7 +626,9 @@ export function ReplenishmentCatalogue({
               </div>
             ) : (
               <div className="space-y-2">
-                {cart.lines.map((line) => (
+                {cart.lines.map((line) => {
+                  const maxQty = products.find((product) => product.product_id === line.product_id)?.available_qty || 1;
+                  return (
                   <div key={line.product_id} className="flex items-center gap-2 rounded-xl border p-2.5">
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-xs font-bold" dir="ltr">{line.name}</p>
@@ -599,6 +643,7 @@ export function ReplenishmentCatalogue({
                       <button
                         type="button"
                         disabled={cart.submissionPending}
+                        aria-label={`${copy.decrease}: ${line.name}`}
                         onClick={() => changeQty(line.product_id, line.qty - 1)}
                         className="p-2 disabled:opacity-40"
                       >
@@ -607,7 +652,7 @@ export function ReplenishmentCatalogue({
                       <input
                         type="number"
                         min={1}
-                        max={999}
+                        max={maxQty}
                         disabled={cart.submissionPending}
                         value={line.qty}
                         onChange={(event) => changeQty(line.product_id, Number(event.target.value))}
@@ -615,7 +660,8 @@ export function ReplenishmentCatalogue({
                       />
                       <button
                         type="button"
-                        disabled={cart.submissionPending}
+                        disabled={cart.submissionPending || line.qty >= maxQty}
+                        aria-label={`${copy.increase}: ${line.name}`}
                         onClick={() => changeQty(line.product_id, line.qty + 1)}
                         className="p-2 disabled:opacity-40"
                       >
@@ -625,13 +671,15 @@ export function ReplenishmentCatalogue({
                     <button
                       type="button"
                       disabled={cart.submissionPending}
+                      aria-label={`${copy.remove}: ${line.name}`}
                       onClick={() => removeLine(line.product_id)}
                       className="rounded-lg p-2 text-red-600 hover:bg-red-50 disabled:opacity-40 dark:hover:bg-red-950/30"
                     >
                       <Trash2 className="h-4 w-4" />
                     </button>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             )}
 
@@ -684,7 +732,7 @@ export function ReplenishmentCatalogue({
       )}
 
       {lastAcknowledgements.length > 0 && (
-        <div className="rounded-xl border border-emerald-300 bg-emerald-50 p-3 text-xs text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300">
+        <div role="status" aria-live="polite" className="rounded-xl border border-emerald-300 bg-emerald-50 p-3 text-xs text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300">
           <p className="flex items-center gap-2 font-bold">
             <CheckCircle2 className="h-4 w-4" /> {copy.sent}
           </p>
@@ -736,7 +784,7 @@ export function ReplenishmentCatalogue({
       </Card>
 
       {message && (
-        <div className="fixed bottom-5 inset-x-0 z-[80] flex justify-center px-4 pointer-events-none">
+        <div role="status" aria-live="polite" className="fixed bottom-5 inset-x-0 z-[80] flex justify-center px-4 pointer-events-none">
           <div className="max-w-[92vw] rounded-xl bg-foreground px-4 py-2.5 text-xs font-bold text-background shadow-xl">
             {message}
           </div>

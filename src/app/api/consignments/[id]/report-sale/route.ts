@@ -25,7 +25,14 @@ export async function POST(
       idempotency_key: body.idempotency_key,
     };
 
-    if (!payload.consignment_line_id || !payload.product_id || !payload.qty_sold || !payload.idempotency_key) {
+    if (
+      !payload.consignment_line_id ||
+      !payload.product_id ||
+      !payload.qty_sold ||
+      typeof payload.idempotency_key !== "string" ||
+      payload.idempotency_key.length < 16 ||
+      payload.idempotency_key.length > 128
+    ) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
 
@@ -34,6 +41,7 @@ export async function POST(
       body: payload,
       partnerId,
       actorToken,
+      idempotencyKey: payload.idempotency_key,
     });
     const data = await res.json();
     if (!res.ok) return NextResponse.json(data, { status: res.status });

@@ -15,12 +15,16 @@ import {
 import { ProductImageSmall } from "@/components/products";
 import { getOdooImageUrl } from "@/lib/odoo/client";
 import { SellOneButton } from "./sell-one-button";
+import {
+  aggregateFinderCustody,
+  isLatestFinderRequest,
+  normalizeFinderCustody,
+  selectReportableCustodySource,
+  type FinderCustodyAggregate,
+  type FinderCustodySource,
+} from "@/lib/consignments/finder-custody";
 
-interface Custody {
-  consignment_id: number; consignment_name: string; line_id: number;
-  qty_remaining: number; reportable_qty: number;
-  invoice_unit_price: number; suggested_retail_price: number; currency_id: number;
-}
+type Custody = FinderCustodyAggregate;
 interface FinderProduct {
   pp_id: number; name: string; code: string | null; pns: string[];
   image_version: number | null; confidence: "confirmed" | "likely";
@@ -41,14 +45,18 @@ function aggregateFinderProducts(items: FinderProduct[]): FinderProduct[] {
   for (const item of items) {
     const existing = grouped.get(item.pp_id);
     if (!existing) {
-      grouped.set(item.pp_id, item);
+      grouped.set(item.pp_id, {
+        ...item,
+        custody: normalizeFinderCustody(item.custody),
+      });
       continue;
     }
-    const custody = existing.custody && item.custody ? {
-      ...existing.custody,
-      qty_remaining: existing.custody.qty_remaining + item.custody.qty_remaining,
-      reportable_qty: existing.custody.reportable_qty + item.custody.reportable_qty,
-    } : existing.custody || item.custody;
+    const normalizedItemCustody = normalizeFinderCustody(item.custody);
+    const custodySources: FinderCustodySource[] = [
+      ...(existing.custody?.sources || []),
+      ...(normalizedItemCustody?.sources || []),
+    ];
+    const custody = aggregateFinderCustody(custodySources);
     const compatible = [...existing.compatible, ...item.compatible].filter((row, index, all) =>
       all.findIndex((candidate) => candidate.brand === row.brand && candidate.family === row.family && candidate.model === row.model) === index,
     );
@@ -86,6 +94,8 @@ export function BatteryFinder({ onAddToReplenishment }: { onAddToReplenishment: 
   const aiTimers = useRef<Array<ReturnType<typeof setTimeout>>>([]);
   const boxRef = useRef<HTMLDivElement | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
+  const finderRequestRef = useRef(0);
+  const finderAbortRef = useRef<AbortController | null>(null);
 
   const showToast = useCallback((m: string) => {
     setToast(m);
@@ -96,6 +106,7 @@ export function BatteryFinder({ onAddToReplenishment }: { onAddToReplenishment: 
   useEffect(() => () => {
     if (toastTimer.current) clearTimeout(toastTimer.current);
     if (debTimer.current) clearTimeout(debTimer.current);
+    finderAbortRef.current?.abort();
     aiTimers.current.forEach(clearTimeout);
   }, []);
 
@@ -126,22 +137,48 @@ export function BatteryFinder({ onAddToReplenishment }: { onAddToReplenishment: 
     const query = q.trim();
     if (query.length < 2) { setSuggestions([]); setShowSugg(false); setNoResult(false); return; }
     debTimer.current = setTimeout(async () => {
+      finderAbortRef.current?.abort();
+      aiTimers.current.forEach(clearTimeout);
+      aiTimers.current = [];
+      setAiStep(-1);
+      const controller = new AbortController();
+      finderAbortRef.current = controller;
+      const requestId = ++finderRequestRef.current;
       setSearching(true);
       try {
-        const res = await fetch(`/api/consignments/finder?q=${encodeURIComponent(query)}`);
-        if (res.ok) applyResponse(await res.json(), false);
+        const res = await fetch(`/api/consignments/finder?q=${encodeURIComponent(query)}`, {
+          cache: "no-store",
+          headers: { "Cache-Control": "no-store" },
+          signal: controller.signal,
+        });
+        if (res.ok && isLatestFinderRequest(requestId, finderRequestRef.current)) applyResponse(await res.json(), false);
       } catch { /* silent */ }
-      finally { setSearching(false); }
+      finally {
+        if (isLatestFinderRequest(requestId, finderRequestRef.current)) setSearching(false);
+      }
     }, 280);
   }, [q, applyResponse]);
 
   const pickLaptop = async (laptopId: number) => {
     setShowSugg(false); setSearching(true); setExtracted(null);
+    finderAbortRef.current?.abort();
+    aiTimers.current.forEach(clearTimeout);
+    aiTimers.current = [];
+    setAiStep(-1);
+    const controller = new AbortController();
+    finderAbortRef.current = controller;
+    const requestId = ++finderRequestRef.current;
     try {
-      const res = await fetch(`/api/consignments/finder?laptop_id=${laptopId}`);
-      if (res.ok) applyResponse(await res.json(), true);
+      const res = await fetch(`/api/consignments/finder?laptop_id=${laptopId}`, {
+        cache: "no-store",
+        headers: { "Cache-Control": "no-store" },
+        signal: controller.signal,
+      });
+      if (res.ok && isLatestFinderRequest(requestId, finderRequestRef.current)) applyResponse(await res.json(), true);
     } catch { /* silent */ }
-    finally { setSearching(false); }
+    finally {
+      if (isLatestFinderRequest(requestId, finderRequestRef.current)) setSearching(false);
+    }
   };
 
   const pickSuggestion = (s: Suggestion) => {
@@ -183,6 +220,10 @@ export function BatteryFinder({ onAddToReplenishment }: { onAddToReplenishment: 
 
   const onPhoto = async (file: File | null) => {
     if (!file) return;
+    finderAbortRef.current?.abort();
+    const controller = new AbortController();
+    finderAbortRef.current = controller;
+    const requestId = ++finderRequestRef.current;
     setResults([]); setNoResult(false); setExtracted(null); setShowSugg(false);
     aiTimers.current.forEach(clearTimeout); aiTimers.current = [];
     setAiStep(0);
@@ -197,9 +238,11 @@ export function BatteryFinder({ onAddToReplenishment }: { onAddToReplenishment: 
         method: "POST",
         headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
         cache: "no-store",
+        signal: controller.signal,
         body: JSON.stringify({ image: b64, media_type: mime }),
       });
       const d = await res.json();
+      if (!isLatestFinderRequest(requestId, finderRequestRef.current)) return;
       aiTimers.current.forEach(clearTimeout);
       if (!res.ok) {
         setAiStep(-1);
@@ -208,30 +251,35 @@ export function BatteryFinder({ onAddToReplenishment }: { onAddToReplenishment: 
       }
       setAiStep(4);
       setTimeout(() => {
+        if (!isLatestFinderRequest(requestId, finderRequestRef.current)) return;
         setExtracted(d.extracted || null);
         applyResponse(d, true);
         if ((d.results || []).length === 0) setNoResult(true);
         setAiStep(-1);
       }, 450);
     } catch {
+      if (!isLatestFinderRequest(requestId, finderRequestRef.current)) return;
       aiTimers.current.forEach(clearTimeout);
       setAiStep(-1);
       showToast(t("aiFailed"));
     } finally {
-      if (fileRef.current) fileRef.current.value = "";
+      if (isLatestFinderRequest(requestId, finderRequestRef.current) && fileRef.current) {
+        fileRef.current.value = "";
+      }
     }
   };
 
   // ── actions on results ──
-  const decrementCustody = (ppId: number) => {
-    setResults(rs => rs.map(r => r.pp_id === ppId && r.custody
-      ? { ...r, custody: { ...r.custody, reportable_qty: Math.max(0, r.custody.reportable_qty - 1), qty_remaining: Math.max(0, r.custody.qty_remaining - 1) } }
-      : r));
-  };
-  const incrementCustody = (ppId: number) => {
-    setResults(rs => rs.map(r => r.pp_id === ppId && r.custody
-      ? { ...r, custody: { ...r.custody, reportable_qty: r.custody.reportable_qty + 1, qty_remaining: r.custody.qty_remaining + 1 } }
-      : r));
+  const updateCustody = (ppId: number, lineId: number, delta: -1 | 1) => {
+    setResults((current) => current.map((product) => {
+      if (product.pp_id !== ppId || !product.custody) return product;
+      const sources = product.custody.sources.map((source) => source.line_id === lineId ? {
+        ...source,
+        reportable_qty: Math.max(0, source.reportable_qty + delta),
+        qty_remaining: Math.max(0, source.qty_remaining + delta),
+      } : source);
+      return { ...product, custody: aggregateFinderCustody(sources) };
+    }));
   };
 
 
@@ -391,11 +439,12 @@ export function BatteryFinder({ onAddToReplenishment }: { onAddToReplenishment: 
 
         {/* Results */}
         {results.map(p => {
-          const cur = p.custody?.currency_id || 87;
-          const retail = p.custody?.suggested_retail_price || 0;
-          const cost = p.custody?.invoice_unit_price || 0;
+          const reportableSource = selectReportableCustodySource(p.custody?.sources || []);
+          const cur = reportableSource?.currency_id || p.custody?.currency_id || 87;
+          const retail = reportableSource?.suggested_retail_price || p.custody?.suggested_retail_price || 0;
+          const cost = reportableSource?.invoice_unit_price || p.custody?.invoice_unit_price || 0;
           const profit = retail > 0 && cost > 0 ? retail - cost : 0;
-          const inStock = (p.custody?.reportable_qty || 0) > 0;
+          const inStock = (p.custody?.reportable_qty || 0) > 0 && reportableSource !== null;
           const compat = p.compatible.map(c2 => (c2.brand + " " + c2.family + " " + c2.model).replace(/\s+/g, " ")).slice(0, 8);
           return (
             <div key={p.pp_id} className={"rounded-xl border-2 p-3.5 space-y-2.5 " + (p.confidence === "likely" ? "border-amber-300 bg-amber-50/60 dark:border-amber-800 dark:bg-amber-950/30" : "border-emerald-200 bg-emerald-50/50 dark:border-emerald-800/60 dark:bg-emerald-950/20")}>
@@ -451,16 +500,16 @@ export function BatteryFinder({ onAddToReplenishment }: { onAddToReplenishment: 
                 <TriangleAlert className="h-3.5 w-3.5 shrink-0 mt-0.5" /> {t("finderCheckNote")}
               </p>
               <div className="space-y-2">
-                {p.custody && inStock && (
+                {reportableSource && inStock && (
                   <SellOneButton
-                    consignmentId={p.custody.consignment_id}
-                    lineId={p.custody.line_id}
+                    consignmentId={reportableSource.consignment_id}
+                    lineId={reportableSource.line_id}
                     productId={p.pp_id}
                     labels={{ sell: t("finderSellNow"), undo: t("undo"), sold: t("soldOneToast"), error: t("errorGeneric") }}
                     className="w-full"
                     showToast={showToast}
-                    onOptimistic={() => decrementCustody(p.pp_id)}
-                    onUndo={() => incrementCustody(p.pp_id)}
+                    onOptimistic={() => updateCustody(p.pp_id, reportableSource.line_id, -1)}
+                    onUndo={() => updateCustody(p.pp_id, reportableSource.line_id, 1)}
                     onCommitted={() => router.refresh()}
                   />
                 )}

@@ -83,14 +83,6 @@ export function normalizeCatalogue(payload: unknown): CatalogueProduct[] {
       const name = text(row.product_name ?? row.name ?? row.display_name);
       if (!Number.isInteger(productId) || productId <= 0 || !name) return null;
 
-      const centralQty = Math.max(0, number(
-        row.central_free ??
-        row.central_available_qty ??
-        row.central_qty ??
-        row.available_qty ??
-        row.available_stock ??
-        row.qty_available,
-      ));
       const availableQty = Math.max(0, number(row.available_for_replenishment));
       const canReplenish = status.can_replenish === true &&
         status.profile_enabled === true &&
@@ -138,8 +130,8 @@ export function normalizeCatalogue(payload: unknown): CatalogueProduct[] {
         code: text(row.code ?? row.default_code ?? row.sku),
         category: text(row.category ?? row.category_name),
         image_version: number(row.image_version) || null,
-        central_qty: centralQty,
-        central_available: centralQty > 0,
+        central_qty: availableQty,
+        central_available: availableQty > 0,
         available_qty: availableQty,
         can_replenish: canReplenish,
         custody_qty: custodyQty,

@@ -1,11 +1,15 @@
 import { getTranslations } from "next-intl/server";
-import { auth } from "@/lib/auth/auth";
 import { redirect, notFound } from "next/navigation";
 import { ConsignmentDetail } from "@/components/consignments/consignment-detail";
 import { getImageVersions } from "@/lib/odoo/client";
+import {
+  consignmentGatewayFetch,
+  getConsignmentActor,
+} from "@/lib/consignments/server-gateway";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
+export const fetchCache = "force-no-store";
 
 export async function generateMetadata() {
   const t = await getTranslations("consignments");
@@ -17,51 +21,48 @@ export default async function ConsignmentDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const session = await auth();
-  if (!session?.user) redirect("/login");
-  if (!session.user.odooPartnerId) notFound();
-
   const { id } = await params;
-  let data: any = null;
+  const numericId = Number(id);
+  if (!Number.isInteger(numericId) || numericId <= 0) notFound();
 
-  try {
-    const GW = process.env.API_GATEWAY_URL || "http://127.0.0.1:3010";
-    const KEY = process.env.API_KEY || "";
-    const res = await fetch(`${GW}/api/client/consignments/${id}`, {
-      headers: { "x-api-key": KEY, "x-partner-id": session.user.odooPartnerId, "Content-Type": "application/json" },
-      cache: "no-store",
-    });
-    if (res.status === 404) notFound();
-    if (res.ok) {
-      const json = await res.json();
-      data = json.data;
-      // Defense in depth: strip sensitive fields
-      if (data?.lines) {
-        data.lines = data.lines.map((l: any) => {
-          const { x_cost, x_margin, x_cogs, ...safe } = l; // keep x_invoice_unit_price — customer's own purchase price
-          return safe;
-        });
-        // Attach image_version per line (x_product_id is pp_id — product_product.id).
-        // Batched gateway lookup of ir.attachment write_date; missing => box-icon fallback.
-        const ppIds = data.lines.map((l: any) => Number(l.x_product_id)).filter(Boolean);
-        const versions = await getImageVersions(ppIds);
-        data.lines = data.lines.map((l: any) => ({
-          ...l,
-          image_version: versions.get(Number(l.x_product_id)),
-        }));
-      }
-    }
-  } catch (e) {
-    console.error("[Consignment Detail Page]", e);
+  const actor = await getConsignmentActor();
+  if (!actor) redirect(`/login?callbackUrl=/consignments/${numericId}&reason=session_expired`);
+
+  const res = await consignmentGatewayFetch(`/api/client/consignments/${numericId}`, { actor });
+  if (res.status === 401 || res.status === 403) {
+    redirect(`/login?callbackUrl=/consignments/${numericId}&reason=session_expired`);
   }
+  if (res.status === 404) notFound();
+  if (!res.ok) throw new Error(`Consignment detail gateway failed (${res.status})`);
+
+  const json = await res.json();
+  const data: any = json?.data;
 
   if (!data) notFound();
+  // Defense in depth: strip fields the customer must never receive.
+  if (Array.isArray(data.lines)) {
+    data.lines = data.lines.map((line: any) => {
+      const { x_cost, x_margin, x_cogs, ...safe } = line;
+      return safe;
+    });
+    const ppIds = data.lines.map((line: any) => Number(line.x_product_id)).filter(Boolean);
+    try {
+      const versions = await getImageVersions(ppIds);
+      data.lines = data.lines.map((line: any) => ({
+        ...line,
+        image_version: versions.get(Number(line.x_product_id)),
+      }));
+    } catch (error) {
+      console.warn("[Consignment Detail Images]", error);
+    }
+  }
 
   return (
     <div className="container mx-auto px-4 py-6">
       <ConsignmentDetail
         consignment={data}
-        consignmentId={parseInt(id)}
+        consignmentId={numericId}
+        partnerId={actor.partnerId}
       />
     </div>
   );

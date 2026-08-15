@@ -1,6 +1,11 @@
 import "server-only";
 
-import { actorTokenNeedsRefresh, auth, mintActorToken } from "@/lib/auth/auth";
+import {
+  actorTokenNeedsRefresh,
+  auth,
+  getCachedActorToken,
+  mintActorToken,
+} from "@/lib/auth/auth";
 
 export interface ConsignmentActor {
   partnerId: string;
@@ -25,13 +30,12 @@ export async function getConsignmentActor(): Promise<ConsignmentActor | null> {
   const partnerId = String(session?.user?.odooPartnerId || "").trim();
   if (!partnerId) return null;
 
-  const sessionUser = session?.user as ({ actorToken?: string } | undefined);
-  let actorToken = sessionUser?.actorToken;
-  if (actorTokenNeedsRefresh(actorToken)) {
+  let actorToken = getCachedActorToken(partnerId) || undefined;
+  if (actorTokenNeedsRefresh(actorToken, partnerId)) {
     actorToken = await mintActorToken(partnerId, session?.user?.name || null) || undefined;
   }
 
-  if (!actorToken || actorTokenNeedsRefresh(actorToken)) return null;
+  if (!actorToken || actorTokenNeedsRefresh(actorToken, partnerId)) return null;
   return { partnerId, actorToken };
 }
 

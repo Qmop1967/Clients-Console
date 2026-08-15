@@ -4,8 +4,14 @@
 // The POST only fires AFTER the undo window closes, so "undo" never hits the server.
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { ShoppingCart, Undo2, Loader2 } from "lucide-react";
+import { ShoppingCart, Undo2, Loader2, RotateCcw } from "lucide-react";
 import { fireConfetti } from "./confetti";
+import {
+  clearMutationKey,
+  getOrCreateMutationKey,
+  isConfirmedMutationFailure,
+  mutationOperationStorageKey,
+} from "@/lib/consignments/operation-key";
 
 interface Labels { sell: string; undo: string; sold: string; error: string }
 
@@ -26,7 +32,7 @@ export function SellOneButton({
   consignmentId, lineId, productId, labels, className, disabled,
   showToast, onOptimistic, onUndo, onCommitted,
 }: Props) {
-  const [phase, setPhase] = useState<"idle" | "countdown" | "posting">("idle");
+  const [phase, setPhase] = useState<"idle" | "countdown" | "posting" | "pending">("idle");
   const [count, setCount] = useState(5);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const cancelledRef = useRef(false);
@@ -62,13 +68,22 @@ export function SellOneButton({
 
   const commit = async () => {
     setPhase("posting");
+    const operationStorageKey = mutationOperationStorageKey("sale-one", {
+      consignmentId,
+      lineId,
+      productId,
+      qty: 1,
+    });
     try {
-      const idem = typeof crypto !== "undefined" && crypto.randomUUID
-        ? crypto.randomUUID()
-        : String(Date.now()) + "-" + Math.random().toString(36).slice(2);
+      const idem = getOrCreateMutationKey(window.localStorage, operationStorageKey);
       const res = await fetch(`/api/consignments/${consignmentId}/report-sale`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "Cache-Control": "no-store",
+          "Idempotency-Key": idem,
+        },
+        cache: "no-store",
         body: JSON.stringify({
           consignment_line_id: lineId,
           product_id: productId,
@@ -78,17 +93,37 @@ export function SellOneButton({
       });
       if (!res.ok) {
         const d = await res.json().catch(() => ({}));
-        throw new Error(d?.message || labels.error);
+        if (isConfirmedMutationFailure(res.status, d)) {
+          clearMutationKey(window.localStorage, operationStorageKey);
+          onUndo?.();
+          setPhase("idle");
+        } else {
+          // The gateway may have committed even when its response was lost.
+          // Keep both the optimistic quantity and operation key until retry.
+          setPhase("pending");
+        }
+        showToast(d?.message || labels.error);
+        return;
       }
+      clearMutationKey(window.localStorage, operationStorageKey);
       showToast(labels.sold);
       onCommitted?.();
     } catch (e: unknown) {
-      onUndo?.();
+      setPhase("pending");
       showToast(e instanceof Error ? e.message : labels.error);
-    } finally {
-      setPhase("idle");
+      return;
     }
+    setPhase("idle");
   };
+
+  if (phase === "pending") {
+    return (
+      <Button size="sm" variant="outline" onClick={() => void commit()}
+        className={"border-orange-400 text-orange-700 dark:text-orange-300 " + (className || "")}>
+        <RotateCcw className="h-3.5 w-3.5 me-1" /> {labels.sell}
+      </Button>
+    );
+  }
 
   if (phase === "countdown") {
     return (

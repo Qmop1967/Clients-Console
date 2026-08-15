@@ -22,6 +22,17 @@ export interface ReplenishmentAcknowledgement {
   state: string;
 }
 
+export interface ReplenishmentAvailability {
+  product_id: number;
+  can_replenish: boolean;
+  available_qty: number;
+}
+
+export interface ReplenishmentHistoryMatch {
+  group_key: string | null;
+  lines: Array<{ product_id: number; qty: number }>;
+}
+
 function uuid(): string {
   return globalThis.crypto.randomUUID();
 }
@@ -84,13 +95,16 @@ function editable(state: ReplenishmentCartState): boolean {
 export function addReplenishmentLine(
   state: ReplenishmentCartState,
   line: Omit<ReplenishmentCartLine, "qty"> & { qty?: number },
+  maxQty = 999,
 ): ReplenishmentCartState {
   if (!editable(state)) return state;
-  const wanted = Math.max(1, Math.min(999, Math.trunc(line.qty || 1)));
+  const safeMax = Math.max(0, Math.min(999, Math.trunc(maxQty || 0)));
+  if (safeMax < 1) return state;
+  const wanted = Math.max(1, Math.min(safeMax, Math.trunc(line.qty || 1)));
   const existing = state.lines.find((item) => item.product_id === line.product_id);
   const lines = existing
     ? state.lines.map((item) => item.product_id === line.product_id
-      ? { ...item, qty: Math.min(999, item.qty + wanted) }
+      ? { ...item, qty: Math.min(safeMax, item.qty + wanted) }
       : item)
     : [...state.lines, { ...line, qty: wanted }];
 
@@ -101,9 +115,11 @@ export function setReplenishmentQuantity(
   state: ReplenishmentCartState,
   productId: number,
   qty: number,
+  maxQty = 999,
 ): ReplenishmentCartState {
   if (!editable(state)) return state;
-  const safeQty = Math.max(1, Math.min(999, Math.trunc(qty || 1)));
+  const safeMax = Math.max(1, Math.min(999, Math.trunc(maxQty || 1)));
+  const safeQty = Math.max(1, Math.min(safeMax, Math.trunc(qty || 1)));
   return {
     ...state,
     lines: state.lines.map((line) => line.product_id === productId
@@ -111,6 +127,75 @@ export function setReplenishmentQuantity(
       : line),
     updatedAt: new Date().toISOString(),
   };
+}
+
+export function reconcileReplenishmentCart(
+  state: ReplenishmentCartState,
+  availability: ReplenishmentAvailability[],
+): ReplenishmentCartState {
+  if (!editable(state)) return state;
+  const limits = new Map(availability.map((product) => [
+    product.product_id,
+    product.can_replenish ? Math.max(0, Math.floor(product.available_qty)) : 0,
+  ]));
+  const lines = state.lines
+    .filter((line) => (limits.get(line.product_id) || 0) > 0)
+    .map((line) => ({
+      ...line,
+      qty: Math.min(line.qty, limits.get(line.product_id) || 0),
+    }));
+  const unchanged = lines.length === state.lines.length && lines.every((line, index) =>
+    line.product_id === state.lines[index].product_id && line.qty === state.lines[index].qty,
+  );
+  return unchanged ? state : { ...state, lines, updatedAt: new Date().toISOString() };
+}
+
+export function replenishmentHistoryMatchesCart(
+  history: ReplenishmentHistoryMatch[],
+  state: ReplenishmentCartState,
+): boolean {
+  const matches = history.filter((item) => item.group_key === state.idempotencyKey);
+  if (!matches.length) return false;
+  const actual = new Map<number, number>();
+  for (const item of matches) {
+    for (const line of item.lines) {
+      actual.set(line.product_id, (actual.get(line.product_id) || 0) + Number(line.qty || 0));
+    }
+  }
+  const expected = new Map(state.lines.map((line) => [line.product_id, line.qty]));
+  return actual.size === expected.size && [...expected].every(([productId, qty]) =>
+    actual.get(productId) === qty,
+  );
+}
+
+const DEFINITE_REPLENISHMENT_CODES = new Set([
+  "INSUFFICIENT_STOCK",
+  "INSUFFICIENT_CENTRAL_STOCK",
+  "EXPOSURE_LIMIT_EXCEEDED",
+  "CONSIGNMENT_LIMIT_EXCEEDED",
+  "PRODUCT_NOT_ELIGIBLE",
+  "INELIGIBLE_PRODUCT",
+  "PROFILE_NOT_ENABLED",
+  "PROFILE_DISABLED",
+  "REPLENISHMENT_NOT_ENABLED",
+  "NO_ACTIVE_ANCHOR",
+  "ANCHOR_CURRENCY_MISMATCH",
+  "MISSING_PRICE",
+  "IDEMPOTENCY_PAYLOAD_MISMATCH",
+  "BAD_LINE",
+  "BAD_PRODUCT",
+  "BAD_QUANTITY",
+]);
+
+export function isDefiniteReplenishmentFailure(status: number, payload: unknown): boolean {
+  if (status >= 400 && status < 500 && ![408, 409, 425, 429].includes(status)) return true;
+  if (status !== 409 || !payload || typeof payload !== "object") return false;
+  const outer = payload as Record<string, unknown>;
+  const nested = outer.error && typeof outer.error === "object"
+    ? outer.error as Record<string, unknown>
+    : {};
+  const code = String(outer.code || nested.code || "").trim().toUpperCase();
+  return DEFINITE_REPLENISHMENT_CODES.has(code);
 }
 
 export function removeReplenishmentLine(

@@ -7,9 +7,26 @@ import { normalizePhone } from '@/lib/otp-store';
 import { actorTokenNeedsRefresh } from '@/lib/consignments/actor-token';
 export { actorTokenNeedsRefresh };
 
-// M2-clients (S-exec-3B): mint a gateway-signed Actor Token for this OTP-authenticated
-// client session. Server-side only; non-fatal — absent token keeps legacy_bridge.
+// Mint a gateway-signed actor for this OTP-authenticated customer. The token
+// stays in the encrypted JWT/server cache and is never exposed in session JSON.
 const actorMintRetryAfter = new Map<string, number>();
+const actorTokenCache = new Map<string, string>();
+
+function rememberActorToken(partnerId: string | number, token: unknown): string | null {
+  const key = String(partnerId).trim();
+  if (!key || actorTokenNeedsRefresh(token, key)) {
+    actorTokenCache.delete(key);
+    return null;
+  }
+  actorTokenCache.set(key, token as string);
+  return token as string;
+}
+
+export function getCachedActorToken(partnerId: string | number): string | null {
+  const key = String(partnerId).trim();
+  return rememberActorToken(key, actorTokenCache.get(key));
+}
+
 export async function mintActorToken(partnerId: string | number, name?: string | null): Promise<string | null> {
   const retryKey = String(partnerId);
   if ((actorMintRetryAfter.get(retryKey) || 0) > Date.now()) return null;
@@ -23,8 +40,11 @@ export async function mintActorToken(partnerId: string | number, name?: string |
     });
     const data = await res.json();
     if (res.ok && data.success && data.data?.token) {
-      actorMintRetryAfter.delete(retryKey);
-      return data.data.token as string;
+      const token = rememberActorToken(retryKey, data.data.token);
+      if (token) {
+        actorMintRetryAfter.delete(retryKey);
+        return token;
+      }
     }
     actorMintRetryAfter.set(retryKey, Date.now() + 60_000);
   } catch (err) {
@@ -171,26 +191,31 @@ export const {
     ...authConfig.callbacks,
     async jwt({ token, user }) {
       if (user) {
+        const partnerId = String((user as any).odooContactId || user.id || '').trim();
         token.id = user.id;
-        token.actorToken = (await mintActorToken((user as any).odooContactId || user.id, user.name)) || undefined;
+        token.actorToken = (await mintActorToken(partnerId, user.name)) || undefined;
         token.odooContactId = (user as any).odooContactId;
         token.priceListId = (user as any).priceListId;
         token.currencyCode = (user as any).currencyCode;
         token.delegateContactId = (user as any).delegateContactId || '';
         token.delegateName = (user as any).delegateName || '';
         token.companyName = (user as any).companyName || '';
-      } else if (token.odooContactId && actorTokenNeedsRefresh(token.actorToken)) {
-        token.actorToken = (await mintActorToken(
-          token.odooContactId,
-          typeof token.name === 'string' ? token.name : null,
-        )) || undefined;
+      } else if (token.odooContactId) {
+        const partnerId = String(token.odooContactId);
+        if (actorTokenNeedsRefresh(token.actorToken, partnerId)) {
+          token.actorToken = (await mintActorToken(
+            partnerId,
+            typeof token.name === 'string' ? token.name : null,
+          )) || undefined;
+        } else {
+          rememberActorToken(partnerId, token.actorToken);
+        }
       }
       return token;
     },
     async session({ session, token }) {
       if (token && session.user) {
         session.user.id = token.id as string;
-        (session.user as any).actorToken = (token.actorToken as string) || undefined;
         session.user.odooPartnerId = token.odooContactId as string;
         session.user.priceListId = token.priceListId as string;
         session.user.currencyCode = token.currencyCode as string;
@@ -259,7 +284,6 @@ declare module 'next-auth' {
     delegateContactId?: string;
     delegateName?: string;
     companyName?: string;
-      actorToken?: string;
   }
 
   interface Session {
@@ -273,7 +297,6 @@ declare module 'next-auth' {
       delegateContactId?: string;
       delegateName?: string;
       companyName?: string;
-      actorToken?: string;
     };
   }
 }

@@ -14,6 +14,12 @@ import { RequestReturnForm } from "./request-return-form";
 import { AddNoteForm } from "./add-note-form";
 import { ProductImageSmall } from "@/components/products";
 import { getOdooImageUrl } from "@/lib/odoo/client";
+import {
+  addReplenishmentLine,
+  createReplenishmentCart,
+  parseReplenishmentCart,
+  replenishmentStorageKey,
+} from "@/lib/consignments/replenishment-cart";
 
 interface Line {
   id: number;
@@ -69,6 +75,7 @@ interface ConsignmentData {
 interface Props {
   consignment: ConsignmentData;
   consignmentId: number;
+  partnerId: string;
 }
 
 const stateColors: Record<string, string> = {
@@ -87,14 +94,13 @@ const reportStateIcons: Record<string, typeof Clock> = {
   failed_needs_review: AlertTriangle,
 };
 
-export function ConsignmentDetail({ consignment, consignmentId }: Props) {
+export function ConsignmentDetail({ consignment, consignmentId, partnerId }: Props) {
   const t = useTranslations("consignments");
   const router = useRouter();
   const [activeForm, setActiveForm] = useState<"sale" | "return" | "note" | null>(null);
   const [saleLineId, setSaleLineId] = useState<number | null>(null);
   const [optimisticSold, setOptimisticSold] = useState<Record<number, number>>({});
   const [lineToast, setLineToast] = useState<string | null>(null);
-  const [topupBusy, setTopupBusy] = useState<number | null>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const showLineToast = (m: string) => {
     setLineToast(m);
@@ -103,18 +109,24 @@ export function ConsignmentDetail({ consignment, consignmentId }: Props) {
   };
   const bumpOptimistic = (lineId: number, d: number) =>
     setOptimisticSold(prev => ({ ...prev, [lineId]: Math.max(0, (prev[lineId] || 0) + d) }));
-  const requestTopup = async (line: Line) => {
-    if (topupBusy) return;
-    setTopupBusy(line.id);
+  const addTopupToBasket = (line: Line) => {
     try {
-      const res = await fetch(`/api/consignments/${consignmentId}/request-topup`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ product_id: line.x_product_id, note: "" }),
+      const storageKey = replenishmentStorageKey(partnerId);
+      const current = parseReplenishmentCart(window.localStorage.getItem(storageKey))
+        || createReplenishmentCart();
+      if (current.submissionPending) {
+        showLineToast(t("topupBasketLocked"));
+        return;
+      }
+      const next = addReplenishmentLine(current, {
+        product_id: line.x_product_id,
+        name: line.product_name,
+        code: line.product_code,
+        confidence: null,
       });
-      showLineToast(res.ok ? t("topupSent") : t("errorGeneric"));
+      window.localStorage.setItem(storageKey, JSON.stringify(next));
+      showLineToast(t("topupAddedToBasket"));
     } catch { showLineToast(t("errorGeneric")); }
-    finally { setTopupBusy(null); }
   };
 
   const c = consignment;
@@ -126,7 +138,7 @@ export function ConsignmentDetail({ consignment, consignmentId }: Props) {
     ? Number(v || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
     : Number(v || 0).toLocaleString("en-US");
   const stateKey = ("state" + c.state.charAt(0).toUpperCase() + c.state.slice(1)) as any;
-  const canAct = c.state === "active" || c.state === "delivered";
+  const canAct = c.state === "active";
 
   const fin: Financials = c.financials || {
     delivered_value: c.lines.reduce((a, l) => a + num(l.x_qty_delivered) * num(l.x_invoice_unit_price), 0),
@@ -385,9 +397,9 @@ export function ConsignmentDetail({ consignment, consignmentId }: Props) {
                         </Button>
                       )}
                       {(Number(line.x_qty_sold) > 0 || Number(line.pending_reported_qty) + opt > 0) && (
-                        <Button size="sm" variant="outline" disabled={topupBusy === line.id}
+                        <Button size="sm" variant="outline"
                           className="h-8 px-2.5 text-xs shrink-0 border-blue-300 dark:border-blue-700 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20"
-                          onClick={() => void requestTopup(line)}>
+                          onClick={() => addTopupToBasket(line)}>
                           <RefreshCw className="h-3.5 w-3.5 me-1" /> {t("requestTopup")}
                         </Button>
                       )}
