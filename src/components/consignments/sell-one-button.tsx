@@ -8,9 +8,10 @@ import { ShoppingCart, Undo2, Loader2, RotateCcw } from "lucide-react";
 import { fireConfetti } from "./confetti";
 import {
   clearMutationKey,
+  createSaleOneAttempt,
   getOrCreateMutationKey,
   isConfirmedMutationFailure,
-  mutationOperationStorageKey,
+  type SaleOneAttempt,
 } from "@/lib/consignments/operation-key";
 
 interface Labels { sell: string; undo: string; sold: string; error: string }
@@ -22,28 +23,38 @@ interface Props {
   labels: Labels;
   className?: string;
   disabled?: boolean;
+  hideWhenDisabled?: boolean;
   showToast: (msg: string) => void;
-  onOptimistic?: () => void;
-  onUndo?: () => void;
-  onCommitted?: () => void;
+  onOptimistic?: (attempt: SaleOneAttempt) => void;
+  onUndo?: (attempt: SaleOneAttempt) => void;
+  onCommitted?: (attempt: SaleOneAttempt) => void;
 }
 
 export function SellOneButton({
   consignmentId, lineId, productId, labels, className, disabled,
-  showToast, onOptimistic, onUndo, onCommitted,
+  hideWhenDisabled, showToast, onOptimistic, onUndo, onCommitted,
 }: Props) {
   const [phase, setPhase] = useState<"idle" | "countdown" | "posting" | "pending">("idle");
   const [count, setCount] = useState(5);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const cancelledRef = useRef(false);
+  const attemptRef = useRef<SaleOneAttempt | null>(null);
 
   useEffect(() => () => { if (timerRef.current) clearInterval(timerRef.current); }, []);
 
   const start = () => {
     if (phase !== "idle" || disabled) return;
+    let attempt: SaleOneAttempt;
+    try {
+      attempt = createSaleOneAttempt({ consignmentId, lineId, productId });
+    } catch {
+      showToast(labels.error);
+      return;
+    }
+    attemptRef.current = attempt;
     cancelledRef.current = false;
     fireConfetti();
-    onOptimistic?.();
+    onOptimistic?.(attempt);
     setCount(5);
     setPhase("countdown");
     let c = 5;
@@ -59,24 +70,25 @@ export function SellOneButton({
   };
 
   const undo = () => {
+    const attempt = attemptRef.current;
     cancelledRef.current = true;
     if (timerRef.current) clearInterval(timerRef.current);
+    attemptRef.current = null;
     setPhase("idle");
-    onUndo?.();
+    if (attempt) onUndo?.(attempt);
     showToast(labels.undo + " ✓");
   };
 
   const commit = async () => {
+    const attempt = attemptRef.current;
+    if (!attempt) {
+      setPhase("idle");
+      return;
+    }
     setPhase("posting");
-    const operationStorageKey = mutationOperationStorageKey("sale-one", {
-      consignmentId,
-      lineId,
-      productId,
-      qty: 1,
-    });
     try {
-      const idem = getOrCreateMutationKey(window.localStorage, operationStorageKey);
-      const res = await fetch(`/api/consignments/${consignmentId}/report-sale`, {
+      const idem = getOrCreateMutationKey(window.localStorage, attempt.operationStorageKey);
+      const res = await fetch(`/api/consignments/${attempt.consignmentId}/report-sale`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -85,8 +97,8 @@ export function SellOneButton({
         },
         cache: "no-store",
         body: JSON.stringify({
-          consignment_line_id: lineId,
-          product_id: productId,
+          consignment_line_id: attempt.lineId,
+          product_id: attempt.productId,
           qty_sold: 1,
           idempotency_key: idem,
         }),
@@ -94,8 +106,9 @@ export function SellOneButton({
       if (!res.ok) {
         const d = await res.json().catch(() => ({}));
         if (isConfirmedMutationFailure(res.status, d)) {
-          clearMutationKey(window.localStorage, operationStorageKey);
-          onUndo?.();
+          clearMutationKey(window.localStorage, attempt.operationStorageKey);
+          attemptRef.current = null;
+          onUndo?.(attempt);
           setPhase("idle");
         } else {
           // The gateway may have committed even when its response was lost.
@@ -105,9 +118,10 @@ export function SellOneButton({
         showToast(d?.message || labels.error);
         return;
       }
-      clearMutationKey(window.localStorage, operationStorageKey);
+      clearMutationKey(window.localStorage, attempt.operationStorageKey);
+      attemptRef.current = null;
       showToast(labels.sold);
-      onCommitted?.();
+      onCommitted?.(attempt);
     } catch (e: unknown) {
       setPhase("pending");
       showToast(e instanceof Error ? e.message : labels.error);
@@ -115,6 +129,10 @@ export function SellOneButton({
     }
     setPhase("idle");
   };
+
+  // The component stays mounted while disabled so an active countdown/pending
+  // attempt survives an optimistic last-unit decrement. Only its idle UI hides.
+  if (phase === "idle" && disabled && hideWhenDisabled) return null;
 
   if (phase === "pending") {
     return (

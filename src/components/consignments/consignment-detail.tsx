@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { Link } from "@/i18n/navigation";
@@ -15,11 +15,9 @@ import { AddNoteForm } from "./add-note-form";
 import { ProductImageSmall } from "@/components/products";
 import { getOdooImageUrl } from "@/lib/odoo/client";
 import {
-  addReplenishmentLine,
-  createReplenishmentCart,
-  parseReplenishmentCart,
-  replenishmentStorageKey,
-} from "@/lib/consignments/replenishment-cart";
+  consignmentReturnableQty,
+} from "@/lib/consignments/return-availability";
+import { reconcileOptimisticSaleCounts } from "@/lib/consignments/operation-key";
 
 interface Line {
   id: number;
@@ -35,6 +33,8 @@ interface Line {
   x_invoice_unit_price: number;
   pending_reported_qty: number;
   reportable_qty: number;
+  returnable_qty?: number;
+  pending_return_qty?: number;
   image_version?: number;
 }
 
@@ -75,7 +75,6 @@ interface ConsignmentData {
 interface Props {
   consignment: ConsignmentData;
   consignmentId: number;
-  partnerId: string;
 }
 
 const stateColors: Record<string, string> = {
@@ -94,13 +93,16 @@ const reportStateIcons: Record<string, typeof Clock> = {
   failed_needs_review: AlertTriangle,
 };
 
-export function ConsignmentDetail({ consignment, consignmentId, partnerId }: Props) {
+export function ConsignmentDetail({ consignment, consignmentId }: Props) {
   const t = useTranslations("consignments");
   const router = useRouter();
   const [activeForm, setActiveForm] = useState<"sale" | "return" | "note" | null>(null);
   const [saleLineId, setSaleLineId] = useState<number | null>(null);
   const [optimisticSold, setOptimisticSold] = useState<Record<number, number>>({});
   const [lineToast, setLineToast] = useState<string | null>(null);
+  const serverReportableRef = useRef<Record<number, number>>(
+    Object.fromEntries(consignment.lines.map((line) => [line.id, Number(line.reportable_qty) || 0])),
+  );
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const showLineToast = (m: string) => {
     setLineToast(m);
@@ -110,26 +112,23 @@ export function ConsignmentDetail({ consignment, consignmentId, partnerId }: Pro
   const bumpOptimistic = (lineId: number, d: number) =>
     setOptimisticSold(prev => ({ ...prev, [lineId]: Math.max(0, (prev[lineId] || 0) + d) }));
   const addTopupToBasket = (line: Line) => {
-    try {
-      const storageKey = replenishmentStorageKey(partnerId);
-      const current = parseReplenishmentCart(window.localStorage.getItem(storageKey))
-        || createReplenishmentCart();
-      if (current.submissionPending) {
-        showLineToast(t("topupBasketLocked"));
-        return;
-      }
-      const next = addReplenishmentLine(current, {
-        product_id: line.x_product_id,
-        name: line.product_name,
-        code: line.product_code,
-        confidence: null,
-      });
-      window.localStorage.setItem(storageKey, JSON.stringify(next));
-      showLineToast(t("topupAddedToBasket"));
-    } catch { showLineToast(t("errorGeneric")); }
+    // The catalogue owns eligibility and live-availability checks. Carry only
+    // an intent; it will add the product after loading the current catalogue.
+    router.push(`/consignments?replenish_product=${line.x_product_id}`);
   };
 
   const c = consignment;
+  useEffect(() => {
+    const nextServer = Object.fromEntries(
+      c.lines.map((line) => [line.id, Number(line.reportable_qty) || 0]),
+    );
+    setOptimisticSold((current) => reconcileOptimisticSaleCounts(
+      current,
+      serverReportableRef.current,
+      nextServer,
+    ));
+    serverReportableRef.current = nextServer;
+  }, [c.lines]);
   // Currency ALWAYS derives from the consignment record itself (87=IQD design default),
   // NEVER from the customer session — a USD customer can hold an IQD consignment.
   const cur = c.currency_id === 1 ? "USD" : "IQD";
@@ -286,7 +285,7 @@ export function ConsignmentDetail({ consignment, consignmentId, partnerId }: Pro
       {activeForm === "return" && (
         <RequestReturnForm
           consignmentId={consignmentId}
-          lines={c.lines.filter(l => Number(l.x_qty_remaining) > 0)}
+          lines={c.lines.filter((line) => consignmentReturnableQty(line) > 0)}
           onSuccess={handleSuccess}
           onCancel={() => setActiveForm(null)}
         />
@@ -378,19 +377,19 @@ export function ConsignmentDetail({ consignment, consignmentId, partnerId }: Pro
                       </p>
                     )}
                     <div className="flex flex-wrap items-center gap-1.5">
-                      {Number(line.reportable_qty) - opt > 0 && (
-                        <SellOneButton
-                          consignmentId={consignmentId}
-                          lineId={line.id}
-                          productId={line.x_product_id}
-                          labels={{ sell: t("soldOne"), undo: t("undo"), sold: t("soldOneToast"), error: t("errorGeneric") }}
-                          className="flex-1 min-w-[120px]"
-                          showToast={showLineToast}
-                          onOptimistic={() => bumpOptimistic(line.id, 1)}
-                          onUndo={() => bumpOptimistic(line.id, -1)}
-                          onCommitted={() => { setOptimisticSold({}); router.refresh(); }}
-                        />
-                      )}
+                      <SellOneButton
+                        consignmentId={consignmentId}
+                        lineId={line.id}
+                        productId={line.x_product_id}
+                        labels={{ sell: t("soldOne"), undo: t("undo"), sold: t("soldOneToast"), error: t("errorGeneric") }}
+                        className="flex-1 min-w-[120px]"
+                        disabled={Number(line.reportable_qty) - opt <= 0}
+                        hideWhenDisabled
+                        showToast={showLineToast}
+                        onOptimistic={(attempt) => bumpOptimistic(attempt.lineId, 1)}
+                        onUndo={(attempt) => bumpOptimistic(attempt.lineId, -1)}
+                        onCommitted={() => router.refresh()}
+                      />
                       {Number(line.reportable_qty) - opt > 0 && (
                         <Button size="sm" variant="outline" className="h-8 px-2.5 text-xs shrink-0" onClick={() => openSaleForm(line.id)}>
                           <ShoppingCart className="h-3.5 w-3.5 me-1" /> {t("reportSale")}

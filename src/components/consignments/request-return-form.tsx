@@ -14,6 +14,7 @@ import {
   isConfirmedMutationFailure,
   mutationOperationStorageKey,
 } from "@/lib/consignments/operation-key";
+import { consignmentReturnableQty } from "@/lib/consignments/return-availability";
 
 interface Line {
   id: number;
@@ -21,7 +22,24 @@ interface Line {
   product_name: string;
   product_code: string;
   x_qty_remaining: number;
+  reportable_qty?: number;
+  returnable_qty?: number;
+  pending_reported_qty?: number;
+  pending_return_qty?: number;
 }
+
+const ERROR_KEYS: Record<string, string> = {
+  EXCEEDS_RETURNABLE: "errorExceedsQty",
+  EXCEEDS_RETURNABLE_QTY: "errorExceedsQty",
+  EXCEEDS_REMAINING: "errorExceedsQty",
+  RETURN_ALREADY_PENDING: "errorExceedsQty",
+  PENDING_RETURN_EXISTS: "errorExceedsQty",
+  INVALID_QTY: "errorInvalidQty",
+  NOT_ACTIVE: "errorNotActive",
+  LINE_NOT_FOUND: "errorLineNotFound",
+  PRODUCT_MISMATCH: "errorLineNotFound",
+  NOT_FOUND: "errorNotFound",
+};
 
 interface Props {
   consignmentId: number;
@@ -41,7 +59,7 @@ export function RequestReturnForm({ consignmentId, lines, onSuccess, onCancel }:
   const [confirming, setConfirming] = useState(false);
 
   const selectedLine = lines.find(l => String(l.id) === selectedLineId);
-  const maxQty = selectedLine ? Number(selectedLine.x_qty_remaining) : 0;
+  const maxQty = selectedLine ? consignmentReturnableQty(selectedLine) : 0;
   const qtyNum = parseInt(qty) || 0;
   const isValid = selectedLineId && qtyNum > 0 && qtyNum <= maxQty;
 
@@ -89,7 +107,8 @@ export function RequestReturnForm({ consignmentId, lines, onSuccess, onCancel }:
         if (isConfirmedMutationFailure(res.status, data)) {
           clearMutationKey(window.localStorage, operationStorageKey);
         }
-        setError(data?.message || t("errorGeneric"));
+        const code = String(data?.code || data?.error?.code || "").trim().toUpperCase();
+        setError(t((ERROR_KEYS[code] || "errorGeneric") as Parameters<typeof t>[0]));
         setConfirming(false);
         return;
       }

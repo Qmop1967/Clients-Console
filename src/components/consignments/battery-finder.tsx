@@ -4,7 +4,7 @@
 // Three gates to one answer: smart text search (AR/EN), brand→family→model browse,
 // and AI sticker photo analysis with a staged "digital progress" reveal.
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -75,6 +75,7 @@ const AI_STEP_DELAYS = [0, 900, 2100, 3300];
 
 export function BatteryFinder({ onAddToReplenishment }: { onAddToReplenishment: (product: FinderReplenishmentProduct) => void }) {
   const t = useTranslations("consignments");
+  const locale = useLocale();
   const router = useRouter();
   const [q, setQ] = useState("");
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
@@ -96,6 +97,7 @@ export function BatteryFinder({ onAddToReplenishment }: { onAddToReplenishment: 
   const fileRef = useRef<HTMLInputElement | null>(null);
   const finderRequestRef = useRef(0);
   const finderAbortRef = useRef<AbortController | null>(null);
+  const suppressTextSearchRef = useRef<string | null>(null);
 
   const showToast = useCallback((m: string) => {
     setToast(m);
@@ -134,16 +136,29 @@ export function BatteryFinder({ onAddToReplenishment }: { onAddToReplenishment: 
   // Debounced text search
   useEffect(() => {
     if (debTimer.current) clearTimeout(debTimer.current);
+    if (suppressTextSearchRef.current !== null) {
+      const suppressedQuery = suppressTextSearchRef.current;
+      suppressTextSearchRef.current = null;
+      if (q === suppressedQuery) return;
+    }
     const query = q.trim();
-    if (query.length < 2) { setSuggestions([]); setShowSugg(false); setNoResult(false); return; }
+    finderAbortRef.current?.abort();
+    finderAbortRef.current = null;
+    const requestId = ++finderRequestRef.current;
+    if (query.length < 2) {
+      setSuggestions([]);
+      setResults([]);
+      setShowSugg(false);
+      setNoResult(false);
+      setSearching(false);
+      return;
+    }
     debTimer.current = setTimeout(async () => {
-      finderAbortRef.current?.abort();
       aiTimers.current.forEach(clearTimeout);
       aiTimers.current = [];
       setAiStep(-1);
       const controller = new AbortController();
       finderAbortRef.current = controller;
-      const requestId = ++finderRequestRef.current;
       setSearching(true);
       try {
         const res = await fetch(`/api/consignments/finder?q=${encodeURIComponent(query)}`, {
@@ -151,7 +166,10 @@ export function BatteryFinder({ onAddToReplenishment }: { onAddToReplenishment: 
           headers: { "Cache-Control": "no-store" },
           signal: controller.signal,
         });
-        if (res.ok && isLatestFinderRequest(requestId, finderRequestRef.current)) applyResponse(await res.json(), false);
+        const data = res.ok ? await res.json() : null;
+        if (data && isLatestFinderRequest(requestId, finderRequestRef.current)) {
+          applyResponse(data, false);
+        }
       } catch { /* silent */ }
       finally {
         if (isLatestFinderRequest(requestId, finderRequestRef.current)) setSearching(false);
@@ -174,7 +192,10 @@ export function BatteryFinder({ onAddToReplenishment }: { onAddToReplenishment: 
         headers: { "Cache-Control": "no-store" },
         signal: controller.signal,
       });
-      if (res.ok && isLatestFinderRequest(requestId, finderRequestRef.current)) applyResponse(await res.json(), true);
+      const data = res.ok ? await res.json() : null;
+      if (data && isLatestFinderRequest(requestId, finderRequestRef.current)) {
+        applyResponse(data, true);
+      }
     } catch { /* silent */ }
     finally {
       if (isLatestFinderRequest(requestId, finderRequestRef.current)) setSearching(false);
@@ -182,8 +203,11 @@ export function BatteryFinder({ onAddToReplenishment }: { onAddToReplenishment: 
   };
 
   const pickSuggestion = (s: Suggestion) => {
-    setQ(s.label);
-    if (s.laptop_id) void pickLaptop(s.laptop_id);
+    if (s.laptop_id) {
+      suppressTextSearchRef.current = s.label;
+      setQ(s.label);
+      void pickLaptop(s.laptop_id);
+    }
     else if (s.pns && s.pns[0]) { setQ(s.pns[0]); }
   };
 
@@ -220,6 +244,7 @@ export function BatteryFinder({ onAddToReplenishment }: { onAddToReplenishment: 
 
   const onPhoto = async (file: File | null) => {
     if (!file) return;
+    if (debTimer.current) clearTimeout(debTimer.current);
     finderAbortRef.current?.abort();
     const controller = new AbortController();
     finderAbortRef.current = controller;
@@ -444,7 +469,21 @@ export function BatteryFinder({ onAddToReplenishment }: { onAddToReplenishment: 
           const retail = reportableSource?.suggested_retail_price || p.custody?.suggested_retail_price || 0;
           const cost = reportableSource?.invoice_unit_price || p.custody?.invoice_unit_price || 0;
           const profit = retail > 0 && cost > 0 ? retail - cost : 0;
-          const inStock = (p.custody?.reportable_qty || 0) > 0 && reportableSource !== null;
+          const sourceQty = Math.max(0, Number(reportableSource?.reportable_qty || 0));
+          const inStock = sourceQty > 0 && reportableSource !== null;
+          const currency = cur === 1 ? "USD" : "IQD";
+          const mixedPricing = (p.custody?.sources || []).some((source) => reportableSource && (
+            source.currency_id !== reportableSource.currency_id ||
+            source.invoice_unit_price !== reportableSource.invoice_unit_price ||
+            source.suggested_retail_price !== reportableSource.suggested_retail_price
+          ));
+          const sourceCopy = locale === "ar" ? {
+            pricedBatch: "دفعة السعر الحالية",
+            mixedCurrency: "توجد دفعات بعملات أو أسعار مختلفة؛ الكمية والسعر أدناه للدفعة المحددة فقط.",
+          } : {
+            pricedBatch: "Current priced batch",
+            mixedCurrency: "Other batches use a different currency or price; the quantity and price below apply only to this batch.",
+          };
           const compat = p.compatible.map(c2 => (c2.brand + " " + c2.family + " " + c2.model).replace(/\s+/g, " ")).slice(0, 8);
           return (
             <div key={p.pp_id} className={"rounded-xl border-2 p-3.5 space-y-2.5 " + (p.confidence === "likely" ? "border-amber-300 bg-amber-50/60 dark:border-amber-800 dark:bg-amber-950/30" : "border-emerald-200 bg-emerald-50/50 dark:border-emerald-800/60 dark:bg-emerald-950/20")}>
@@ -484,32 +523,43 @@ export function BatteryFinder({ onAddToReplenishment }: { onAddToReplenishment: 
                 <div className="rounded-lg border bg-background px-1 py-1.5">
                   <p className="text-[9.5px] text-muted-foreground">{t("finderInCustody")}</p>
                   <p className={"text-[13px] font-bold " + (inStock ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground")}>
-                    {p.custody ? (inStock ? p.custody.reportable_qty.toLocaleString("en-US") + " ✓" : t("finderOutOfStock")) : t("finderOutOfStock")}
+                    {p.custody ? (inStock ? sourceQty.toLocaleString("en-US") + " ✓" : t("finderOutOfStock")) : t("finderOutOfStock")}
                   </p>
                 </div>
                 <div className="rounded-lg border bg-background px-1 py-1.5">
                   <p className="text-[9.5px] text-muted-foreground">{t("finderYourPrice")}</p>
-                  <p className="text-[13px] font-bold tabular-nums">{retail > 0 ? fmt(retail, cur) : "—"}</p>
+                  <p className="text-[13px] font-bold tabular-nums">{retail > 0 ? `${fmt(retail, cur)} ${currency}` : "—"}</p>
                 </div>
                 <div className="rounded-lg border bg-background px-1 py-1.5">
                   <p className="text-[9.5px] text-muted-foreground">{t("finderYourProfit")}</p>
-                  <p className="text-[13px] font-bold tabular-nums text-emerald-600 dark:text-emerald-400">{profit > 0 ? "+" + fmt(profit, cur) : "—"}</p>
+                  <p className="text-[13px] font-bold tabular-nums text-emerald-600 dark:text-emerald-400">{profit > 0 ? `+${fmt(profit, cur)} ${currency}` : "—"}</p>
                 </div>
               </div>
+              {reportableSource && (
+                <p className="rounded-lg border bg-background/80 px-2.5 py-2 text-[10.5px] text-muted-foreground">
+                  <b>{sourceCopy.pricedBatch}:</b>{" "}
+                  <span dir="ltr">{reportableSource.consignment_name}</span>
+                  {(p.custody?.mixed_currency || mixedPricing) && (
+                    <span className="mt-1 block text-amber-700 dark:text-amber-400">{sourceCopy.mixedCurrency}</span>
+                  )}
+                </p>
+              )}
               <p className="flex items-start gap-1.5 text-[10.5px] text-amber-600 dark:text-amber-500">
                 <TriangleAlert className="h-3.5 w-3.5 shrink-0 mt-0.5" /> {t("finderCheckNote")}
               </p>
               <div className="space-y-2">
-                {reportableSource && inStock && (
+                {p.custody && (
                   <SellOneButton
-                    consignmentId={reportableSource.consignment_id}
-                    lineId={reportableSource.line_id}
+                    consignmentId={reportableSource?.consignment_id || p.custody.consignment_id}
+                    lineId={reportableSource?.line_id || p.custody.line_id}
                     productId={p.pp_id}
                     labels={{ sell: t("finderSellNow"), undo: t("undo"), sold: t("soldOneToast"), error: t("errorGeneric") }}
                     className="w-full"
+                    disabled={!inStock || !reportableSource}
+                    hideWhenDisabled
                     showToast={showToast}
-                    onOptimistic={() => updateCustody(p.pp_id, reportableSource.line_id, -1)}
-                    onUndo={() => updateCustody(p.pp_id, reportableSource.line_id, 1)}
+                    onOptimistic={(attempt) => updateCustody(p.pp_id, attempt.lineId, -1)}
+                    onUndo={(attempt) => updateCustody(p.pp_id, attempt.lineId, 1)}
                     onCommitted={() => router.refresh()}
                   />
                 )}

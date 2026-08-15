@@ -62,7 +62,6 @@ export default async function ConsignmentDetailPage({
       <ConsignmentDetail
         consignment={data}
         consignmentId={numericId}
-        partnerId={actor.partnerId}
       />
     </div>
   );

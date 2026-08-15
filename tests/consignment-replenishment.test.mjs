@@ -29,9 +29,12 @@ import {
 } from "../src/lib/consignments/finder-custody.ts";
 import {
   getOrCreateMutationKey,
+  createSaleOneAttempt,
   isConfirmedMutationFailure,
   mutationOperationStorageKey,
+  reconcileOptimisticSaleCounts,
 } from "../src/lib/consignments/operation-key.ts";
+import { consignmentReturnableQty } from "../src/lib/consignments/return-availability.ts";
 
 test("catalogue keeps central stock separate from replenishment eligibility", () => {
   const [blocked, available] = normalizeCatalogue({
@@ -235,6 +238,50 @@ test("mutation keys survive retry/reload without Math.random", () => {
   assert.equal(isConfirmedMutationFailure(409, { code: "IDEMPOTENCY_IN_PROGRESS" }), false);
 });
 
+test("one-tap sale freezes the allocation and retry key across prop/source changes", () => {
+  const attempt = createSaleOneAttempt({ consignmentId: 7, lineId: 10, productId: 42 });
+  const nextRenderSource = { consignmentId: 8, lineId: 20, productId: 42 };
+  assert.equal(attempt.consignmentId, 7);
+  assert.equal(attempt.lineId, 10);
+  assert.notEqual(attempt.operationStorageKey, createSaleOneAttempt(nextRenderSource).operationStorageKey);
+
+  const values = new Map();
+  const storage = {
+    getItem: (key) => values.get(key) || null,
+    setItem: (key, value) => values.set(key, value),
+    removeItem: (key) => values.delete(key),
+  };
+  const first = getOrCreateMutationKey(storage, attempt.operationStorageKey, () => "11111111-1111-4111-8111-111111111111");
+  const lostResponseRetry = getOrCreateMutationKey(storage, attempt.operationStorageKey, () => "22222222-2222-4222-8222-222222222222");
+  assert.equal(lostResponseRetry, first);
+});
+
+test("last-unit one-tap action remains mounted and disables only its idle UI", () => {
+  const detail = readFileSync(new URL("../src/components/consignments/consignment-detail.tsx", import.meta.url), "utf8");
+  const finder = readFileSync(new URL("../src/components/consignments/battery-finder.tsx", import.meta.url), "utf8");
+  const button = readFileSync(new URL("../src/components/consignments/sell-one-button.tsx", import.meta.url), "utf8");
+  assert.equal(/reportable_qty\) - opt > 0 && \(\s*<SellOneButton/.test(detail), false);
+  assert.match(detail, /disabled=\{Number\(line\.reportable_qty\) - opt <= 0\}/);
+  assert.match(finder, /\{p\.custody && \(\s*<SellOneButton/);
+  assert.match(button, /phase === "idle" && disabled && hideWhenDisabled/);
+  assert.match(button, /attemptRef\.current/);
+  assert.equal(detail.includes("delete next[attempt.lineId]"), false);
+});
+
+test("server refresh acknowledges only committed optimistic units", () => {
+  const optimistic = { 10: 2, 20: 1 };
+  assert.deepEqual(reconcileOptimisticSaleCounts(
+    optimistic,
+    { 10: 5, 20: 3 },
+    { 10: 4, 20: 3 },
+  ), { 10: 1, 20: 1 });
+  assert.deepEqual(reconcileOptimisticSaleCounts(
+    { 10: 1 },
+    { 10: 1 },
+    { 10: 0 },
+  ), {});
+});
+
 test("finder always chooses an actually reportable custody allocation", () => {
   const custody = normalizeFinderCustody({
     consignment_id: 1,
@@ -258,6 +305,52 @@ test("finder always chooses an actually reportable custody allocation", () => {
   assert.equal(custody?.reportable_qty, 2);
   assert.equal(isLatestFinderRequest(4, 5), false);
   assert.equal(isLatestFinderRequest(5, 5), true);
+  const ordered = normalizeFinderCustody({
+    consignment_id: 3,
+    consignment_name: "C3",
+    line_id: 30,
+    qty_remaining: 6,
+    reportable_qty: 6,
+    invoice_unit_price: 1,
+    suggested_retail_price: 2,
+    currency_id: 1,
+    sources: [
+      { consignment_id: 3, consignment_name: "C3", line_id: 30, qty_remaining: 1, reportable_qty: 1, invoice_unit_price: 1, suggested_retail_price: 2, currency_id: 1 },
+      { consignment_id: 4, consignment_name: "C4", line_id: 40, qty_remaining: 5, reportable_qty: 5, invoice_unit_price: 1500, suggested_retail_price: 2000, currency_id: 87 },
+    ],
+  });
+  assert.equal(selectReportableCustodySource(ordered?.sources || [])?.line_id, 30);
+});
+
+test("finder scopes displayed quantity/price to one source and invalidates stale work", () => {
+  const finder = readFileSync(new URL("../src/components/consignments/battery-finder.tsx", import.meta.url), "utf8");
+  assert.match(finder, /const sourceQty = .*reportableSource\?\.reportable_qty/);
+  assert.match(finder, /mixedPricing/);
+  assert.match(finder, /finderAbortRef\.current\?\.abort\(\);[\s\S]*const requestId = \+\+finderRequestRef\.current/);
+  assert.match(finder, /const data = res\.ok \? await res\.json\(\) : null;[\s\S]*isLatestFinderRequest/);
+  assert.match(finder, /suppressTextSearchRef\.current = s\.label/);
+});
+
+test("return quantity subtracts pending sales/returns and recognizes definite conflicts", () => {
+  assert.equal(consignmentReturnableQty({
+    x_qty_remaining: 8,
+    reportable_qty: 6,
+    pending_reported_qty: 2,
+    pending_return_qty: 3,
+  }), 3);
+  assert.equal(consignmentReturnableQty({
+    x_qty_remaining: 8,
+    returnable_qty: 2,
+    pending_return_qty: 7,
+  }), 2);
+  assert.equal(consignmentReturnableQty({
+    x_qty_remaining: 8,
+    returnable_qty: null,
+    pending_reported_qty: 2,
+    pending_return_qty: 1,
+  }), 5);
+  assert.equal(isConfirmedMutationFailure(409, { code: "EXCEEDS_RETURNABLE" }), true);
+  assert.equal(isConfirmedMutationFailure(409, { error: { code: "RETURN_ALREADY_PENDING" } }), true);
 });
 
 test("detail and return flows use strict actor and exact gateway payload", () => {
@@ -275,7 +368,14 @@ test("detail and return flows use strict actor and exact gateway payload", () =>
   assert.match(detailPage, /consignmentGatewayFetch/);
   assert.equal(detailPage.includes("x-partner-id"), false);
   assert.equal(detailComponent.includes("/request-topup"), false);
-  assert.match(detailComponent, /replenishmentStorageKey/);
+  assert.equal(detailComponent.includes("replenishmentStorageKey"), false);
+  assert.match(detailComponent, /replenish_product=/);
+  const catalogueComponent = readFileSync(new URL("../src/components/consignments/replenishment-catalogue.tsx", import.meta.url), "utf8");
+  const listComponent = readFileSync(new URL("../src/components/consignments/consignments-list.tsx", import.meta.url), "utf8");
+  assert.match(catalogueComponent, /product\?\.can_replenish/);
+  assert.match(catalogueComponent, /product\.available_qty/);
+  assert.match(catalogueComponent, /hydratedStorageKey === storageKey/);
+  assert.match(listComponent, /key=\{partnerId\}/);
   assert.match(returnForm, /qty_returning:\s*qtyNum/);
   assert.equal(/\bqty:\s*qtyNum/.test(returnForm), false);
   assert.match(returnProxy, /qty_returning:\s*Number\(row\.qty_returning\)/);

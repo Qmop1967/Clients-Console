@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocale } from "next-intl";
+import { useRouter } from "next/navigation";
 import {
   CheckCircle2,
   CircleOff,
@@ -90,6 +91,7 @@ export function ReplenishmentCatalogue({
   initialReplenishments,
 }: Props) {
   const locale = useLocale();
+  const router = useRouter();
   const ar = locale === "ar";
   const copy = ar ? {
     finderAdded: "أُضيفت البطارية إلى سلة تعزيز العهدة",
@@ -197,13 +199,15 @@ export function ReplenishmentCatalogue({
   const [query, setQuery] = useState("");
   const [cart, setCart] = useState<ReplenishmentCartState>(() => createReplenishmentCart());
   const [undoCart, setUndoCart] = useState<ReplenishmentCartState | null>(null);
-  const [hydrated, setHydrated] = useState(false);
+  const [hydratedStorageKey, setHydratedStorageKey] = useState<string | null>(null);
   const [basketOpen, setBasketOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [checking, setChecking] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [lastAcknowledgements, setLastAcknowledgements] = useState<ReplenishmentAcknowledgement[]>([]);
   const storageKey = replenishmentStorageKey(partnerId);
+  const hydrated = hydratedStorageKey === storageKey;
+  const handledIntentRef = useRef<string | null>(null);
   const availability = useMemo(() => products.map((product) => ({
     product_id: product.product_id,
     can_replenish: hasActiveAnchor && product.can_replenish,
@@ -213,7 +217,7 @@ export function ReplenishmentCatalogue({
   useEffect(() => {
     const saved = parseReplenishmentCart(window.localStorage.getItem(storageKey));
     setCart(reconcileReplenishmentCart(saved || createReplenishmentCart(), availability));
-    setHydrated(true);
+    setHydratedStorageKey(storageKey);
   }, [availability, storageKey]);
 
   useEffect(() => {
@@ -248,6 +252,7 @@ export function ReplenishmentCatalogue({
   };
 
   const addProduct = (source: CatalogueProduct | FinderReplenishmentProduct) => {
+    if (!hydrated) return;
     const catalogueProduct = products.find((product) => product.product_id === source.product_id);
     if (!catalogueProduct?.can_replenish || !hasActiveAnchor) {
       flash(hasActiveAnchor ? copy.notAvailable : copy.noActiveAnchor);
@@ -265,6 +270,45 @@ export function ReplenishmentCatalogue({
     setBasketOpen(true);
     flash(copy.finderAdded);
   };
+
+  useEffect(() => {
+    if (!hydrated) return;
+    const url = new URL(window.location.href);
+    const intent = url.searchParams.get("replenish_product");
+    if (!intent || handledIntentRef.current === intent) return;
+    handledIntentRef.current = intent;
+
+    const productId = Number(intent);
+    const product = products.find((item) => item.product_id === productId);
+    if (!Number.isInteger(productId) || productId <= 0 || !product?.can_replenish || !hasActiveAnchor) {
+      flash(hasActiveAnchor ? copy.notAvailable : copy.noActiveAnchor);
+    } else if (cart.submissionPending) {
+      flash(copy.locked);
+      setBasketOpen(true);
+    } else {
+      setCart((current) => addReplenishmentLine(current, {
+        product_id: product.product_id,
+        name: product.name,
+        code: product.code,
+        confidence: product.confidence,
+      }, product.available_qty));
+      setUndoCart(null);
+      setBasketOpen(true);
+      flash(copy.finderAdded);
+    }
+
+    url.searchParams.delete("replenish_product");
+    window.history.replaceState(window.history.state, "", url.pathname + url.search + url.hash);
+  }, [
+    cart.submissionPending,
+    copy.finderAdded,
+    copy.locked,
+    copy.noActiveAnchor,
+    copy.notAvailable,
+    hasActiveAnchor,
+    hydrated,
+    products,
+  ]);
 
   const changeQty = (productId: number, qty: number) => {
     const product = products.find((item) => item.product_id === productId);
@@ -371,6 +415,9 @@ export function ReplenishmentCatalogue({
       if (definitelyRejected) {
         setCart(reconcileReplenishmentCart(unlockAfterConfirmedFailure(locked), availability));
         flash(response.status === 401 ? copy.rejected : copy.rejected);
+        // Pull a fresh catalogue so new stock/profile limits immediately clamp
+        // the unlocked cart instead of repeating the same stale business 409.
+        router.refresh();
       } else {
         flash(response.ok ? copy.invalidAck : copy.timeout);
       }

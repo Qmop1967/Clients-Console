@@ -4,6 +4,18 @@ export interface OperationStorage {
   removeItem(key: string): void;
 }
 
+export interface SaleOneTarget {
+  consignmentId: number;
+  lineId: number;
+  productId: number;
+}
+
+export interface SaleOneAttempt extends Readonly<SaleOneTarget> {
+  operationStorageKey: string;
+}
+
+export type SaleQuantitySnapshot = Record<number, number>;
+
 function stableHash(value: string): string {
   let hash = 2166136261;
   for (let index = 0; index < value.length; index += 1) {
@@ -15,6 +27,51 @@ function stableHash(value: string): string {
 
 export function mutationOperationStorageKey(namespace: string, identity: unknown): string {
   return `tsh:consignment-operation:v1:${namespace}:${stableHash(JSON.stringify(identity))}`;
+}
+
+function positiveInteger(value: number, field: string): number {
+  if (!Number.isInteger(value) || value <= 0) {
+    throw new Error(`Invalid ${field}`);
+  }
+  return value;
+}
+
+/** Freeze the exact custody allocation selected when the user taps Sell. */
+export function createSaleOneAttempt(target: SaleOneTarget): SaleOneAttempt {
+  const attempt = {
+    consignmentId: positiveInteger(target.consignmentId, "consignmentId"),
+    lineId: positiveInteger(target.lineId, "lineId"),
+    productId: positiveInteger(target.productId, "productId"),
+  };
+  return Object.freeze({
+    ...attempt,
+    operationStorageKey: mutationOperationStorageKey("sale-one", {
+      ...attempt,
+      qty: 1,
+    }),
+  });
+}
+
+/** Remove only optimistic units that a newer server snapshot has acknowledged. */
+export function reconcileOptimisticSaleCounts(
+  optimistic: SaleQuantitySnapshot,
+  previousServer: SaleQuantitySnapshot,
+  nextServer: SaleQuantitySnapshot,
+): SaleQuantitySnapshot {
+  let changed = false;
+  const next: SaleQuantitySnapshot = {};
+  for (const [rawLineId, rawCount] of Object.entries(optimistic)) {
+    const lineId = Number(rawLineId);
+    if (!Object.hasOwn(nextServer, lineId)) {
+      changed = true;
+      continue;
+    }
+    const acknowledged = Math.max(0, Number(previousServer[lineId] || 0) - Number(nextServer[lineId] || 0));
+    const remaining = Math.max(0, Number(rawCount || 0) - acknowledged);
+    if (remaining > 0) next[lineId] = remaining;
+    if (remaining !== rawCount) changed = true;
+  }
+  return changed ? next : optimistic;
 }
 
 export function getOrCreateMutationKey(
@@ -39,6 +96,10 @@ const DEFINITE_MUTATION_CODES = new Set([
   "EXCEEDS_REPORTABLE",
   "EXCEEDS_REPORTABLE_QTY",
   "EXCEEDS_REMAINING",
+  "EXCEEDS_RETURNABLE",
+  "EXCEEDS_RETURNABLE_QTY",
+  "RETURN_ALREADY_PENDING",
+  "PENDING_RETURN_EXISTS",
   "INVALID_QTY",
   "LINE_NOT_FOUND",
   "PRODUCT_MISMATCH",

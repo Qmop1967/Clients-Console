@@ -56,12 +56,9 @@ export function normalizeFinderCustody(
 export function selectReportableCustodySource(
   sources: FinderCustodySource[],
 ): FinderCustodySource | null {
-  return [...sources]
-    .filter((source) => Number(source.reportable_qty) > 0)
-    .sort((left, right) =>
-      Number(right.reportable_qty) - Number(left.reportable_qty) ||
-      Number(left.line_id) - Number(right.line_id),
-    )[0] || null;
+  // Preserve the gateway allocation order (oldest/priority source first), while
+  // skipping exhausted allocations. Do not invent a client-side quantity sort.
+  return sources.find((source) => Number(source.reportable_qty) > 0) || null;
 }
 
 export function isLatestFinderRequest(requestId: number, currentId: number): boolean {

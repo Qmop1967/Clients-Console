@@ -80,6 +80,7 @@ export function ConsignmentsList({ consignments, total, summary, partnerId, init
 
       {/* Battery Finder — always first, even with zero consignments */}
       <ReplenishmentCatalogue
+        key={partnerId}
         partnerId={partnerId}
         hasActiveAnchor={consignments.some((consignment) => consignment.x_state === "active")}
         initialCatalogue={initialCatalogue}
