@@ -17,6 +17,10 @@ import {
   isConfirmedMutationFailure,
   mutationOperationStorageKey,
 } from "@/lib/consignments/operation-key";
+import {
+  normalizeSaleReportAcknowledgement,
+  saleReportAcknowledgementMatches,
+} from "@/lib/consignments/mutation-acknowledgements";
 
 interface Line {
   id: number;
@@ -34,6 +38,7 @@ interface Line {
 interface Props {
   consignmentId: number;
   lines: Line[];
+  currencyId: number;
   currency: string;
   fmt: (v: unknown) => string;
   initialLineId?: number | null;
@@ -55,7 +60,7 @@ const ERROR_KEYS: Record<string, string> = {
   NOT_FOUND: "errorNotFound",
 };
 
-export function ReportSaleForm({ consignmentId, lines, currency, fmt, initialLineId, onSuccess, onCancel }: Props) {
+export function ReportSaleForm({ consignmentId, lines, currencyId, currency, fmt, initialLineId, onSuccess, onCancel }: Props) {
   const t = useTranslations("consignments");
   const [selectedLineId, setSelectedLineId] = useState<string>(() => {
     if (initialLineId && lines.some(l => l.id === initialLineId)) return String(initialLineId);
@@ -142,6 +147,22 @@ export function ReportSaleForm({ consignmentId, lines, currency, fmt, initialLin
           clearMutationKey(window.localStorage, operationStorageKey);
         }
         setError(t((ERROR_KEYS[code] || "errorGeneric") as Parameters<typeof t>[0]));
+        setConfirming(false);
+        return;
+      }
+      const acknowledgement = normalizeSaleReportAcknowledgement(data);
+      if (!saleReportAcknowledgementMatches(acknowledgement, {
+        consignmentId,
+        consignmentLineId: selectedLine.id,
+        productId: selectedLine.x_product_id,
+        qtySold: qtyNum,
+        effectiveSellPrice: unitPrice,
+        currencyId,
+        idempotencyKey,
+      })) {
+        // A successful HTTP status is not proof that this exact financial
+        // mutation was acknowledged. Preserve the same key for a safe replay.
+        setError(t("errorGeneric"));
         setConfirming(false);
         return;
       }

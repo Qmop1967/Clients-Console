@@ -275,6 +275,7 @@ export function ConsignmentDetail({ consignment, consignmentId }: Props) {
         <ReportSaleForm
           consignmentId={consignmentId}
           lines={c.lines.filter(l => Number(l.reportable_qty) > 0)}
+          currencyId={c.currency_id}
           currency={cur}
           fmt={fmt}
           initialLineId={saleLineId}
@@ -381,6 +382,8 @@ export function ConsignmentDetail({ consignment, consignmentId }: Props) {
                         consignmentId={consignmentId}
                         lineId={line.id}
                         productId={line.x_product_id}
+                        effectiveSellPrice={Number(line.x_invoice_unit_price)}
+                        currencyId={c.currency_id}
                         labels={{ sell: t("soldOne"), undo: t("undo"), sold: t("soldOneToast"), error: t("errorGeneric") }}
                         className="flex-1 min-w-[120px]"
                         disabled={Number(line.reportable_qty) - opt <= 0}

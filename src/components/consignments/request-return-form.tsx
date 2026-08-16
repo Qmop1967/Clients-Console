@@ -15,6 +15,10 @@ import {
   mutationOperationStorageKey,
 } from "@/lib/consignments/operation-key";
 import { consignmentReturnableQty } from "@/lib/consignments/return-availability";
+import {
+  normalizeReturnRequestAcknowledgement,
+  returnRequestAcknowledgementMatches,
+} from "@/lib/consignments/mutation-acknowledgements";
 
 interface Line {
   id: number;
@@ -109,6 +113,21 @@ export function RequestReturnForm({ consignmentId, lines, onSuccess, onCancel }:
         }
         const code = String(data?.code || data?.error?.code || "").trim().toUpperCase();
         setError(t((ERROR_KEYS[code] || "errorGeneric") as Parameters<typeof t>[0]));
+        setConfirming(false);
+        return;
+      }
+      const acknowledgement = normalizeReturnRequestAcknowledgement(data);
+      if (!returnRequestAcknowledgementMatches(acknowledgement, {
+        consignmentId,
+        idempotencyKey,
+        lines: [{
+          consignmentLineId: selectedLine.id,
+          productId: selectedLine.x_product_id,
+          qtyReturning: qtyNum,
+        }],
+      })) {
+        // Unknown/misdirected 2xx responses remain retryable with the same key.
+        setError(t("errorGeneric"));
         setConfirming(false);
         return;
       }

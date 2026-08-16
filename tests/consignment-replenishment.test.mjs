@@ -40,6 +40,12 @@ import {
   reconcileOptimisticSaleCounts,
 } from "../src/lib/consignments/operation-key.ts";
 import { consignmentReturnableQty } from "../src/lib/consignments/return-availability.ts";
+import {
+  normalizeReturnRequestAcknowledgement,
+  normalizeSaleReportAcknowledgement,
+  returnRequestAcknowledgementMatches,
+  saleReportAcknowledgementMatches,
+} from "../src/lib/consignments/mutation-acknowledgements.ts";
 
 test("catalogue keeps central stock separate from replenishment eligibility", () => {
   const [blocked, available] = normalizeCatalogue({
@@ -284,12 +290,180 @@ test("mutation keys survive retry/reload without Math.random", () => {
   assert.equal(isConfirmedMutationFailure(409, { code: "IDEMPOTENCY_IN_PROGRESS" }), false);
 });
 
+test("sale acknowledgement is canonical and binds exact identity, money, state, version and key", () => {
+  const key = "11111111-1111-4111-8111-111111111111";
+  const payload = {
+    data: {
+      id: 51,
+      report_id: 51,
+      consignment_id: 7,
+      consignment_line_id: 10,
+      product_id: 42,
+      qty_sold: 2,
+      sell_price: 1500,
+      total_amount: 3000,
+      currency_id: 87,
+      state: "reported",
+      version: 1,
+      idempotency_key: key,
+      idempotent_replay: false,
+    },
+  };
+  const expected = {
+    consignmentId: 7,
+    consignmentLineId: 10,
+    productId: 42,
+    qtySold: 2,
+    effectiveSellPrice: 1500,
+    currencyId: 87,
+    idempotencyKey: key,
+  };
+  const acknowledgement = normalizeSaleReportAcknowledgement(payload);
+  assert.equal(saleReportAcknowledgementMatches(acknowledgement, expected), true);
+
+  for (const [field, value] of [
+    ["consignmentId", 8],
+    ["consignmentLineId", 11],
+    ["productId", 43],
+    ["qtySold", 3],
+    ["effectiveSellPrice", 1501],
+    ["currencyId", 1],
+    ["idempotencyKey", "22222222-2222-4222-8222-222222222222"],
+  ]) {
+    assert.equal(saleReportAcknowledgementMatches(acknowledgement, { ...expected, [field]: value }), false, field);
+  }
+
+  assert.equal(normalizeSaleReportAcknowledgement({
+    data: { ...payload.data, report_id: 52 },
+  }), null, "id and report_id must both exist and agree");
+  assert.equal(normalizeSaleReportAcknowledgement({
+    data: { ...payload.data, state: "unknown" },
+  }), null);
+  assert.equal(normalizeSaleReportAcknowledgement({
+    data: { ...payload.data, version: 0 },
+  }), null);
+  assert.equal(normalizeSaleReportAcknowledgement({
+    data: { ...payload.data, idempotent_replay: "false" },
+  }), null);
+});
+
+test("return acknowledgement requires exact canonical request identity and allocation", () => {
+  const key = "11111111-1111-4111-8111-111111111111";
+  const payload = {
+    data: {
+      id: 61,
+      return_id: 61,
+      consignment_id: 7,
+      state: "requested",
+      version: 1,
+      idempotency_key: key,
+      idempotent_replay: false,
+      lines: [{
+        return_line_id: 71,
+        consignment_line_id: 10,
+        product_id: 42,
+        requested_qty: 2,
+        requested_good_qty: 2,
+        requested_damaged_qty: 0,
+      }],
+    },
+  };
+  const expected = {
+    consignmentId: 7,
+    idempotencyKey: key,
+    lines: [{ consignmentLineId: 10, productId: 42, qtyReturning: 2 }],
+  };
+  const acknowledgement = normalizeReturnRequestAcknowledgement(payload);
+  assert.equal(returnRequestAcknowledgementMatches(acknowledgement, expected), true);
+  assert.equal(returnRequestAcknowledgementMatches(acknowledgement, { ...expected, consignmentId: 8 }), false);
+  assert.equal(returnRequestAcknowledgementMatches(acknowledgement, {
+    ...expected,
+    idempotencyKey: "22222222-2222-4222-8222-222222222222",
+  }), false);
+  assert.equal(returnRequestAcknowledgementMatches(acknowledgement, {
+    ...expected,
+    lines: [{ consignmentLineId: 11, productId: 42, qtyReturning: 2 }],
+  }), false);
+  assert.equal(returnRequestAcknowledgementMatches(acknowledgement, {
+    ...expected,
+    lines: [{ consignmentLineId: 10, productId: 43, qtyReturning: 2 }],
+  }), false);
+  assert.equal(returnRequestAcknowledgementMatches(acknowledgement, {
+    ...expected,
+    lines: [{ consignmentLineId: 10, productId: 42, qtyReturning: 3 }],
+  }), false);
+  assert.equal(normalizeReturnRequestAcknowledgement({
+    data: { ...payload.data, return_id: 62 },
+  }), null, "id and return_id must both exist and agree");
+  assert.equal(normalizeReturnRequestAcknowledgement({
+    data: { ...payload.data, state: "unknown" },
+  }), null);
+  assert.equal(normalizeReturnRequestAcknowledgement({
+    data: { ...payload.data, version: null },
+  }), null);
+  assert.equal(normalizeReturnRequestAcknowledgement({
+    data: { ...payload.data, lines: [{ ...payload.data.lines[0], requested_damaged_qty: 1 }] },
+  })?.lines[0].requestedDamagedQty, 1, "parser preserves canonical allocation for matcher rejection");
+  assert.equal(returnRequestAcknowledgementMatches(normalizeReturnRequestAcknowledgement({
+    data: { ...payload.data, lines: [{ ...payload.data.lines[0], requested_damaged_qty: 1 }] },
+  }), expected), false);
+});
+
+test("unknown successful response preserves the same mutation key for replay", () => {
+  const values = new Map();
+  const storage = {
+    getItem: (key) => values.get(key) || null,
+    setItem: (key, value) => values.set(key, value),
+    removeItem: (key) => values.delete(key),
+  };
+  const storageKey = mutationOperationStorageKey("report-sale", {
+    consignmentId: 7,
+    consignmentLineId: 10,
+    productId: 42,
+    qtySold: 2,
+  });
+  const first = getOrCreateMutationKey(storage, storageKey, () => "11111111-1111-4111-8111-111111111111");
+  const matched = saleReportAcknowledgementMatches(
+    normalizeSaleReportAcknowledgement({ data: { ok: true } }),
+    {
+      consignmentId: 7,
+      consignmentLineId: 10,
+      productId: 42,
+      qtySold: 2,
+      effectiveSellPrice: 1500,
+      currencyId: 87,
+      idempotencyKey: first,
+    },
+  );
+  if (matched) storage.removeItem(storageKey);
+  const retry = getOrCreateMutationKey(storage, storageKey, () => "22222222-2222-4222-8222-222222222222");
+  assert.equal(matched, false);
+  assert.equal(retry, first);
+});
+
 test("one-tap sale freezes the allocation and retry key across prop/source changes", () => {
-  const attempt = createSaleOneAttempt({ consignmentId: 7, lineId: 10, productId: 42 });
-  const nextRenderSource = { consignmentId: 8, lineId: 20, productId: 42 };
+  const target = {
+    consignmentId: 7,
+    lineId: 10,
+    productId: 42,
+    effectiveSellPrice: 1500,
+    currencyId: 87,
+  };
+  const attempt = createSaleOneAttempt(target);
+  const nextRenderSource = { ...target, consignmentId: 8, lineId: 20 };
   assert.equal(attempt.consignmentId, 7);
   assert.equal(attempt.lineId, 10);
+  assert.equal(attempt.effectiveSellPrice, 1500);
+  assert.equal(attempt.currencyId, 87);
   assert.notEqual(attempt.operationStorageKey, createSaleOneAttempt(nextRenderSource).operationStorageKey);
+  assert.notEqual(attempt.operationStorageKey, createSaleOneAttempt({
+    ...target,
+    effectiveSellPrice: 1600,
+  }).operationStorageKey);
+  assert.notEqual(attempt.operationStorageKey, createSaleOneAttempt({
+    ...target,
+    currencyId: 1,
+  }).operationStorageKey);
 
   const values = new Map();
   const storage = {

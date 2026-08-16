@@ -572,6 +572,8 @@ export function BatteryFinder({ onAddToReplenishment }: { onAddToReplenishment: 
                     consignmentId={reportableSource?.consignment_id || p.custody.consignment_id}
                     lineId={reportableSource?.line_id || p.custody.line_id}
                     productId={p.pp_id}
+                    effectiveSellPrice={cost}
+                    currencyId={cur}
                     labels={{ sell: t("finderSellNow"), undo: t("undo"), sold: t("soldOneToast"), error: t("errorGeneric") }}
                     className="w-full"
                     disabled={!canUseMatch || !inStock || !reportableSource}

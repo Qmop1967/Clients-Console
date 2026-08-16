@@ -13,6 +13,10 @@ import {
   isConfirmedMutationFailure,
   type SaleOneAttempt,
 } from "@/lib/consignments/operation-key";
+import {
+  normalizeSaleReportAcknowledgement,
+  saleReportAcknowledgementMatches,
+} from "@/lib/consignments/mutation-acknowledgements";
 
 interface Labels { sell: string; undo: string; sold: string; error: string }
 
@@ -20,6 +24,8 @@ interface Props {
   consignmentId: number;
   lineId: number;
   productId: number;
+  effectiveSellPrice: number;
+  currencyId: number;
   labels: Labels;
   className?: string;
   disabled?: boolean;
@@ -31,7 +37,7 @@ interface Props {
 }
 
 export function SellOneButton({
-  consignmentId, lineId, productId, labels, className, disabled,
+  consignmentId, lineId, productId, effectiveSellPrice, currencyId, labels, className, disabled,
   hideWhenDisabled, showToast, onOptimistic, onUndo, onCommitted,
 }: Props) {
   const [phase, setPhase] = useState<"idle" | "countdown" | "posting" | "pending">("idle");
@@ -46,7 +52,13 @@ export function SellOneButton({
     if (phase !== "idle" || disabled) return;
     let attempt: SaleOneAttempt;
     try {
-      attempt = createSaleOneAttempt({ consignmentId, lineId, productId });
+      attempt = createSaleOneAttempt({
+        consignmentId,
+        lineId,
+        productId,
+        effectiveSellPrice,
+        currencyId,
+      });
     } catch {
       showToast(labels.error);
       return;
@@ -103,8 +115,9 @@ export function SellOneButton({
           idempotency_key: idem,
         }),
       });
+      const data = await res.json().catch(() => null);
       if (!res.ok) {
-        const d = await res.json().catch(() => ({}));
+        const d = data && typeof data === "object" ? data : {};
         if (isConfirmedMutationFailure(res.status, d)) {
           clearMutationKey(window.localStorage, attempt.operationStorageKey);
           attemptRef.current = null;
@@ -116,6 +129,22 @@ export function SellOneButton({
           setPhase("pending");
         }
         showToast(d?.message || labels.error);
+        return;
+      }
+      const acknowledgement = normalizeSaleReportAcknowledgement(data);
+      if (!saleReportAcknowledgementMatches(acknowledgement, {
+        consignmentId: attempt.consignmentId,
+        consignmentLineId: attempt.lineId,
+        productId: attempt.productId,
+        qtySold: 1,
+        effectiveSellPrice: attempt.effectiveSellPrice,
+        currencyId: attempt.currencyId,
+        idempotencyKey: idem,
+      })) {
+        // Keep the optimistic unit and the same operation key until the exact
+        // canonical acknowledgement can be recovered.
+        setPhase("pending");
+        showToast(labels.error);
         return;
       }
       clearMutationKey(window.localStorage, attempt.operationStorageKey);

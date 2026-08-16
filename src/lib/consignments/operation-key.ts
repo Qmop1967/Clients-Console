@@ -8,6 +8,8 @@ export interface SaleOneTarget {
   consignmentId: number;
   lineId: number;
   productId: number;
+  effectiveSellPrice: number;
+  currencyId: number;
 }
 
 export interface SaleOneAttempt extends Readonly<SaleOneTarget> {
@@ -36,12 +38,21 @@ function positiveInteger(value: number, field: string): number {
   return value;
 }
 
+function nonNegativeNumber(value: number, field: string): number {
+  if (!Number.isFinite(value) || value < 0) {
+    throw new Error(`Invalid ${field}`);
+  }
+  return value;
+}
+
 /** Freeze the exact custody allocation selected when the user taps Sell. */
 export function createSaleOneAttempt(target: SaleOneTarget): SaleOneAttempt {
   const attempt = {
     consignmentId: positiveInteger(target.consignmentId, "consignmentId"),
     lineId: positiveInteger(target.lineId, "lineId"),
     productId: positiveInteger(target.productId, "productId"),
+    effectiveSellPrice: nonNegativeNumber(target.effectiveSellPrice, "effectiveSellPrice"),
+    currencyId: positiveInteger(target.currencyId, "currencyId"),
   };
   return Object.freeze({
     ...attempt,
