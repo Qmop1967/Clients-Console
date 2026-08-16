@@ -23,6 +23,11 @@ import {
 } from "../src/lib/consignments/replenishment-cart.ts";
 import { actorTokenNeedsRefresh } from "../src/lib/consignments/actor-claims.ts";
 import {
+  batteryMatchCanAct,
+  mergeBatteryActionability,
+  normalizeBatteryActionability,
+} from "../src/lib/consignments/battery-actionability.ts";
+import {
   normalizeFinderCustody,
   isLatestFinderRequest,
   selectReportableCustodySource,
@@ -209,18 +214,52 @@ test("strict consignment gateway never emits raw partner identity headers", () =
   assert.match(serviceWorker, /consignments/);
 });
 
-test("client actor claims bind cached token to partner, role and human actor", () => {
+test("client actor claims bind cached token to purpose, partner, role and human actor", () => {
   const now = 2_000_000_000;
   const token = (claims) => [
     Buffer.from(JSON.stringify({ alg: "none", typ: "JWT" })).toString("base64url"),
     Buffer.from(JSON.stringify(claims)).toString("base64url"),
     "signature",
   ].join(".");
-  const valid = token({ exp: now + 3600, partner_id: 42, role: "client", type: "human" });
+  const purpose = { iss: "tsh-api-gateway", aud: "tsh-app:client", token_use: "actor" };
+  const valid = token({ ...purpose, exp: now + 3600, partner_id: 42, role: "client", type: "human" });
   assert.equal(actorTokenNeedsRefresh(valid, "42", now), false);
   assert.equal(actorTokenNeedsRefresh(valid, "43", now), true);
-  assert.equal(actorTokenNeedsRefresh(token({ exp: now + 3600, partner_id: 42, role: "admin", type: "human" }), 42, now), true);
-  assert.equal(actorTokenNeedsRefresh(token({ exp: now + 3600, partner_id: 42, role: "client", type: "service" }), 42, now), true);
+  assert.equal(actorTokenNeedsRefresh(token({ ...purpose, exp: now + 3600, partner_id: 42, role: "admin", type: "human" }), 42, now), true);
+  assert.equal(actorTokenNeedsRefresh(token({ ...purpose, exp: now + 3600, partner_id: 42, role: "client", type: "service" }), 42, now), true);
+  assert.equal(actorTokenNeedsRefresh(token({ exp: now + 3600, partner_id: 42, role: "client", type: "human" }), 42, now), true);
+  assert.equal(actorTokenNeedsRefresh(token({ ...purpose, aud: "tsh-app:rep", exp: now + 3600, partner_id: 42, role: "client", type: "human" }), 42, now), true);
+});
+
+test("battery matches fail closed unless confirmed and explicitly actionable", () => {
+  assert.deepEqual(normalizeBatteryActionability({
+    confidence: "likely",
+    actionable: true,
+    reason_codes: ["FITMENT_NOT_CONFIRMED"],
+  }), {
+    confidence: "likely",
+    actionable: false,
+    reason_codes: ["FITMENT_NOT_CONFIRMED"],
+  });
+  assert.deepEqual(normalizeBatteryActionability({
+    confidence: "confirmed",
+    actionable: false,
+    reason_codes: ["BATTERY_PROFILE_NOT_VERIFIED", "VOLTAGE_MISSING"],
+  }), {
+    confidence: "confirmed",
+    actionable: false,
+    reason_codes: ["BATTERY_PROFILE_NOT_VERIFIED", "VOLTAGE_MISSING"],
+  });
+  const safe = { confidence: "confirmed", actionable: true, reason_codes: [] };
+  assert.equal(batteryMatchCanAct(safe), true);
+  assert.equal(batteryMatchCanAct({ confidence: "confirmed" }), false);
+  assert.equal(mergeBatteryActionability([safe, { confidence: "likely", actionable: false }]).actionable, false);
+
+  const finder = readFileSync(new URL("../src/components/consignments/battery-finder.tsx", import.meta.url), "utf8");
+  assert.match(finder, /disabled=\{!canUseMatch \|\| !inStock \|\| !reportableSource\}/);
+  assert.match(finder, /disabled=\{!canUseMatch\}/);
+  assert.match(finder, /if \(!canUseMatch\) return/);
+  assert.match(finder, /p\.reason_codes\.join/);
 });
 
 test("mutation keys survive retry/reload without Math.random", () => {

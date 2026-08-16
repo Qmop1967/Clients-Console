@@ -21,6 +21,8 @@ export function actorTokenNeedsRefresh(
     const payload = decodeJwt(value);
     if (typeof payload.exp !== "number" || payload.exp <= nowSeconds + 5 * 60) return true;
     if (normalizedId(payload.partner_id) !== expected) return true;
+    if (payload.iss !== "tsh-api-gateway" || payload.aud !== "tsh-app:client") return true;
+    if (payload.token_use !== "actor") return true;
     if (payload.type !== "human") return true;
 
     const roles = [payload.role, payload.app_role]

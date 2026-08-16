@@ -23,11 +23,18 @@ import {
   type FinderCustodyAggregate,
   type FinderCustodySource,
 } from "@/lib/consignments/finder-custody";
+import {
+  batteryMatchCanAct,
+  mergeBatteryActionability,
+  normalizeBatteryActionability,
+} from "@/lib/consignments/battery-actionability";
 
 type Custody = FinderCustodyAggregate;
 interface FinderProduct {
   pp_id: number; name: string; code: string | null; pns: string[];
   image_version: number | null; confidence: "confirmed" | "likely";
+  actionable: boolean;
+  reason_codes: string[];
   matched: { type: "laptop" | "pn"; brand?: string; family?: string; model?: string; pn?: string };
   compatible: Array<{ brand: string; family: string; model: string }>;
   multi_option: boolean;
@@ -35,6 +42,7 @@ interface FinderProduct {
 }
 export interface FinderReplenishmentProduct {
   product_id: number; name: string; code: string | null; confidence: "confirmed" | "likely";
+  actionable: boolean; reason_codes: string[];
 }
 interface Suggestion { type: "laptop" | "pn"; label: string; laptop_id?: number; pp_id?: number; pns?: string[] }
 interface TreeBrand { brand: string; families: Array<{ family: string; models: Array<{ id: number; model: string }> }> }
@@ -43,29 +51,31 @@ interface Extracted { device: string; brand: string; family: string; model: stri
 function aggregateFinderProducts(items: FinderProduct[]): FinderProduct[] {
   const grouped = new Map<number, FinderProduct>();
   for (const item of items) {
+    const safeItem = { ...item, ...normalizeBatteryActionability(item) };
     const existing = grouped.get(item.pp_id);
     if (!existing) {
       grouped.set(item.pp_id, {
-        ...item,
-        custody: normalizeFinderCustody(item.custody),
+        ...safeItem,
+        custody: normalizeFinderCustody(safeItem.custody),
       });
       continue;
     }
-    const normalizedItemCustody = normalizeFinderCustody(item.custody);
+    const normalizedItemCustody = normalizeFinderCustody(safeItem.custody);
     const custodySources: FinderCustodySource[] = [
       ...(existing.custody?.sources || []),
       ...(normalizedItemCustody?.sources || []),
     ];
     const custody = aggregateFinderCustody(custodySources);
-    const compatible = [...existing.compatible, ...item.compatible].filter((row, index, all) =>
+    const compatible = [...existing.compatible, ...safeItem.compatible].filter((row, index, all) =>
       all.findIndex((candidate) => candidate.brand === row.brand && candidate.family === row.family && candidate.model === row.model) === index,
     );
+    const actionability = mergeBatteryActionability([existing, safeItem]);
     grouped.set(item.pp_id, {
       ...existing,
       custody,
       compatible,
-      multi_option: existing.multi_option || item.multi_option,
-      confidence: existing.confidence === "confirmed" && item.confidence === "confirmed" ? "confirmed" : "likely",
+      multi_option: existing.multi_option || safeItem.multi_option,
+      ...actionability,
     });
   }
   return Array.from(grouped.values());
@@ -471,6 +481,7 @@ export function BatteryFinder({ onAddToReplenishment }: { onAddToReplenishment: 
           const profit = retail > 0 && cost > 0 ? retail - cost : 0;
           const sourceQty = Math.max(0, Number(reportableSource?.reportable_qty || 0));
           const inStock = sourceQty > 0 && reportableSource !== null;
+          const canUseMatch = batteryMatchCanAct(p);
           const currency = cur === 1 ? "USD" : "IQD";
           const mixedPricing = (p.custody?.sources || []).some((source) => reportableSource && (
             source.currency_id !== reportableSource.currency_id ||
@@ -480,18 +491,20 @@ export function BatteryFinder({ onAddToReplenishment }: { onAddToReplenishment: 
           const sourceCopy = locale === "ar" ? {
             pricedBatch: "دفعة السعر الحالية",
             mixedCurrency: "توجد دفعات بعملات أو أسعار مختلفة؛ الكمية والسعر أدناه للدفعة المحددة فقط.",
+            reviewRequired: "هذه المطابقة للمراجعة فقط. لا يمكن البيع أو التعزيز حتى تُؤكّد ويُوثّق جواز سلامة البطارية.",
           } : {
             pricedBatch: "Current priced batch",
             mixedCurrency: "Other batches use a different currency or price; the quantity and price below apply only to this batch.",
+            reviewRequired: "Review only. Selling and replenishment stay disabled until the fitment and battery safety passport are verified.",
           };
           const compat = p.compatible.map(c2 => (c2.brand + " " + c2.family + " " + c2.model).replace(/\s+/g, " ")).slice(0, 8);
           return (
-            <div key={p.pp_id} className={"rounded-xl border-2 p-3.5 space-y-2.5 " + (p.confidence === "likely" ? "border-amber-300 bg-amber-50/60 dark:border-amber-800 dark:bg-amber-950/30" : "border-emerald-200 bg-emerald-50/50 dark:border-emerald-800/60 dark:bg-emerald-950/20")}>
-              <div className={"flex items-start gap-1.5 text-[11.5px] font-bold " + (p.confidence === "likely" ? "text-amber-800 dark:text-amber-300" : "text-emerald-700 dark:text-emerald-400")}>
-                {p.confidence === "likely" ? (
+            <div key={p.pp_id} className={"rounded-xl border-2 p-3.5 space-y-2.5 " + (!canUseMatch ? "border-amber-300 bg-amber-50/60 dark:border-amber-800 dark:bg-amber-950/30" : "border-emerald-200 bg-emerald-50/50 dark:border-emerald-800/60 dark:bg-emerald-950/20")}>
+              <div className={"flex items-start gap-1.5 text-[11.5px] font-bold " + (!canUseMatch ? "text-amber-800 dark:text-amber-300" : "text-emerald-700 dark:text-emerald-400")}>
+                {!canUseMatch ? (
                   <>
                     <TriangleAlert className="h-4 w-4 shrink-0" />
-                    <span>{t("finderLikelyNote")}</span>
+                    <span>{sourceCopy.reviewRequired}</span>
                   </>
                 ) : (
                   <>
@@ -547,6 +560,12 @@ export function BatteryFinder({ onAddToReplenishment }: { onAddToReplenishment: 
               <p className="flex items-start gap-1.5 text-[10.5px] text-amber-600 dark:text-amber-500">
                 <TriangleAlert className="h-3.5 w-3.5 shrink-0 mt-0.5" /> {t("finderCheckNote")}
               </p>
+              {!canUseMatch && p.reason_codes.length > 0 && (
+                <p role="status" aria-live="polite" className="rounded-lg border border-amber-300/70 bg-background/80 px-2.5 py-2 text-[10px] text-amber-800 dark:text-amber-300">
+                  <span className="font-semibold">{sourceCopy.reviewRequired}</span>
+                  <span dir="ltr" className="mt-1 block font-mono">{p.reason_codes.join(" · ")}</span>
+                </p>
+              )}
               <div className="space-y-2">
                 {p.custody && (
                   <SellOneButton
@@ -555,7 +574,7 @@ export function BatteryFinder({ onAddToReplenishment }: { onAddToReplenishment: 
                     productId={p.pp_id}
                     labels={{ sell: t("finderSellNow"), undo: t("undo"), sold: t("soldOneToast"), error: t("errorGeneric") }}
                     className="w-full"
-                    disabled={!inStock || !reportableSource}
+                    disabled={!canUseMatch || !inStock || !reportableSource}
                     hideWhenDisabled
                     showToast={showToast}
                     onOptimistic={(attempt) => updateCustody(p.pp_id, attempt.lineId, -1)}
@@ -566,12 +585,18 @@ export function BatteryFinder({ onAddToReplenishment }: { onAddToReplenishment: 
                 <Button
                   size="sm"
                   className="w-full bg-violet-600 text-white hover:bg-violet-700"
-                  onClick={() => onAddToReplenishment({
-                    product_id: p.pp_id,
-                    name: p.name,
-                    code: p.code,
-                    confidence: p.confidence,
-                  })}
+                  disabled={!canUseMatch}
+                  onClick={() => {
+                    if (!canUseMatch) return;
+                    onAddToReplenishment({
+                      product_id: p.pp_id,
+                      name: p.name,
+                      code: p.code,
+                      confidence: p.confidence,
+                      actionable: p.actionable,
+                      reason_codes: p.reason_codes,
+                    });
+                  }}
                 >
                   <Package className="h-3.5 w-3.5 me-1" /> {t("requestTopup")}
                 </Button>
