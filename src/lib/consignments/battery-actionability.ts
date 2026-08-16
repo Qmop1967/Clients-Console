@@ -22,8 +22,11 @@ function reasonCodes(value: unknown): string[] {
 export function normalizeBatteryActionability(value: unknown): BatteryActionability {
   const row = value && typeof value === "object" ? value as Record<string, unknown> : {};
   const confidence: BatteryMatchConfidence = row.confidence === "confirmed" ? "confirmed" : "likely";
-  const actionable = confidence === "confirmed" && row.actionable === true;
   const reasons = reasonCodes(row.reason_codes);
+  const canonicalReasonCodes = Array.isArray(row.reason_codes) &&
+    row.reason_codes.every((code) => typeof code === "string" && code.trim().length > 0);
+  const actionable = confidence === "confirmed" && row.actionable === true &&
+    canonicalReasonCodes && reasons.length === 0;
 
   if (!actionable && reasons.length === 0) {
     reasons.push(confidence === "likely"
@@ -39,8 +42,8 @@ export function mergeBatteryActionability(values: unknown[]): BatteryActionabili
   const confidence: BatteryMatchConfidence = normalized.every((item) => item.confidence === "confirmed")
     ? "confirmed"
     : "likely";
-  const actionable = confidence === "confirmed" && normalized.every((item) => item.actionable);
   const merged = Array.from(new Set(normalized.flatMap((item) => item.reason_codes)));
+  const actionable = confidence === "confirmed" && merged.length === 0 && normalized.every((item) => item.actionable);
   if (!actionable && merged.length === 0) {
     merged.push(confidence === "likely" ? "FITMENT_NOT_CONFIRMED" : "BATTERY_PROFILE_NOT_VERIFIED");
   }

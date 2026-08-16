@@ -251,8 +251,15 @@ test("battery matches fail closed unless confirmed and explicitly actionable", (
     reason_codes: ["BATTERY_PROFILE_NOT_VERIFIED", "VOLTAGE_MISSING"],
   });
   const safe = { confidence: "confirmed", actionable: true, reason_codes: [] };
+  assert.equal(batteryMatchCanAct({
+    confidence: "confirmed",
+    actionable: true,
+    reason_codes: ["BATTERY_PROFILE_NOT_VERIFIED"],
+  }), false, "contradictory blocker codes must win over an actionable flag");
   assert.equal(batteryMatchCanAct(safe), true);
   assert.equal(batteryMatchCanAct({ confidence: "confirmed" }), false);
+  assert.equal(batteryMatchCanAct({ confidence: "confirmed", actionable: true }), false);
+  assert.equal(batteryMatchCanAct({ confidence: "confirmed", actionable: true, reason_codes: [null] }), false);
   assert.equal(mergeBatteryActionability([safe, { confidence: "likely", actionable: false }]).actionable, false);
 
   const finder = readFileSync(new URL("../src/components/consignments/battery-finder.tsx", import.meta.url), "utf8");
