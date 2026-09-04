@@ -4,6 +4,7 @@ import Link from "next/link";
 import { PublicHeader } from "@/components/layout/public-header";
 import { PublicLayoutClient } from "@/components/layout/public-layout-client";
 import { WhatsAppFloat } from "@/components/ui/whatsapp-float";
+import { AssistantLauncher } from "@/components/assistant/AssistantLauncher";
 import { COMPANY_PHONE_DISPLAY, whatsappSalesLink } from "@/lib/config/contact";
 
 interface PublicLayoutProps {
@@ -97,6 +98,8 @@ export default async function PublicLayout({
 
       {/* Always-reachable sales WhatsApp */}
       <WhatsAppFloat />
+      {/* AI sales assistant launcher + proactive greeting */}
+      <AssistantLauncher locale={locale} />
     </div>
   );
 }
