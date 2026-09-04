@@ -27,7 +27,8 @@ async function forward(req: NextRequest, path: string[]) {
   const cookie = req.headers.get("cookie");
   if (cookie) headers.cookie = cookie;
   // Never forward Arabic text in headers — ByteString errors. Body only.
-  if (!isMultipart) headers["content-type"] = "application/json";
+  // Multipart MUST carry the original content-type (with boundary) or the gateway sees no fields.
+  headers["content-type"] = isMultipart ? contentType : "application/json";
 
   try {
     const res = await fetch(target, {

@@ -30,7 +30,8 @@ async function forward(req: NextRequest, path: string[]) {
   const isMultipart = contentType.startsWith("multipart/form-data");
 
   const headers: Record<string, string> = { "x-api-key": key };
-  if (!isMultipart) headers["content-type"] = "application/json";
+  // Multipart MUST carry the original content-type (with boundary) or the gateway sees no fields.
+  headers["content-type"] = isMultipart ? contentType : "application/json";
   const fwd = req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip");
   if (fwd) headers["x-forwarded-for"] = fwd;
 
