@@ -34,6 +34,9 @@ async function forward(req: NextRequest, path: string[]) {
   headers["content-type"] = isMultipart ? contentType : "application/json";
   const fwd = req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip");
   if (fwd) headers["x-forwarded-for"] = fwd;
+  // Session ownership proof minted by the gateway at session creation.
+  const sfa = req.headers.get("x-sfa-token");
+  if (sfa) headers["x-sfa-token"] = sfa;
 
   // Verified identity (session creation only).
   if (safePath[0] === "session" && req.method === "POST") {

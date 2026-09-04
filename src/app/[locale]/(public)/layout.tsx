@@ -3,7 +3,6 @@ import { getTranslations } from "next-intl/server";
 import Link from "next/link";
 import { PublicHeader } from "@/components/layout/public-header";
 import { PublicLayoutClient } from "@/components/layout/public-layout-client";
-import { WhatsAppFloat } from "@/components/ui/whatsapp-float";
 import { AssistantLauncher } from "@/components/assistant/AssistantLauncher";
 import { COMPANY_PHONE_DISPLAY, whatsappSalesLink } from "@/lib/config/contact";
 
@@ -96,8 +95,7 @@ export default async function PublicLayout({
         {children}
       </PublicLayoutClient>
 
-      {/* Always-reachable sales WhatsApp */}
-      <WhatsAppFloat />
+      {/* One entry point: the AI assistant. Human/WhatsApp handoff lives INSIDE the chat. */}
       {/* AI sales assistant launcher + proactive greeting */}
       <AssistantLauncher locale={locale} />
     </div>

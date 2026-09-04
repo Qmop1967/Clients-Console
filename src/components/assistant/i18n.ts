@@ -57,6 +57,8 @@ const AR = {
   fileTooLarge: "الملف كبير جداً (الحد 25MB، الصور 10MB).",
   micDenied: "ما گدرت أوصل للمايكروفون.",
   recordingNow: "جاري التسجيل",
+  whatsapp: "واتساب",
+  whatsappNow: "افتح واتساب الآن",
   remove: "إزالة المرفق",
   attachHint: "اكتب سؤالك عن الصورة ثم اضغط إرسال",
 };
@@ -112,6 +114,8 @@ const EN: typeof AR = {
   fileTooLarge: "File too large (limit 25MB, images 10MB).",
   micDenied: "Microphone access was denied.",
   recordingNow: "Recording",
+  whatsapp: "WhatsApp",
+  whatsappNow: "Open WhatsApp now",
   remove: "Remove attachment",
   attachHint: "Add your question about the photo, then press send",
 };
@@ -135,9 +139,36 @@ const CKB: typeof AR = {
   bubbleClose: "داخستن",
   launcher: "یاریدەدەری فرۆشتن",
   recordingNow: "تۆمارکردن",
+  whatsapp: "واتساپ",
+  whatsappNow: "واتساپ بکەرەوە",
   remove: "لابردن",
   attachHint: "پرسیارەکەت بنووسە پاشان بینێرە",
 };
+/**
+ * Starter chips. The gateway sends these with a fresh greeting; the client also re-offers
+ * them when a short transcript is resumed (the stored transcript carries no chips).
+ */
+export const GREET_CHIPS: Record<AssistantLocale, { label: string; value: string }[]> = {
+  ar: [
+    { label: "شنو عندكم؟", value: "شنو الأقسام والمنتجات عندكم؟" },
+    { label: "بحث بصورة", value: "__upload_image__" },
+    { label: "حساب تاجر جملة", value: "أريد أفتح حساب تاجر جملة" },
+    { label: "أسئلة عن الشركة", value: "عرّفني على شركة TSH والتوصيل والدفع" },
+  ],
+  en: [
+    { label: "What do you sell?", value: "What categories and products do you have?" },
+    { label: "Search by photo", value: "__upload_image__" },
+    { label: "Wholesale account", value: "I want to open a wholesale trader account" },
+    { label: "About TSH", value: "Tell me about TSH, delivery and payment" },
+  ],
+  ckb: [
+    { label: "چیتان هەیە؟", value: "چ بەشێک و بەرهەمێکتان هەیە؟" },
+    { label: "گەڕان بە وێنە", value: "__upload_image__" },
+    { label: "هەژماری بازرگان", value: "دەمەوێت هەژماری بازرگانی کۆمەڵ بکەمەوە" },
+    { label: "دەربارەی TSH", value: "دەربارەی TSH و گەیاندن و پارەدان" },
+  ],
+};
+
 export const ASSISTANT_COPY: Record<AssistantLocale, typeof AR> = { ar: AR, en: EN, ckb: CKB };
 
 export const GOVERNORATES: { code: string; ar: string; en: string }[] = [

@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import { useCart } from "@/components/providers/cart-provider";
 import { getOdooImageUrl } from "@/lib/odoo/client";
-import { ASSISTANT_COPY, GOVERNORATES, assistantLocale } from "./i18n";
+import { ASSISTANT_COPY, GOVERNORATES, GREET_CHIPS, assistantLocale } from "./i18n";
 import { cn } from "@/lib/utils";
 
 interface ProductCard {
@@ -28,12 +28,25 @@ interface Msg {
 }
 interface Upload { uploadId: string; kind: string; name: string; previewUrl?: string; transcript?: string | null }
 
+function WhatsAppIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden="true">
+      <path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2zm5.3 14.1c-.2.7-1.3 1.3-1.9 1.4-.5.1-1.1.2-3.4-.7-2.9-1.2-4.7-4.1-4.9-4.3-.1-.2-1.1-1.5-1.1-2.9s.7-2 1-2.3c.2-.3.5-.3.7-.3h.5c.2 0 .4 0 .6.4l.9 2.1c.1.2.1.4 0 .6l-.4.6c-.1.2-.3.4-.1.7.1.3.8 1.3 1.7 2.1 1.2 1 2.1 1.4 2.4 1.5.3.1.5.1.7-.1l1-1.2c.2-.3.4-.2.7-.1l2 1c.3.1.5.2.6.4 0 .1 0 .7-.2 1.1z" />
+    </svg>
+  );
+}
+
 const SESSION_KEY = "tsh_assistant_session_v1";
+const TOKEN_KEY = "tsh_assistant_token_v1";
+const readToken = () => { try { return sessionStorage.getItem(TOKEN_KEY) || ""; } catch { return ""; } };
 
 async function api(path: string, body?: any, init?: RequestInit) {
+  const token = readToken();
   const res = await fetch(`/api/assistant/${path}`, {
     method: "POST",
-    headers: body instanceof FormData ? undefined : { "content-type": "application/json" },
+    headers: body instanceof FormData
+      ? (token ? { "x-sfa-token": token } : undefined)
+      : { "content-type": "application/json", ...(token ? { "x-sfa-token": token } : {}) },
     body: body instanceof FormData ? body : JSON.stringify(body || {}),
     ...init,
   });
@@ -59,6 +72,7 @@ export function AssistantChat({ locale }: { locale: string }) {
   const [seconds, setSeconds] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [panel, setPanel] = useState<"none" | "human" | "wholesale">("none");
+  const [whatsapp, setWhatsapp] = useState<string | null>(null);
   const [addedIds, setAddedIds] = useState<Set<number>>(new Set());
   const listRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -79,22 +93,33 @@ export function AssistantChat({ locale }: { locale: string }) {
     (async () => {
       const saved = typeof window !== "undefined" ? sessionStorage.getItem(SESSION_KEY) : null;
       if (saved) {
-        const r = await fetch(`/api/assistant/session/${saved}`).then((x) => x.json()).catch(() => null);
+        const tok = readToken();
+        const r = await fetch(`/api/assistant/session/${saved}`, { headers: tok ? { "x-sfa-token": tok } : undefined })
+          .then((x) => x.json()).catch(() => null);
         if (!cancelled && r?.success && Array.isArray(r.history)) {
           setSessionId(saved);
-          setMessages(r.history.map((h: any, i: number) => ({
+          setWhatsapp(r.whatsapp || null);
+          const restored: Msg[] = r.history.map((h: any, i: number) => ({
             id: h.id || `h${i}`, role: h.role === "customer" ? "user" : "assistant", text: h.text, at: Date.parse(h.timestamp) || Date.now(),
-          })));
+          }));
+          // The transcript carries no chips; re-offer the starters on a fresh-looking chat.
+          const lastIdx = restored.length - 1;
+          if (lastIdx >= 0 && restored[lastIdx].role === "assistant" && restored.length <= 2) {
+            restored[lastIdx] = { ...restored[lastIdx], quickReplies: GREET_CHIPS[L] };
+          }
+          setMessages(restored);
           scrollDown(); return;
         }
-        sessionStorage.removeItem(SESSION_KEY);
+        sessionStorage.removeItem(SESSION_KEY); sessionStorage.removeItem(TOKEN_KEY);
       }
       const r = await api("session", { locale: L, path: window.location.pathname });
       if (cancelled) return;
       if (r.ok && r.json?.sessionId) {
         sessionStorage.setItem(SESSION_KEY, r.json.sessionId);
+        if (r.json.sessionToken) sessionStorage.setItem(TOKEN_KEY, r.json.sessionToken);
         setSessionId(r.json.sessionId);
-        setMessages([{ id: "a0", role: "assistant", text: r.json.greeting?.text || "", at: Date.now(), quickReplies: r.json.greeting?.quickReplies || [] }]);
+        setWhatsapp(r.json.whatsapp || null);
+        setMessages([{ id: "a0", role: "assistant", text: r.json.greeting?.text || "", at: Date.now(), quickReplies: r.json.greeting?.quickReplies || GREET_CHIPS[L] }]);
       } else setError(r.status === 429 ? t.rateLimited : t.error);
     })();
     return () => { cancelled = true; };
@@ -244,6 +269,12 @@ export function AssistantChat({ locale }: { locale: string }) {
           <div className="truncate text-sm font-semibold">{t.title}</div>
           <div className="truncate text-[11px] text-muted-foreground">{t.online} · {t.subtitle}</div>
         </div>
+        {whatsapp ? (
+          <a href={whatsapp} target="_blank" rel="noopener noreferrer" title={t.whatsapp} aria-label={t.whatsapp}
+            className="flex items-center gap-1.5 rounded-xl bg-[#25D366] px-2.5 py-1.5 text-xs font-medium text-white">
+            <WhatsAppIcon className="h-4 w-4" /><span className="hidden sm:inline">{t.whatsapp}</span>
+          </a>
+        ) : null}
         <button onClick={() => setPanel(panel === "human" ? "none" : "human")} className="hidden items-center gap-1 rounded-xl border px-3 py-1.5 text-xs hover:bg-muted sm:flex"><UserRound className="h-3.5 w-3.5" />{t.human}</button>
         <button onClick={newChat} aria-label={t.newChat} title={t.newChat} className="rounded-xl p-2 hover:bg-muted"><RotateCcw className="h-4 w-4" /></button>
       </div>
@@ -318,7 +349,7 @@ export function AssistantChat({ locale }: { locale: string }) {
             <div className="flex items-end"><div className="rounded-2xl rounded-es-md border bg-card px-4 py-2.5 text-[13px] text-muted-foreground"><span className="inline-flex items-center gap-2"><Loader2 className="h-3.5 w-3.5 animate-spin" />{t.thinking}</span></div></div>
           ) : null}
 
-          {panel === "human" ? <HumanPanel t={t} sessionId={sessionId} onDone={(msg) => { setPanel("none"); setMessages((m) => [...m, { id: `a${Date.now()}`, role: "assistant", text: msg, at: Date.now() }]); }} onCancel={() => setPanel("none")} /> : null}
+          {panel === "human" ? <HumanPanel t={t} sessionId={sessionId} whatsapp={whatsapp} onDone={(msg) => { setPanel("none"); setMessages((m) => [...m, { id: `a${Date.now()}`, role: "assistant", text: msg, at: Date.now() }]); }} onCancel={() => setPanel("none")} /> : null}
           {panel === "wholesale" ? <WholesalePanel t={t} L={L} sessionId={sessionId} onDone={(msg) => { setPanel("none"); setMessages((m) => [...m, { id: `a${Date.now()}`, role: "assistant", text: msg, at: Date.now() }]); }} onCancel={() => setPanel("none")} /> : null}
 
           {error ? <div className="rounded-xl border border-red-300 bg-red-50 px-3 py-2 text-[12.5px] text-red-700 dark:bg-red-950/30 dark:text-red-300">{error}</div> : null}
@@ -374,7 +405,10 @@ export function AssistantChat({ locale }: { locale: string }) {
         </div>
         <div className="mx-auto mt-1 flex max-w-2xl items-center justify-between px-1 text-[10.5px] text-muted-foreground">
           <span>{t.poweredBy}</span>
-          <button onClick={() => setPanel("human")} className="sm:hidden underline">{t.human}</button>
+          <span className="flex items-center gap-3">
+            {whatsapp ? <a href={whatsapp} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-[#25D366]"><WhatsAppIcon className="h-3.5 w-3.5" />{t.whatsapp}</a> : null}
+            <button onClick={() => setPanel("human")} className="underline">{t.human}</button>
+          </span>
         </div>
       </div>
     </div>
@@ -382,8 +416,8 @@ export function AssistantChat({ locale }: { locale: string }) {
 }
 
 // ---------------------------------------------------------------- inline panels (no modals)
-function HumanPanel({ t, sessionId, onDone, onCancel }: { t: any; sessionId: string | null; onDone: (m: string) => void; onCancel: () => void }) {
-  const [name, setName] = useState(""); const [phone, setPhone] = useState(""); const [busy, setBusy] = useState(false);
+function HumanPanel({ t, sessionId, whatsapp, onDone, onCancel }: { t: any; sessionId: string | null; whatsapp: string | null; onDone: (m: string) => void; onCancel: () => void }) {
+  const [name, setName] = useState(""); const [phone, setPhone] = useState(""); const [busy, setBusy] = useState(false); const [, setWa] = useState<string | null>(null);
   return (
     <div className="rounded-2xl border bg-card p-4 shadow-sm">
       <div className="mb-1 flex items-center gap-2 text-sm font-semibold"><UserRound className="h-4 w-4" />{t.humanTitle}</div>
@@ -392,8 +426,13 @@ function HumanPanel({ t, sessionId, onDone, onCancel }: { t: any; sessionId: str
         <input value={name} onChange={(e) => setName(e.target.value)} placeholder={t.name} className="rounded-xl border bg-background px-3 py-2 text-sm" />
         <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder={t.phone} inputMode="tel" dir="ltr" className="rounded-xl border bg-background px-3 py-2 text-sm" />
       </div>
-      <div className="mt-3 flex gap-2">
-        <button disabled={busy || !sessionId} onClick={async () => { setBusy(true); const r = await api("handoff", { sessionId, reason: "customer_request", contact: { name, phone } }); setBusy(false); onDone(r.json?.message || t.error); }} className="rounded-xl bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50">{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : t.sendRequest}</button>
+      <div className="mt-3 flex flex-wrap gap-2">
+        <button disabled={busy || !sessionId} onClick={async () => { setBusy(true); const r = await api("handoff", { sessionId, reason: "customer_request", contact: { name, phone } }); setBusy(false); if (r.json?.whatsapp) setWa(r.json.whatsapp); onDone(r.json?.message || t.error); }} className="rounded-xl bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50">{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : t.sendRequest}</button>
+        {whatsapp ? (
+          <a href={whatsapp} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 rounded-xl bg-[#25D366] px-4 py-2 text-sm font-medium text-white">
+            <WhatsAppIcon className="h-4 w-4" />{t.whatsappNow}
+          </a>
+        ) : null}
         <button onClick={onCancel} className="rounded-xl border px-4 py-2 text-sm">{t.cancel}</button>
       </div>
     </div>

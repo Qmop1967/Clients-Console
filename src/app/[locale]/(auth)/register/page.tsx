@@ -44,6 +44,7 @@ export default function RegisterPage() {
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
   const [knownCustomer, setKnownCustomer] = useState(false);
+  const [partnerName, setPartnerName] = useState("");
   const [appId, setAppId] = useState<number | null>(null);
   const [outcome, setOutcome] = useState<string>("");
 
@@ -90,9 +91,37 @@ export default function RegisterPage() {
 
   const verifyCode = () => run(async () => {
     const d = await post("otp/verify", { email, code });
-    if (d.application?.status === "verified") { setOutcome("verified"); setStep("done"); return; }
-    if (d.application?.id) setAppId(d.application.id);
-    setStep("details");
+    const app = d.application || null;
+    const p = d.partner || null;
+    if (p?.name) setPartnerName(p.name);
+    if (app?.id) setAppId(app.id);
+
+    // Never re-ask for what we already hold: his own earlier answers first, then
+    // the structured fields Odoo already has. Deliberately NOT the partner name —
+    // in Odoo it is a mixed string like "عمر مكتب التهاني الموصل", and seeding it
+    // as the shop name hands the screening agent a name the signboard won't match.
+    setForm(f => ({
+      ...f,
+      applicant_type: app?.applicant_type || f.applicant_type,
+      shop_name:     app?.shop_name     || f.shop_name,
+      owner_name:    app?.owner_name    || f.owner_name,
+      phone:         app?.phone         || p?.phone        || f.phone,
+      governorate:   app?.governorate   || p?.governorate  || f.governorate,
+      business_type: app?.business_type || f.business_type,
+      address_text:  app?.address_text  || f.address_text,
+      facebook_url:  app?.facebook_url  || f.facebook_url,
+      instagram_url: app?.instagram_url || f.instagram_url,
+    }));
+
+    // The gateway decides where he stands; the form is only one of the answers.
+    switch (d.next) {
+      case "active_trader": setOutcome("active_trader"); setStep("done"); return;
+      case "provisional":   setOutcome("provisional");   setStep("done"); return;
+      case "in_review":     setOutcome("in_review");     setStep("done"); return;
+      case "needs_photo":
+      case "resume_photos": setStep("photos"); return;
+      default:              setStep("details");
+    }
   });
 
   const askLocation = () => {
@@ -147,11 +176,17 @@ export default function RegisterPage() {
             <CardDescription>
               {step === "email" && "أدخل بريدك ونرسل لك رمز دخول."}
               {step === "code" && `أرسلنا رمزاً إلى ${email}. تحقّق من صندوق الوارد ومجلد الرسائل غير المرغوبة.`}
-              {step === "details" && (knownCustomer
-                ? "أنت مسجّل عندنا — أكمل بيانات المحل لفتح حساب التاجر."
-                : "بيانات المحل. تأخذ أقل من دقيقة.")}
-              {step === "photos" && (isOnline ? "لقطة واحدة من لوحة إدارة صفحتك تكفي." : "صورة واحدة لواجهة المحل تكفي للبدء.")}
-              {step === "done" && "تم استلام طلبك."}
+              {step === "details" && (partnerName
+                ? `مسجّل عندنا باسم: ${partnerName} — عبّأنا ما نعرفه، أكمل الناقص فقط.`
+                : knownCustomer
+                  ? "أنت مسجّل عندنا — أكمل بيانات المحل لفتح حساب التاجر."
+                  : "بيانات المحل. تأخذ أقل من دقيقة.")}
+              {step === "photos" && (appId
+                ? "بقيت الصورة فقط — بياناتك محفوظة."
+                : isOnline ? "لقطة واحدة من لوحة إدارة صفحتك تكفي." : "صورة واحدة لواجهة المحل تكفي للبدء.")}
+              {step === "done" && (outcome === "active_trader" ? "حسابك التجاري فعّال."
+                : outcome === "in_review" ? "طلبك قيد المراجعة."
+                : "تم استلام طلبك.")}
             </CardDescription>
           </CardHeader>
 
@@ -331,6 +366,29 @@ export default function RegisterPage() {
                       حسابك مفتوح وتقدر تتصفح المنتجات الآن. أرسلنا لك بريداً بالتفاصيل.
                     </p>
                   </>
+                ) : outcome === "in_review" ? (
+                  <>
+                    <Loader2 className="mx-auto h-11 w-11 animate-spin text-blue-600" />
+                    <h3 className="text-lg font-bold">طلبك قيد المراجعة</h3>
+                    <p className="text-sm text-slate-600 dark:text-slate-400">
+                      استلمنا بياناتك وصورك ونراجعها الآن. نرسل لك النتيجة على {email}
+                      {" "}— ما تحتاج تعيد التسجيل.
+                    </p>
+                  </>
+                ) : outcome === "active_trader" ? (
+                  <>
+                    <ShieldCheck className="mx-auto h-11 w-11 text-emerald-600" />
+                    <h3 className="text-lg font-bold">
+                      {partnerName ? `أهلاً ${partnerName}` : "حسابك التجاري فعّال"}
+                    </h3>
+                    <p className="text-sm text-slate-600 dark:text-slate-400">
+                      عندك حساب تاجر مفعّل بأسعار الجملة — ما تحتاج تسجّل من جديد.
+                      سجّل دخولك وتصفّح مباشرة.
+                    </p>
+                    <Button asChild className="w-full">
+                      <Link href={`/${locale}/login`}>تسجيل الدخول</Link>
+                    </Button>
+                  </>
                 ) : outcome === "provisional" || outcome === "verified" ? (
                   <>
                     <ShieldCheck className="mx-auto h-11 w-11 text-emerald-600" />
@@ -348,7 +406,11 @@ export default function RegisterPage() {
                     </p>
                   </>
                 )}
-                <Button asChild className="w-full"><Link href={`/${locale}/shop`}>تصفّح المنتجات</Link></Button>
+                {outcome !== "active_trader" && (
+                  <Button asChild className="w-full">
+                    <Link href={`/${locale}/shop`}>تصفّح المنتجات</Link>
+                  </Button>
+                )}
               </div>
             )}
           </CardContent>

@@ -41,7 +41,7 @@ export function AssistantLauncher({ locale }: { locale: string }) {
         </div>
       ) : null}
       <Link href={href} aria-label={t.launcher} title={t.launcher} onClick={dismiss}
-        className="fixed bottom-[4.75rem] end-4 z-40 flex h-12 items-center gap-2 rounded-2xl bg-primary px-3 text-primary-foreground shadow-lg shadow-black/25 transition-transform native-press hover:scale-105 md:bottom-6 md:end-6 md:h-12">
+        className="fixed bottom-[5.5rem] end-4 z-40 flex h-12 items-center gap-2 rounded-2xl bg-primary px-3 text-primary-foreground shadow-lg shadow-black/25 transition-transform native-press hover:scale-105 md:bottom-6 md:end-6 md:h-12">
         <Sparkles className="h-5 w-5" />
         <span className="hidden text-sm font-medium md:inline">{t.launcher}</span>
         <span className="absolute -top-1 -end-1 h-3 w-3 rounded-full border-2 border-primary bg-emerald-400" />
