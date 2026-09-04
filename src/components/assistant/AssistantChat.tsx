@@ -138,12 +138,19 @@ export function AssistantChat({ locale }: { locale: string }) {
   }, [scrollDown]);
 
   // Grow the composer with the text instead of trapping long questions in one row.
+  // An empty textarea reports its WRAPPED PLACEHOLDER in scrollHeight (two lines in Arabic),
+  // so the idle composer must be pinned to one row rather than measured.
   useEffect(() => {
     const el = taRef.current;
     if (!el) return;
+    if (!input) { el.style.height = "44px"; return; }
     el.style.height = "0px";
-    el.style.height = Math.min(el.scrollHeight, 128) + "px";
+    el.style.height = Math.min(Math.max(el.scrollHeight, 44), 128) + "px";
   }, [input]);
+
+  // A physical keyboard means the visitor is ready to type; a touch keyboard must not
+  // spring open and swallow half the screen before they have read the greeting.
+  useEffect(() => { if (!softKb && sessionId) taRef.current?.focus(); }, [softKb, sessionId]);
 
   // ---- session bootstrap (resume within 24h, else new)
   useEffect(() => {
@@ -427,7 +434,7 @@ export function AssistantChat({ locale }: { locale: string }) {
       </div>
 
       {/* composer */}
-      <div className="shrink-0 border-t bg-card/90 px-2 pb-[max(env(safe-area-inset-bottom),8px)] pt-2 backdrop-blur">
+      <div className="shrink-0 border-t bg-card/90 px-2 pb-2 pt-2 backdrop-blur md:pb-[max(env(safe-area-inset-bottom),8px)]">
         {pending.length ? (
           <div className="mx-auto mb-2 flex max-w-2xl flex-wrap items-center gap-2 px-1">
             {pending.map((u) => (
