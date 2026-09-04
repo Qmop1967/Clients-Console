@@ -158,8 +158,9 @@ export function AssistantChat({ locale }: { locale: string }) {
       if (!r.ok) { setError(r.status === 429 ? t.rateLimited : t.error); return; }
       const ups: Upload[] = (r.json.uploads || []).map((u: any) => ({ uploadId: u.uploadId, kind: u.kind, name: u.name }));
       setPending((p) => [...p, ...ups]);
-      // A lone photo with no text is a complete question ("do you have this?") — send it.
-      if (ups.length && ups.every((u) => u.kind === "image") && !input.trim()) await send("", ups);
+      // A lone photo ("do you have this?") or a transcribed voice note is a complete turn — send it.
+      const auto = ups.length && !input.trim() && ups.every((u) => u.kind === "image" || (u.kind === "audio" && (r.json.uploads || []).find((x: any) => x.uploadId === u.uploadId)?.transcript));
+      if (auto) await send("", ups);
     } catch { setError(t.error); } finally { setUploading(false); }
   };
 
