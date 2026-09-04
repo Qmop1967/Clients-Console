@@ -8,7 +8,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   ArrowLeft, ArrowRight, Send, Paperclip, Mic, Square, ShoppingCart, ExternalLink,
-  Sparkles, ThumbsUp, ThumbsDown, UserRound, RotateCcw, Loader2, ImageIcon, FileIcon, Check, X, Trash2,
+  Sparkles, ThumbsUp, ThumbsDown, UserRound, RotateCcw, Loader2, ImageIcon, FileIcon, Check, X, Trash2, ChevronDown,
 } from "lucide-react";
 import { useCart } from "@/components/providers/cart-provider";
 import { getOdooImageUrl } from "@/lib/odoo/client";
@@ -74,7 +74,11 @@ export function AssistantChat({ locale }: { locale: string }) {
   const [panel, setPanel] = useState<"none" | "human" | "wholesale">("none");
   const [whatsapp, setWhatsapp] = useState<string | null>(null);
   const [addedIds, setAddedIds] = useState<Set<number>>(new Set());
+  const [atBottom, setAtBottom] = useState(true);
+  const [softKb, setSoftKb] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
+  const taRef = useRef<HTMLTextAreaElement>(null);
+  const atBottomRef = useRef(true);
   const fileRef = useRef<HTMLInputElement>(null);
   const recRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -84,8 +88,62 @@ export function AssistantChat({ locale }: { locale: string }) {
   const cancelRef = useRef(false);
 
   const scrollDown = useCallback(() => {
-    requestAnimationFrame(() => { const el = listRef.current; if (el) el.scrollTop = el.scrollHeight; });
+    requestAnimationFrame(() => {
+      const el = listRef.current;
+      if (!el) return;
+      el.scrollTop = el.scrollHeight;
+      atBottomRef.current = true;
+      setAtBottom(true);
+    });
   }, []);
+
+  // Follow the conversation only while the visitor is already at the bottom — yanking
+  // them down while they scroll back through prices is the classic chat annoyance.
+  const onListScroll = useCallback(() => {
+    const el = listRef.current;
+    if (!el) return;
+    const near = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+    atBottomRef.current = near;
+    setAtBottom(near);
+  }, []);
+
+  // Touch keyboards: Enter inserts a newline (the send button is right there).
+  // Physical keyboards keep Enter-to-send. Resolved after mount to keep SSR markup stable.
+  useEffect(() => {
+    setSoftKb(typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)").matches === true);
+  }, []);
+
+  // iOS overlays the software keyboard ON TOP of the fixed app shell, so the composer
+  // ends up underneath it. visualViewport reports the real overlap: we shrink the chat by
+  // exactly that much and (via data-kb-open) hide the bottom nav while typing.
+  useEffect(() => {
+    const vv = typeof window !== "undefined" ? window.visualViewport : null;
+    if (!vv) return;
+    const root = document.documentElement;
+    const apply = () => {
+      const inset = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
+      root.style.setProperty("--tsh-kb-inset", inset + "px");
+      root.setAttribute("data-kb-open", inset > 120 ? "1" : "0");
+      if (inset > 120 && atBottomRef.current) scrollDown();
+    };
+    apply();
+    vv.addEventListener("resize", apply);
+    vv.addEventListener("scroll", apply);
+    return () => {
+      vv.removeEventListener("resize", apply);
+      vv.removeEventListener("scroll", apply);
+      root.style.removeProperty("--tsh-kb-inset");
+      root.removeAttribute("data-kb-open");
+    };
+  }, [scrollDown]);
+
+  // Grow the composer with the text instead of trapping long questions in one row.
+  useEffect(() => {
+    const el = taRef.current;
+    if (!el) return;
+    el.style.height = "0px";
+    el.style.height = Math.min(el.scrollHeight, 128) + "px";
+  }, [input]);
 
   // ---- session bootstrap (resume within 24h, else new)
   useEffect(() => {
@@ -126,7 +184,7 @@ export function AssistantChat({ locale }: { locale: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [L]);
 
-  useEffect(scrollDown, [messages, busy, panel, scrollDown]);
+  useEffect(() => { if (atBottomRef.current) scrollDown(); }, [messages, busy, panel, scrollDown]);
 
   // ---- send
   const send = useCallback(async (text: string, attachments = pending) => {
@@ -257,7 +315,11 @@ export function AssistantChat({ locale }: { locale: string }) {
   const BackIcon = rtl ? ArrowRight : ArrowLeft;
 
   return (
-    <div dir={rtl ? "rtl" : "ltr"} className="flex h-[calc(100dvh-var(--header-height,3.5rem))] min-h-[420px] flex-col bg-background">
+    <div
+      dir={rtl ? "rtl" : "ltr"}
+      style={{ paddingBottom: "var(--tsh-kb-inset, 0px)" }}
+      className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background"
+    >
       {/* header */}
       <div className="flex shrink-0 items-center gap-3 border-b bg-card/80 px-3 py-2 backdrop-blur">
         <button onClick={() => (history.length > 1 ? router.back() : router.push(`/${locale}/shop`))} aria-label={t.back} className="rounded-xl p-2 hover:bg-muted"><BackIcon className="h-5 w-5" /></button>
@@ -280,10 +342,11 @@ export function AssistantChat({ locale }: { locale: string }) {
       </div>
 
       {/* messages */}
-      <div ref={listRef} className="flex-1 overflow-y-auto overscroll-contain px-3 py-4 [scrollbar-width:thin]">
+      <div className="relative flex min-h-0 flex-1 flex-col">
+      <div ref={listRef} onScroll={onListScroll} className="flex-1 overflow-y-auto overscroll-contain px-3 py-4 [scrollbar-width:thin]">
         <div className="mx-auto flex max-w-2xl flex-col gap-3">
           {messages.map((m) => (
-            <div key={m.id} className={cn("flex flex-col gap-2", m.role === "user" ? "items-start [dir=ltr]:items-end" : "items-end [dir=ltr]:items-start")}>
+            <div key={m.id} className={cn("flex flex-col gap-2", m.role === "user" ? "items-end" : "items-start")}>
               <div className={cn("max-w-[88%] whitespace-pre-line rounded-2xl px-4 py-2.5 text-[14px] leading-relaxed shadow-sm",
                 m.role === "user" ? "rounded-ee-md bg-primary text-primary-foreground" : "rounded-es-md border bg-card")}>
                 {m.text}
@@ -346,7 +409,7 @@ export function AssistantChat({ locale }: { locale: string }) {
           ))}
 
           {busy ? (
-            <div className="flex items-end"><div className="rounded-2xl rounded-es-md border bg-card px-4 py-2.5 text-[13px] text-muted-foreground"><span className="inline-flex items-center gap-2"><Loader2 className="h-3.5 w-3.5 animate-spin" />{t.thinking}</span></div></div>
+            <div className="flex items-start"><div className="rounded-2xl rounded-es-md border bg-card px-4 py-2.5 text-[13px] text-muted-foreground"><span className="inline-flex items-center gap-2"><Loader2 className="h-3.5 w-3.5 animate-spin" />{t.thinking}</span></div></div>
           ) : null}
 
           {panel === "human" ? <HumanPanel t={t} sessionId={sessionId} whatsapp={whatsapp} onDone={(msg) => { setPanel("none"); setMessages((m) => [...m, { id: `a${Date.now()}`, role: "assistant", text: msg, at: Date.now() }]); }} onCancel={() => setPanel("none")} /> : null}
@@ -354,6 +417,13 @@ export function AssistantChat({ locale }: { locale: string }) {
 
           {error ? <div className="rounded-xl border border-red-300 bg-red-50 px-3 py-2 text-[12.5px] text-red-700 dark:bg-red-950/30 dark:text-red-300">{error}</div> : null}
         </div>
+      </div>
+      {!atBottom ? (
+        <button onClick={scrollDown} aria-label={t.jumpToLatest} title={t.jumpToLatest}
+          className="absolute bottom-3 left-1/2 flex -translate-x-1/2 items-center gap-1.5 rounded-full border bg-card/95 px-3 py-1.5 text-[12px] shadow-lg backdrop-blur">
+          <ChevronDown className="h-3.5 w-3.5" />{t.jumpToLatest}
+        </button>
+      ) : null}
       </div>
 
       {/* composer */}
@@ -397,9 +467,10 @@ export function AssistantChat({ locale }: { locale: string }) {
           <input ref={fileRef} type="file" multiple accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx" className="hidden" onChange={(e) => { if (e.target.files?.length) void uploadFiles(e.target.files); e.currentTarget.value = ""; }} />
           <button onClick={() => fileRef.current?.click()} disabled={!sessionId || uploading} aria-label={t.attach} title={t.attach} className="rounded-xl p-2.5 text-muted-foreground hover:bg-muted disabled:opacity-40">{uploading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Paperclip className="h-5 w-5" />}</button>
           <button onClick={toggleRecord} disabled={!sessionId} aria-label={recording ? t.stop : t.record} title={recording ? t.stop : t.record} className={cn("rounded-xl p-2.5 hover:bg-muted disabled:opacity-40", recording ? "animate-pulse text-red-500" : "text-muted-foreground")}>{recording ? <Square className="h-5 w-5" /> : <Mic className="h-5 w-5" />}</button>
-          <textarea value={input} onChange={(e) => setInput(e.target.value)} rows={1} placeholder={t.placeholder}
-            onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void send(input); } }}
-            className="max-h-32 min-h-[44px] flex-1 resize-none rounded-2xl border bg-background px-4 py-2.5 text-[14px] outline-none focus:ring-2 focus:ring-primary/30" />
+          <textarea ref={taRef} value={input} onChange={(e) => setInput(e.target.value)} rows={1} placeholder={t.placeholder}
+            aria-label={t.placeholder} enterKeyHint={softKb ? "enter" : "send"}
+            onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && !softKb) { e.preventDefault(); void send(input); } }}
+            className="max-h-32 min-h-[44px] flex-1 resize-none overflow-y-auto rounded-2xl border bg-background px-4 py-2.5 text-[14px] leading-6 outline-none focus:ring-2 focus:ring-primary/30" />
           <button onClick={() => void send(input)} disabled={!sessionId || busy || (!input.trim() && !pending.length)} aria-label={t.send}
             className="flex h-11 w-11 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow disabled:opacity-40"><Send className={cn("h-5 w-5", rtl && "-scale-x-100")} /></button>
         </div>

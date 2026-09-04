@@ -17,6 +17,10 @@ export function PublicLayoutClient({ children, locale, footer }: PublicLayoutCli
   const [menuOpen, setMenuOpen] = useState(false);
   const router = useRouter();
   const pathname = usePathname();
+  // The AI assistant is a chat surface: it owns its own scrolling and must end exactly
+  // where the bottom nav begins. Container padding + a page-level scroller would push
+  // its composer underneath the nav, so it renders full-bleed in a non-scrolling main.
+  const fullBleed = /\/assistant(?:\/|$)/.test(pathname || "");
   const { data: session } = useSession();
 
   const handleLocaleChange = (newLocale: Locale) => {
@@ -39,9 +43,21 @@ export function PublicLayoutClient({ children, locale, footer }: PublicLayoutCli
   return (
     <>
       {/* ONLY this area scrolls (flex-1). overscroll-none stops rubber-band chaining to the shell. */}
-      <main className="flex-1 overflow-y-auto overscroll-none [-webkit-overflow-scrolling:touch]">
-        <div className="container mx-auto px-4 py-4 pb-6">{children}</div>
-        {footer}
+      <main
+        className={
+          fullBleed
+            ? "flex min-h-0 flex-1 flex-col overflow-hidden overscroll-none"
+            : "flex-1 overflow-y-auto overscroll-none [-webkit-overflow-scrolling:touch]"
+        }
+      >
+        {fullBleed ? (
+          children
+        ) : (
+          <>
+            <div className="container mx-auto px-4 py-4 pb-6">{children}</div>
+            {footer}
+          </>
+        )}
       </main>
 
       {/* Bottom Navigation */}

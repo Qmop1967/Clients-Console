@@ -301,6 +301,13 @@
     padding-bottom: env(safe-area-inset-bottom);
   }
 
+  /* iOS draws the software keyboard OVER the fixed app shell. While it is open the
+     bottom nav is unreachable anyway, so we reclaim its 60px for the chat composer.
+     data-kb-open is set only by the assistant chat (visualViewport), and cleared on unmount. */
+  html[data-kb-open="1"] .tsh-bottom-nav {
+    display: none;
+  }
+
   /* Selection color - Gold accent */
   ::selection {
     background-color: hsl(var(--gold) / 0.2);

@@ -61,6 +61,7 @@ const AR = {
   whatsappNow: "افتح واتساب الآن",
   remove: "إزالة المرفق",
   attachHint: "اكتب سؤالك عن الصورة ثم اضغط إرسال",
+  jumpToLatest: "أحدث الرسائل",
 };
 const EN: typeof AR = {
   title: "TSH Sales Assistant",
@@ -118,6 +119,7 @@ const EN: typeof AR = {
   whatsappNow: "Open WhatsApp now",
   remove: "Remove attachment",
   attachHint: "Add your question about the photo, then press send",
+  jumpToLatest: "Jump to latest",
 };
 const CKB: typeof AR = {
   ...AR,
@@ -143,6 +145,7 @@ const CKB: typeof AR = {
   whatsappNow: "واتساپ بکەرەوە",
   remove: "لابردن",
   attachHint: "پرسیارەکەت بنووسە پاشان بینێرە",
+  jumpToLatest: "نوێترین نامەکان",
 };
 /**
  * Starter chips. The gateway sends these with a fresh greeting; the client also re-offers
