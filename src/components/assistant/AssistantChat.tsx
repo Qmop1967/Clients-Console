@@ -8,7 +8,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   ArrowLeft, ArrowRight, Send, Paperclip, Mic, Square, ShoppingCart, ExternalLink,
-  Sparkles, ThumbsUp, ThumbsDown, UserRound, RotateCcw, Loader2, ImageIcon, FileIcon, Check,
+  Sparkles, ThumbsUp, ThumbsDown, UserRound, RotateCcw, Loader2, ImageIcon, FileIcon, Check, X, Trash2,
 } from "lucide-react";
 import { useCart } from "@/components/providers/cart-provider";
 import { getOdooImageUrl } from "@/lib/odoo/client";
@@ -26,7 +26,7 @@ interface Msg {
   products?: ProductCard[]; quickReplies?: QuickReply[]; actions?: Action[];
   attachments?: { name: string; kind: string }[]; rating?: "up" | "down";
 }
-interface Upload { uploadId: string; kind: string; name: string }
+interface Upload { uploadId: string; kind: string; name: string; previewUrl?: string; transcript?: string | null }
 
 const SESSION_KEY = "tsh_assistant_session_v1";
 
@@ -55,6 +55,8 @@ export function AssistantChat({ locale }: { locale: string }) {
   const [pending, setPending] = useState<Upload[]>([]);
   const [uploading, setUploading] = useState(false);
   const [recording, setRecording] = useState(false);
+  const [level, setLevel] = useState(0);
+  const [seconds, setSeconds] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [panel, setPanel] = useState<"none" | "human" | "wholesale">("none");
   const [addedIds, setAddedIds] = useState<Set<number>>(new Set());
@@ -62,6 +64,10 @@ export function AssistantChat({ locale }: { locale: string }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const recRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const rafRef = useRef<number | null>(null);
+  const timerRef = useRef<number | null>(null);
+  const cancelRef = useRef(false);
 
   const scrollDown = useCallback(() => {
     requestAnimationFrame(() => { const el = listRef.current; if (el) el.scrollTop = el.scrollHeight; });
@@ -156,30 +162,66 @@ export function AssistantChat({ locale }: { locale: string }) {
       list.forEach((f) => fd.append("files", f, f.name));
       const r = await api("upload", fd);
       if (!r.ok) { setError(r.status === 429 ? t.rateLimited : t.error); return; }
-      const ups: Upload[] = (r.json.uploads || []).map((u: any) => ({ uploadId: u.uploadId, kind: u.kind, name: u.name }));
-      setPending((p) => [...p, ...ups]);
-      // A lone photo ("do you have this?") or a transcribed voice note is a complete turn — send it.
-      const auto = ups.length && !input.trim() && ups.every((u) => u.kind === "image" || (u.kind === "audio" && (r.json.uploads || []).find((x: any) => x.uploadId === u.uploadId)?.transcript));
-      if (auto) await send("", ups);
+      const ups: Upload[] = (r.json.uploads || []).map((u: any, i: number) => ({
+        uploadId: u.uploadId, kind: u.kind, name: u.name, transcript: u.transcript ?? null,
+        previewUrl: u.kind === "image" && list[i] ? URL.createObjectURL(list[i]) : undefined,
+      }));
+      // Photos and files stay attached to the composer so the visitor can add a question
+      // and review before sending. Only a transcribed voice note is a complete turn.
+      const voice = ups.filter((u) => u.kind === "audio" && u.transcript);
+      const keep = ups.filter((u) => !(u.kind === "audio" && u.transcript));
+      if (keep.length) setPending((p) => [...p, ...keep]);
+      if (voice.length && !input.trim()) await send("", voice);
     } catch { setError(t.error); } finally { setUploading(false); }
   };
 
-  const toggleRecord = async () => {
-    if (recording) { recRef.current?.stop(); return; }
+  const stopMeters = () => {
+    if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    if (timerRef.current) window.clearInterval(timerRef.current);
+    rafRef.current = null; timerRef.current = null;
+    audioCtxRef.current?.close().catch(() => {}); audioCtxRef.current = null;
+    setLevel(0); setSeconds(0);
+  };
+
+  const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const rec = new MediaRecorder(stream);
-      chunksRef.current = [];
+      chunksRef.current = []; cancelRef.current = false;
+
+      // Live loudness meter drives the bars, so the visitor SEES that we are listening.
+      const Ctx: typeof AudioContext = (window as any).AudioContext || (window as any).webkitAudioContext;
+      const ctx = new Ctx(); audioCtxRef.current = ctx;
+      const analyser = ctx.createAnalyser();
+      analyser.fftSize = 512; analyser.smoothingTimeConstant = 0.75;
+      ctx.createMediaStreamSource(stream).connect(analyser);
+      const data = new Uint8Array(analyser.frequencyBinCount);
+      const tick = () => {
+        analyser.getByteTimeDomainData(data);
+        let sum = 0;
+        for (let i = 0; i < data.length; i++) { const v = (data[i] - 128) / 128; sum += v * v; }
+        const rms = Math.sqrt(sum / data.length);
+        setLevel(Math.min(1, rms * 3.2));
+        rafRef.current = requestAnimationFrame(tick);
+      };
+      rafRef.current = requestAnimationFrame(tick);
+      timerRef.current = window.setInterval(() => setSeconds((x) => (x >= 119 ? (rec.state === "recording" && rec.stop(), x) : x + 1)), 1000);
+
       rec.ondataavailable = (e) => { if (e.data.size) chunksRef.current.push(e.data); };
       rec.onstop = async () => {
         stream.getTracks().forEach((tr) => tr.stop());
-        setRecording(false);
+        setRecording(false); stopMeters();
+        if (cancelRef.current) { chunksRef.current = []; return; }
         const blob = new Blob(chunksRef.current, { type: rec.mimeType || "audio/webm" });
-        if (blob.size > 0) await uploadFiles([new File([blob], `voice-${Date.now()}.webm`, { type: blob.type })]);
+        if (blob.size > 1200) await uploadFiles([new File([blob], `voice-${Date.now()}.webm`, { type: blob.type })]);
       };
       recRef.current = rec; rec.start(); setRecording(true);
-    } catch { setError(t.micDenied); }
+    } catch { setError(t.micDenied); stopMeters(); }
   };
+
+  const stopRecording = (cancel = false) => { cancelRef.current = cancel; recRef.current?.stop(); };
+  const toggleRecord = () => (recording ? stopRecording(false) : void startRecording());
+  useEffect(() => () => stopMeters(), []);
 
   const rate = async (m: Msg, rating: "up" | "down") => {
     setMessages((all) => all.map((x) => (x.id === m.id ? { ...x, rating } : x)));
@@ -286,11 +328,41 @@ export function AssistantChat({ locale }: { locale: string }) {
       {/* composer */}
       <div className="shrink-0 border-t bg-card/90 px-2 pb-[max(env(safe-area-inset-bottom),8px)] pt-2 backdrop-blur">
         {pending.length ? (
-          <div className="mx-auto mb-1.5 flex max-w-2xl flex-wrap gap-1.5 px-1">
-            {pending.map((u) => <span key={u.uploadId} className="inline-flex items-center gap-1 rounded-lg bg-muted px-2 py-1 text-[11px]">{u.kind === "image" ? <ImageIcon className="h-3 w-3" /> : <FileIcon className="h-3 w-3" />}{u.name} · {t.uploaded}</span>)}
+          <div className="mx-auto mb-2 flex max-w-2xl flex-wrap items-center gap-2 px-1">
+            {pending.map((u) => (
+              <div key={u.uploadId} className="relative flex items-center gap-2 rounded-xl border bg-muted/60 p-1.5 pe-7">
+                {u.previewUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={u.previewUrl} alt={u.name} className="h-12 w-12 rounded-lg border bg-white object-contain" />
+                ) : (
+                  <span className="flex h-12 w-12 items-center justify-center rounded-lg border bg-background">{u.kind === "image" ? <ImageIcon className="h-5 w-5" /> : <FileIcon className="h-5 w-5" />}</span>
+                )}
+                <span className="max-w-[9rem] truncate text-[11px] text-muted-foreground">{u.name}</span>
+                <button onClick={() => setPending((p) => p.filter((x) => x.uploadId !== u.uploadId))} aria-label={t.remove}
+                  className="absolute top-1 end-1 rounded-md bg-background/90 p-0.5 text-muted-foreground hover:text-red-500"><X className="h-3.5 w-3.5" /></button>
+              </div>
+            ))}
+            <span className="text-[11px] text-muted-foreground">{t.attachHint}</span>
           </div>
         ) : null}
-        <div className="mx-auto flex max-w-2xl items-end gap-1.5">
+
+        {recording ? (
+          <div className="mx-auto mb-2 flex max-w-2xl items-center gap-3 rounded-2xl border border-red-400/40 bg-red-500/5 px-3 py-2">
+            <span className="h-2.5 w-2.5 shrink-0 animate-pulse rounded-full bg-red-500" />
+            <span className="shrink-0 font-mono text-[12px] tabular-nums text-red-500">{String(Math.floor(seconds / 60)).padStart(2, "0")}:{String(seconds % 60).padStart(2, "0")}</span>
+            <div className="flex h-8 flex-1 items-center justify-center gap-[3px] overflow-hidden" aria-hidden>
+              {Array.from({ length: 28 }).map((_, i) => {
+                const wave = 0.45 + 0.55 * Math.abs(Math.sin(i * 0.7 + seconds * 1.4));
+                const h = Math.max(3, Math.min(30, 3 + level * 30 * wave));
+                return <span key={i} style={{ height: `${h}px`, transition: "height 90ms linear" }} className="w-[3px] rounded-full bg-red-500/80" />;
+              })}
+            </div>
+            <span className="shrink-0 text-[11px] text-red-500">{t.recordingNow}</span>
+            <button onClick={() => stopRecording(true)} aria-label={t.cancel} className="shrink-0 rounded-lg p-1.5 text-muted-foreground hover:bg-muted"><Trash2 className="h-4 w-4" /></button>
+            <button onClick={() => stopRecording(false)} className="shrink-0 rounded-lg bg-red-500 px-3 py-1.5 text-[12px] font-medium text-white">{t.stop}</button>
+          </div>
+        ) : null}
+        <div className={cn("mx-auto flex max-w-2xl items-end gap-1.5", recording && "pointer-events-none opacity-40")}>
           <input ref={fileRef} type="file" multiple accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx" className="hidden" onChange={(e) => { if (e.target.files?.length) void uploadFiles(e.target.files); e.currentTarget.value = ""; }} />
           <button onClick={() => fileRef.current?.click()} disabled={!sessionId || uploading} aria-label={t.attach} title={t.attach} className="rounded-xl p-2.5 text-muted-foreground hover:bg-muted disabled:opacity-40">{uploading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Paperclip className="h-5 w-5" />}</button>
           <button onClick={toggleRecord} disabled={!sessionId} aria-label={recording ? t.stop : t.record} title={recording ? t.stop : t.record} className={cn("rounded-xl p-2.5 hover:bg-muted disabled:opacity-40", recording ? "animate-pulse text-red-500" : "text-muted-foreground")}>{recording ? <Square className="h-5 w-5" /> : <Mic className="h-5 w-5" />}</button>

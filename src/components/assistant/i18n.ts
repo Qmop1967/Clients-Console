@@ -56,6 +56,9 @@ const AR = {
   uploaded: "تم الرفع",
   fileTooLarge: "الملف كبير جداً (الحد 25MB، الصور 10MB).",
   micDenied: "ما گدرت أوصل للمايكروفون.",
+  recordingNow: "جاري التسجيل",
+  remove: "إزالة المرفق",
+  attachHint: "اكتب سؤالك عن الصورة ثم اضغط إرسال",
 };
 const EN: typeof AR = {
   title: "TSH Sales Assistant",
@@ -108,6 +111,9 @@ const EN: typeof AR = {
   uploaded: "Uploaded",
   fileTooLarge: "File too large (limit 25MB, images 10MB).",
   micDenied: "Microphone access was denied.",
+  recordingNow: "Recording",
+  remove: "Remove attachment",
+  attachHint: "Add your question about the photo, then press send",
 };
 const CKB: typeof AR = {
   ...AR,
@@ -128,6 +134,9 @@ const CKB: typeof AR = {
   bubbleCta: "دەستپێکردنی گفتوگۆ",
   bubbleClose: "داخستن",
   launcher: "یاریدەدەری فرۆشتن",
+  recordingNow: "تۆمارکردن",
+  remove: "لابردن",
+  attachHint: "پرسیارەکەت بنووسە پاشان بینێرە",
 };
 export const ASSISTANT_COPY: Record<AssistantLocale, typeof AR> = { ar: AR, en: EN, ckb: CKB };
 
