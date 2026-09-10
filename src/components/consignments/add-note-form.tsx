@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { AlertCircle, CheckCircle2, Loader2 } from "lucide-react";
+import { consignmentErrorKey } from "@/lib/consignments/error-keys";
 
 interface Props {
   consignmentId: number;
@@ -33,9 +34,10 @@ export function AddNoteForm({ consignmentId, onSuccess, onCancel }: Props) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ notes: notes.trim() }),
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => null);
       if (!res.ok) {
-        setError(data?.message || t("errorGeneric"));
+        // Map gateway codes to translated copy; never surface raw `message`.
+        setError(t(consignmentErrorKey(data) as Parameters<typeof t>[0]));
         return;
       }
       setSuccess(true);

@@ -36,6 +36,7 @@ const ERROR_KEYS: Record<string, string> = {
   EXCEEDS_RETURNABLE: "errorExceedsQty",
   EXCEEDS_RETURNABLE_QTY: "errorExceedsQty",
   EXCEEDS_REMAINING: "errorExceedsQty",
+  RETURN_QTY_RESERVED: "errorExceedsQty",
   RETURN_ALREADY_PENDING: "errorExceedsQty",
   PENDING_RETURN_EXISTS: "errorExceedsQty",
   INVALID_QTY: "errorInvalidQty",
