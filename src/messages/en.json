@@ -1073,6 +1073,21 @@
     "guideStep3": "After admin approval, a cost-price invoice is added to your balance — the difference is all your profit",
     "guideStep4": "Request replenishment for sold items — delivered on the rep's visit",
     "unitsAvailable": "{n} units available",
-    "myBatteries": "Your consignment batteries"
+    "myBatteries": "Your consignment batteries",
+    "visitsTitle": "Count & Reconciliation Reports",
+    "visitsDesc": "Every custody count visit made by your rep, with its results and invoices",
+    "visitsEmpty": "No count visits recorded yet",
+    "visitsLink": "Count & reconciliation reports",
+    "visitSoldQty": "Sold by count",
+    "visitInvoices": "Invoices",
+    "visitOpenReport": "Open report",
+    "visitReportTitle": "Count & Reconciliation Report",
+    "visitReportLoading": "Loading report…",
+    "visitReportError": "Could not load the report — please try again later",
+    "visitState_draft": "Draft (sealed)",
+    "visitState_submitted": "Submitted",
+    "visitState_review": "Under review",
+    "visitState_needs_action": "Needs action",
+    "visitState_closed": "Closed"
   }
 }

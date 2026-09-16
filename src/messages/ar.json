@@ -1073,6 +1073,21 @@
     "guideStep3": "بعد موافقة الإدارة تنضاف فاتورة بسعر الكلفة لرصيدك — والفرق كله ربحك",
     "guideStep4": "تطلب تعويض بدل المباع، ويوصلك ويّه زيارة المندوب",
     "unitsAvailable": "{n} قطعة متوفرة",
-    "myBatteries": "بطارياتك بالعهدة المخزنية"
+    "myBatteries": "بطارياتك بالعهدة المخزنية",
+    "visitsTitle": "تقارير الجرد والمطابقة",
+    "visitsDesc": "كل زيارة جرد قام بها المندوب على بضاعة العهدة لديكم، مع نتائجها وفواتيرها",
+    "visitsEmpty": "لا توجد زيارات جرد مسجّلة بعد",
+    "visitsLink": "تقارير الجرد والمطابقة",
+    "visitSoldQty": "مباع بالجرد",
+    "visitInvoices": "فواتير",
+    "visitOpenReport": "عرض التقرير",
+    "visitReportTitle": "تقرير الجرد والمطابقة",
+    "visitReportLoading": "جارٍ تحميل التقرير…",
+    "visitReportError": "تعذّر تحميل التقرير — أعد المحاولة لاحقاً",
+    "visitState_draft": "مسودة (مختومة)",
+    "visitState_submitted": "مرسلة للمراجعة",
+    "visitState_review": "قيد المراجعة",
+    "visitState_needs_action": "تحتاج إجراء",
+    "visitState_closed": "مغلقة"
   }
 }

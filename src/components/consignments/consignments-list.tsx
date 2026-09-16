@@ -8,7 +8,7 @@ import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Package, ChevronRight, ChevronDown, Inbox, BookOpen } from "lucide-react";
+import { Package, ChevronRight, ChevronDown, Inbox, BookOpen, ClipboardCheck } from "lucide-react";
 import { ReplenishmentCatalogue } from "./replenishment-catalogue";
 import { ConsignmentSummary, type ConsignmentSummaryData } from "./consignment-summary";
 
@@ -148,6 +148,16 @@ export function ConsignmentsList({ consignments, total, summary, partnerId, init
       )}
 
       {/* How it works */}
+      <Link href="/consignments/visits">
+        <Card className="cursor-pointer transition-colors hover:bg-muted/50">
+          <CardContent className="flex items-center justify-between p-4">
+            <span className="flex items-center gap-2 text-[13px] font-bold">
+              <ClipboardCheck className="h-4 w-4 text-blue-600 dark:text-blue-400" /> {t("visitsLink")}
+            </span>
+            <ChevronRight className="h-4 w-4 text-muted-foreground rtl:rotate-180" />
+          </CardContent>
+        </Card>
+      </Link>
       <Guide />
     </div>
   );
