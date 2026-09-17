@@ -6,6 +6,7 @@ import { useSession } from "next-auth/react";
 import { PublicBottomNav } from "./public-bottom-nav";
 import { MenuDrawer } from "./menu-drawer";
 import { useRouter, usePathname } from "next/navigation";
+import { TraderStatusBanner } from "@/components/trader/trader-status-banner";
 
 interface PublicLayoutClientProps {
   children: React.ReactNode;
@@ -54,7 +55,10 @@ export function PublicLayoutClient({ children, locale, footer }: PublicLayoutCli
           children
         ) : (
           <>
-            <div className="container mx-auto px-4 py-4 pb-6">{children}</div>
+            <div className="container mx-auto px-4 py-4 pb-6">
+              <TraderStatusBanner locale={locale} />
+              {children}
+            </div>
             {footer}
           </>
         )}

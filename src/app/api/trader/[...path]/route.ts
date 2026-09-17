@@ -19,7 +19,7 @@ async function forward(req: NextRequest, path: string[]) {
     );
   }
 
-  const target = `${base.replace(/\/$/, "")}/api/trader/${path.join("/")}`;
+  const target = `${base.replace(/\/$/, "")}/api/trader/${path.join("/")}${req.nextUrl.search || ""}`;
   const contentType = req.headers.get("content-type") || "";
   const isMultipart = contentType.startsWith("multipart/form-data");
 
