@@ -26,20 +26,16 @@ const PUBLIC_MARKETING_NESTED = new Set(['wholesale/ac-adapters']);
 // primary subtags in browser preference order (ku->ckb, tk->tm aliases for Iraqi
 // Kurdish/Turkmen) -> defaultLocale. Crawlers sending no header keep landing on
 // /ar, so Meta-review behaviour is unchanged.
-const LOCALE_ALIASES: Record<string, string> = { ku: 'ckb', tk: 'tm' };
 
+// ARABIC_FIRST_2026_09_18 (Khaleel): the bare domain ALWAYS lands on Arabic.
+// Accept-Language is deliberately ignored — most Iraqi phones run an English
+// system language, which used to send real customers (and ad traffic) to /en
+// and then into Chrome's auto-translate. Only an explicit choice made with the
+// language switch (saved in NEXT_LOCALE) overrides Arabic.
 function detectLocale(request: NextRequest): string {
   const known = locales as readonly string[];
   const saved = request.cookies.get('NEXT_LOCALE')?.value;
   if (saved && known.includes(saved)) return saved;
-  const header = request.headers.get('accept-language') || '';
-  for (const part of header.split(',')) {
-    const tag = part.split(';')[0].trim().toLowerCase();
-    if (!tag || tag === '*') continue;
-    const primary = tag.split('-')[0];
-    const candidate = LOCALE_ALIASES[primary] ?? primary;
-    if (known.includes(candidate)) return candidate;
-  }
   return defaultLocale;
 }
 

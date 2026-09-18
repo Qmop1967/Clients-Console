@@ -92,12 +92,16 @@ export function MarketingHeader({ locale }: { locale: string }) {
         </nav>
 
         <div className="ms-auto flex shrink-0 items-center gap-1.5">
+          {/* Language switch — a labelled pill, not a lone glyph, so changing
+              language is obvious at a glance (Khaleel, 2026-09-18). */}
           <Link
             href={`/${locale === "ar" ? "en" : "ar"}`}
             hrefLang={locale === "ar" ? "en" : "ar"}
-            className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg px-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold"
+            aria-label={locale === "ar" ? "Switch to English" : "التبديل إلى العربية"}
+            className="inline-flex min-h-11 items-center gap-1.5 rounded-full border border-border bg-background/60 px-3 text-sm font-semibold text-foreground transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold"
           >
-            {locale === "ar" ? "EN" : "ع"}
+            <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4 text-muted-foreground" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" /></svg>
+            <span dir={locale === "ar" ? "ltr" : "rtl"}>{locale === "ar" ? "English" : "العربية"}</span>
           </Link>
 
           <Link
