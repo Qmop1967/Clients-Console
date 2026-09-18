@@ -782,11 +782,11 @@ export default function LoginPage() {
           </h2>
           <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
             {isAr
-              ? "قدّم طلب تسجيل جديد، وسيراجع فريق المبيعات بيانات النشاط قبل تفعيل الحساب."
-              : "Submit a new registration request. Our sales team will review the business details before activating access."}
+              ? "سجّل بنفسك خلال دقائق: نتحقق من بريدك ورقم هاتفك، ثم صور محلك — ويُفعَّل حسابك بعد المراجعة."
+              : "Register yourself in minutes: we verify your email and phone, then your shop photos — your account is activated after review."}
           </p>
           <Link
-            href={`/${locale}/contact-us#partner`}
+            href={`/${locale}/register`}
             className="mt-3 inline-flex min-h-11 w-full items-center justify-center rounded-xl border border-gold bg-background px-4 text-sm font-semibold text-gold transition-colors hover:bg-gold hover:text-white"
           >
             {isAr ? "طلب تسجيل جديد" : "New registration request"}

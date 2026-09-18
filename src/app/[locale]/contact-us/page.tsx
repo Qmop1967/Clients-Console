@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Clock, Mail, MapPin, Phone } from "lucide-react";
 import { MarketingShell, PlainEmail } from "@/components/marketing/marketing-chrome";
+import Link from "next/link";
 import { COMPANY, toMarketingLocale } from "@/lib/marketing/company";
 
 interface Props { params: Promise<{ locale: string }> }
@@ -72,12 +73,18 @@ export default async function ContactPage({ params }: Props) {
             </h2>
             <p className="mt-3 text-[15px] leading-relaxed text-muted-foreground">
               {isAr
-                ? "نبيع بالجملة للوكلاء والتجّار والمكاتب الفنية. راسلنا واذكر اسم نشاطك التجاري، والمحافظة، ونوع المنتجات التي تهمّك، وسيتواصل معك فريق المبيعات لفتح حسابك."
-                : "We sell wholesale to dealers, traders and technical offices. Email us with your business name, your province, and the product categories you are interested in, and our sales team will get in touch to open your account."}
+                ? "نبيع بالجملة للوكلاء والتجّار والمكاتب الفنية. سجّل بنفسك خلال دقائق من الاستمارة أدناه — نتحقق من بريدك ورقم هاتفك ثم صور محلك، ويُفعَّل حسابك بعد المراجعة. أو راسلنا إن فضّلت ذلك."
+                : "We sell wholesale to dealers, traders and technical offices. Register yourself in minutes using the form below — we verify your email and phone, then your shop photos, and your account is activated after review. Or email us if you prefer."}
             </p>
+            <Link
+              href={`/${locale}/register`}
+              className="mt-5 inline-flex min-h-12 w-full items-center justify-center rounded-lg bg-gold px-5 text-sm font-semibold text-white transition-opacity hover:opacity-90"
+            >
+              {isAr ? "ابدأ التسجيل الآن" : "Start registration"}
+            </Link>
             <a
               href={`mailto:${COMPANY.email}?subject=${encodeURIComponent(isAr ? "طلب فتح حساب تاجر جملة" : "Wholesale account request")}`}
-              className="mt-5 inline-flex min-h-12 w-full items-center justify-center rounded-lg bg-gold px-5 text-sm font-semibold text-white transition-opacity hover:opacity-90"
+              className="mt-2.5 inline-flex min-h-12 w-full items-center justify-center rounded-lg border border-border px-5 text-sm font-semibold text-foreground transition-colors hover:bg-muted"
             >
               {isAr ? "راسلنا بالبريد الإلكتروني" : "Email us"}
             </a>
