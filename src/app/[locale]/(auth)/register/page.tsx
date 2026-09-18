@@ -18,10 +18,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Store, Mail, Loader2, Camera, CheckCircle2, MapPin, ShieldCheck, AlertCircle,
-  ChevronRight, ChevronLeft, Globe, Building2, Receipt, ImageIcon, RefreshCw, Clock, XCircle,
+  ChevronRight, ChevronLeft, Globe, Building2, Receipt, ImageIcon, RefreshCw, Clock, XCircle, Phone, UserCheck, BadgeCheck,
 } from "lucide-react";
 
 const RESELLER_JOIN_URL = "https://reseller.tsh.sale/login?intent=join";
+const RESELLER_LOGIN_URL = "https://reseller.tsh.sale/login";
+const REP_APP_URL = "https://rep.tsh.sale";
 const DRAFT_KEY = "tsh_trader_reg_v2";
 const DRAFT_TTL_MS = 6 * 3600 * 1000;
 
@@ -38,9 +40,17 @@ const BUSINESS_TYPES = [
   ["electronics_office", "مكتب إلكترونيات / كمبيوتر"], ["other", "غير ذلك"],
 ] as const;
 
-type Step = "type" | "reseller" | "email" | "code" | "details" | "photos" | "done";
-const STEP_INDEX: Record<Step, number> = { type: 0, reseller: 0, email: 1, code: 1, details: 2, photos: 3, done: 4 };
-const STEP_LABELS = ["نوع النشاط", "البريد", "بيانات المحل", "الصور", "النتيجة"];
+type Step = "check" | "known" | "type" | "reseller" | "email" | "code" | "details" | "photos" | "done";
+const STEP_INDEX: Record<Step, number> = { check: 0, known: 0, type: 1, reseller: 1, email: 2, code: 2, details: 3, photos: 4, done: 5 };
+const STEP_LABELS = ["التحقق", "نوع النشاط", "البريد", "بيانات المحل", "الصور", "النتيجة"];
+
+// What /precheck says about the email + phone typed on the first screen.
+type Precheck = {
+  kind: "staff" | "reseller" | "customer" | "new";
+  name?: string; since?: string | null; status?: string; trader_status?: string | null;
+  matched_by?: "email" | "phone"; conflict?: "phone_other_account" | "email_differs" | null;
+  next?: string; url?: string;
+};
 
 type PhotoKind = "storefront" | "interior" | "extra_proof";
 const PHOTO_SLOTS: { kind: PhotoKind; label: string; hint: string; required: boolean; Icon: any; capture: boolean }[] = [
@@ -78,7 +88,9 @@ async function compressImage(file: File, maxSide = 1600, quality = 0.85): Promis
 
 export default function RegisterPage() {
   const locale = useLocale();
-  const [step, setStep] = useState<Step>("type");
+  const [step, setStep] = useState<Step>("check");
+  const [checkPhone, setCheckPhone] = useState("");
+  const [pre, setPre] = useState<Precheck | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fieldErr, setFieldErr] = useState<Partial<Record<keyof Form, string>>>({});
@@ -107,7 +119,8 @@ export default function RegisterPage() {
       if (raw) {
         const d = JSON.parse(raw);
         if (d && Date.now() - (d.at || 0) < DRAFT_TTL_MS) {
-          if (d.step) setStep(d.step === "code" ? "email" : d.step);
+          if (d.step) setStep(d.step === "code" ? "email" : d.step === "known" ? "check" : d.step);
+          setCheckPhone(d.checkPhone || "");
           setEmail(d.email || ""); setToken(d.token || ""); setAppId(d.appId ?? null);
           setForm({ ...EMPTY_FORM, ...(d.form || {}) }); setGeo(d.geo || null);
           setKnownCustomer(Boolean(d.knownCustomer)); setPartnerName(d.partnerName || "");
@@ -122,9 +135,9 @@ export default function RegisterPage() {
     try {
       if (step === "done" && outcome === "active_trader") { sessionStorage.removeItem(DRAFT_KEY); return; }
       sessionStorage.setItem(DRAFT_KEY, JSON.stringify({
-        at: Date.now(), step, email, token, appId, form, geo, knownCustomer, partnerName, outcome }));
+        at: Date.now(), step, email, token, appId, form, geo, knownCustomer, partnerName, outcome, checkPhone }));
     } catch {}
-  }, [step, email, token, appId, form, geo, knownCustomer, partnerName, outcome]);
+  }, [step, email, token, appId, form, geo, knownCustomer, partnerName, outcome, checkPhone]);
 
   useEffect(() => {
     if (resendIn <= 0) return;
@@ -154,6 +167,17 @@ export default function RegisterPage() {
     }
     finally { setBusy(false); }
   };
+
+  // ---- step 0: who are you already? (Khaleel 2026-09-18 — check before the form)
+  const runPrecheck = () => run(async () => {
+    const d = await post("precheck", { email: email.trim(), phone: toWestern(checkPhone).trim() });
+    const r: Precheck = { kind: d.kind, name: d.name, since: d.since, status: d.status, trader_status: d.trader_status,
+      matched_by: d.matched_by, conflict: d.conflict, next: d.next, url: d.url };
+    setPre(r);
+    setForm(f => ({ ...f, phone: f.phone || toWestern(checkPhone).trim() }));
+    if (r.kind === "new") { setStep("type"); return; }
+    setStep("known");
+  });
 
   // ---- step 2: email + code
   const requestCode = () => run(async () => {
@@ -262,7 +286,7 @@ export default function RegisterPage() {
 
   const restart = () => {
     try { sessionStorage.removeItem(DRAFT_KEY); } catch {}
-    setStep("type"); setEmail(""); setCode(""); setToken(""); setAppId(null); setOutcome("");
+    setStep("check"); setEmail(""); setCheckPhone(""); setPre(null); setCode(""); setToken(""); setAppId(null); setOutcome("");
     setForm(EMPTY_FORM); setGeo(null); setFiles({}); setPreviews({}); setError(null); setFieldErr({});
   };
 
@@ -291,7 +315,7 @@ export default function RegisterPage() {
         </div>
 
         {/* Stepper */}
-        <ol className="mb-5 grid grid-cols-5 gap-1">
+        <ol className="mb-5 grid grid-cols-6 gap-1">
           {STEP_LABELS.map((label, i) => {
             const state = i < stepIdx ? "done" : i === stepIdx ? "current" : "todo";
             return (
@@ -313,12 +337,118 @@ export default function RegisterPage() {
             </div>
           )}
 
+          {/* ---------------------------------------------------------------- 0. check */}
+          {step === "check" && (
+            <div className="space-y-4">
+              <div>
+                <h1 className="text-xl font-bold">فتح حساب تاجر</h1>
+                <p className="mt-1 text-sm text-slate-500">
+                  أولاً نتحقق هل لديك حساب سابق عندنا — اكتب بريدك ورقم هاتفك.
+                </p>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="pre-email">البريد الإلكتروني</Label>
+                <div className="relative">
+                  <Mail className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                  <Input id="pre-email" type="email" dir="ltr" inputMode="email" value={email}
+                    onChange={e => setEmail(e.target.value)} placeholder="name@example.com"
+                    className="h-11 pr-9 text-left" autoComplete="email" autoFocus />
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="pre-phone">رقم الهاتف</Label>
+                <div className="relative">
+                  <Phone className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                  <Input id="pre-phone" type="tel" dir="ltr" inputMode="tel" value={checkPhone}
+                    onChange={e => setCheckPhone(e.target.value)} placeholder="07701234567"
+                    className="h-11 pr-9 text-left" autoComplete="tel"
+                    onKeyDown={e => { if (e.key === "Enter") runPrecheck(); }} />
+                </div>
+                <p className="text-xs text-slate-500">الرقم الذي يعرفه مندوبنا أو الذي تتواصل به معنا.</p>
+              </div>
+              <Button className="h-11 w-full"
+                disabled={busy || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email.trim()) || !validPhone(checkPhone)}
+                onClick={runPrecheck}>
+                {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : "تحقّق ثم تابع"}
+              </Button>
+              <p className="text-center text-xs text-slate-500">
+                عندك حساب فعلاً؟ <Link href={`/${locale}/login`} className="font-bold text-blue-700 underline dark:text-blue-400">سجّل الدخول</Link>
+              </p>
+            </div>
+          )}
+
+          {/* ---------------------------------------------------------------- 0b. known account */}
+          {step === "known" && pre && (
+            <div className="space-y-4 text-center">
+              {pre.kind === "staff" && (<>
+                <span className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-300"><UserCheck className="h-7 w-7" /></span>
+                <h2 className="text-xl font-bold">هذا الحساب مسجّل كمندوب / موظف في TSH</h2>
+                <p className="text-sm leading-relaxed text-slate-600 dark:text-slate-400">
+                  {pre.name ? <>الاسم: <b>{pre.name}</b>. </> : null}
+                  حسابات الموظفين لا تُفتح كحسابات تجار. استخدم تطبيق المندوب، أو تواصل مع الإدارة إذا كان هذا خطأ.
+                </p>
+                <Button asChild className="w-full"><a href={REP_APP_URL}>افتح تطبيق المندوب</a></Button>
+              </>)}
+              {pre.kind === "reseller" && (<>
+                <span className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"><Globe className="h-7 w-7" /></span>
+                <h2 className="text-xl font-bold">أنت مسجّل عندنا كموزّع</h2>
+                <p className="text-sm leading-relaxed text-slate-600 dark:text-slate-400">
+                  {pre.name ? <>الاسم: <b>{pre.name}</b>. </> : null}
+                  {pre.status === "active" ? "حسابك كموزّع فعّال — سجّل الدخول من تطبيق الموزّعين."
+                    : "طلبك كموزّع قيد المراجعة — تابعه من تطبيق الموزّعين."}
+                </p>
+                <Button asChild className="w-full bg-emerald-600 hover:bg-emerald-700"><a href={RESELLER_LOGIN_URL}>دخول تطبيق الموزّعين</a></Button>
+                <button type="button" onClick={() => { setError(null); setStep("type"); }} className="text-sm text-slate-500 hover:text-slate-800 dark:hover:text-slate-200">
+                  عندي محل فعلي وأريد حساب تاجر أيضاً
+                </button>
+              </>)}
+              {pre.kind === "customer" && (<>
+                <span className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300"><BadgeCheck className="h-7 w-7" /></span>
+                <h2 className="text-xl font-bold">
+                  {pre.trader_status === "verified" ? "أنت تاجر معتمد عندنا" : "أنت عميل مسجّل عندنا"}
+                </h2>
+                <p className="text-sm leading-relaxed text-slate-600 dark:text-slate-400">
+                  {pre.name ? <>باسم <b>{pre.name}</b></> : null}
+                  {pre.since ? <> منذ {pre.since}</> : null}
+                  {pre.matched_by === "phone" ? " (تعرّفنا عليك من رقم الهاتف)" : ""}.
+                  {" "}
+                  {pre.trader_status === "verified"
+                    ? "حسابك مفعّل بأسعار الجملة — سجّل الدخول ببريدك مباشرة."
+                    : pre.trader_status && pre.trader_status !== "rejected"
+                      ? "لديك طلب تاجر قيد المراجعة. سجّل الدخول لمتابعته، أو أكمل الطلب إذا بقي رفع الصور."
+                      : "يمكنك الدخول الآن بأسعار المفرد، أو تفعيل حساب التاجر بصور محلك لتظهر لك أسعار الجملة."}
+                </p>
+                {pre.conflict === "phone_other_account" && (
+                  <p className="rounded-lg border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
+                    تنبيه: رقم الهاتف الذي كتبته مرتبط بحساب آخر غير حساب هذا البريد. سنعتمد البريد.
+                  </p>
+                )}
+                {pre.conflict === "email_differs" && (
+                  <p className="rounded-lg border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
+                    حسابك مسجّل ببريد آخر. إذا أكملت هنا سنحدّث بريدك إلى الذي كتبته بعد التحقق منه.
+                  </p>
+                )}
+                <Button asChild className="h-11 w-full">
+                  <Link href={`/${locale}/login`}>تسجيل الدخول</Link>
+                </Button>
+                {pre.trader_status !== "verified" && (
+                  <Button variant="outline" className="h-11 w-full" onClick={() => { setError(null); setStep("email"); }}>
+                    {pre.trader_status && pre.trader_status !== "rejected" ? "أكمل طلب التاجر" : "فعّل حساب التاجر"}
+                  </Button>
+                )}
+              </>)}
+              <button type="button" onClick={() => { setPre(null); setStep("check"); }} className="text-sm text-slate-500 hover:text-slate-800 dark:hover:text-slate-200">
+                رجوع — تعديل البريد أو الرقم
+              </button>
+            </div>
+          )}
+
           {/* ---------------------------------------------------------------- 1. type */}
           {step === "type" && (
             <div className="space-y-4">
               <div>
-                <h1 className="text-xl font-bold">فتح حساب تاجر</h1>
-                <p className="mt-1 text-sm text-slate-500">سؤال واحد أولاً حتى نوجّهك للمسار الصحيح.</p>
+                <h1 className="text-xl font-bold">نوع نشاطك</h1>
+                <p className="mt-1 text-sm text-slate-500">لا يوجد حساب سابق بهذا البريد أو الرقم — سؤال واحد حتى نوجّهك للمسار الصحيح.</p>
               </div>
               <p className="text-base font-semibold">هل عندك محل أو مكتب فعلي يستقبل زبائن؟</p>
               <button type="button" onClick={() => { setError(null); setStep("email"); }}
@@ -380,7 +510,7 @@ export default function RegisterPage() {
               <Button className="h-11 w-full" disabled={busy || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email.trim())} onClick={requestCode}>
                 {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : "أرسل رمز التحقق"}
               </Button>
-              <button type="button" onClick={() => setStep("type")} className="w-full text-center text-sm text-slate-500 hover:text-slate-800 dark:hover:text-slate-200">رجوع</button>
+              <button type="button" onClick={() => setStep(pre && pre.kind === "customer" ? "known" : "type")} className="w-full text-center text-sm text-slate-500 hover:text-slate-800 dark:hover:text-slate-200">رجوع</button>
             </div>
           )}
 

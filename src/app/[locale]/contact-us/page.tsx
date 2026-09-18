@@ -11,8 +11,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   return {
     title: isAr ? "تواصل معنا" : "Contact us",
     description: isAr
-      ? `تواصل مع ${COMPANY.legalNameAr} — ${COMPANY.streetAr}، ${COMPANY.cityAr}. هاتف ${COMPANY.phoneDisplay} — بريد ${COMPANY.email}`
-      : `Contact ${COMPANY.legalNameEn} — ${COMPANY.streetEn}, ${COMPANY.cityEn}. Phone ${COMPANY.phoneDisplay} — email ${COMPANY.email}`,
+      ? `تواصل مع ${COMPANY.legalNameAr} — ${COMPANY.streetAr}. هاتف ${COMPANY.phoneDisplay} — بريد ${COMPANY.email}`
+      : `Contact ${COMPANY.legalNameEn} — ${COMPANY.streetEn}. Phone ${COMPANY.phoneDisplay} — email ${COMPANY.email}`,
     alternates: { canonical: `${COMPANY.website}/${locale}/contact-us` },
   };
 }
@@ -23,7 +23,7 @@ export default async function ContactPage({ params }: Props) {
 
   const cards = [
     { icon: MapPin, label: isAr ? "المقرّ" : "Head office",
-      lines: [isAr ? COMPANY.streetAr : COMPANY.streetEn, isAr ? COMPANY.cityAr : COMPANY.cityEn], ltr: false },
+      lines: [isAr ? COMPANY.streetAr : COMPANY.streetEn], ltr: false },
     { icon: Phone, label: isAr ? "الهاتف" : "Phone", lines: [COMPANY.phoneDisplay], href: `tel:${COMPANY.phone}`, ltr: true },
     { icon: Mail, label: isAr ? "البريد الإلكتروني" : "Email", lines: [COMPANY.email], href: `mailto:${COMPANY.email}`, ltr: true },
     { icon: Clock, label: isAr ? "ساعات العمل" : "Business hours", lines: [isAr ? COMPANY.hoursAr : COMPANY.hoursEn], ltr: false },

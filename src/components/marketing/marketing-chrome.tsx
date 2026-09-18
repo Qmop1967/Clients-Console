@@ -34,7 +34,7 @@ export function OrganizationJsonLd({ locale }: { locale: string }) {
     telephone: COMPANY.phone,
     address: {
       "@type": "PostalAddress",
-      streetAddress: COMPANY.streetEn,
+      streetAddress: "Baghdad",
       addressLocality: "Baghdad",
       addressCountry: "IQ",
     },
@@ -165,8 +165,6 @@ export function MarketingFooter({ locale }: { locale: string }) {
             <MapPin className="mt-0.5 size-4 shrink-0 text-gold" aria-hidden />
             <span>
               {isAr ? COMPANY.streetAr : COMPANY.streetEn}
-              <br />
-              {isAr ? COMPANY.cityAr : COMPANY.cityEn}
             </span>
           </p>
           <p className="flex items-center gap-2">

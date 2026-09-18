@@ -23,7 +23,7 @@ const AR = [
   {
     h: 'من نحن',
     p: [
-      `هذه السياسة تخصّ ${COMPANY.legalNameAr} ("الشركة" أو "نحن")، ومقرّها ${COMPANY.streetAr}، ${COMPANY.cityAr}. الشركة هي الجهة المسؤولة عن البيانات التي تُجمع عبر موقع ${COMPANY.website} وبوابة الشركاء وقنوات التواصل الرسمية.`,
+      `هذه السياسة تخصّ ${COMPANY.legalNameAr} ("الشركة" أو "نحن")، ومقرّها ${COMPANY.streetAr}. الشركة هي الجهة المسؤولة عن البيانات التي تُجمع عبر موقع ${COMPANY.website} وبوابة الشركاء وقنوات التواصل الرسمية.`,
     ],
   },
   {
@@ -103,7 +103,7 @@ const EN = [
   {
     h: 'Who we are',
     p: [
-      `This policy belongs to ${COMPANY.legalNameEn} ("the Company", "we"), based at ${COMPANY.streetEn}, ${COMPANY.cityEn}. We are responsible for data collected through ${COMPANY.website}, our partner portal, and our official contact channels.`,
+      `This policy belongs to ${COMPANY.legalNameEn} ("the Company", "we"), based at ${COMPANY.streetEn}. We are responsible for data collected through ${COMPANY.website}, our partner portal, and our official contact channels.`,
     ],
   },
   {

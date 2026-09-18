@@ -19,7 +19,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 const AR = [
   { h: "من نحن", p: [
-    `هذه السياسة تخصّ ${COMPANY.legalNameAr} ("الشركة" أو "نحن")، ومقرّها ${COMPANY.streetAr}، ${COMPANY.cityAr}، والمسجّلة بموجب ${COMPANY.incorporationAr}.`,
+    `هذه السياسة تخصّ ${COMPANY.legalNameAr} ("الشركة" أو "نحن")، ومقرّها ${COMPANY.streetAr}، والمسجّلة بموجب ${COMPANY.incorporationAr}.`,
     `نشاطنا هو توزيع الإلكترونيات وملحقات الحاسوب بالجملة داخل العراق. الموقع الرسمي ${COMPANY.website} والبريد ${COMPANY.email} والهاتف ${COMPANY.phoneDisplay}.`,
     "توضّح هذه الصفحة كيف نستخدم واتساب للتواصل مع الزبائن، وكيف نحصل على موافقتك، وما نوع الرسائل التي نرسلها، وكيف يمكنك إيقافها في أي وقت.",
   ]},
@@ -53,13 +53,13 @@ const AR = [
   ]},
   { h: "التحديثات والتواصل", p: [
     `قد نُحدّث هذه السياسة، ويظهر تاريخ آخر تحديث أعلى الصفحة. للاستفسار: ${COMPANY.email} — ${COMPANY.phoneDisplay}.`,
-    `${COMPANY.legalNameAr} — ${COMPANY.streetAr}، ${COMPANY.cityAr}.`,
+    `${COMPANY.legalNameAr} — ${COMPANY.streetAr}.`,
   ]},
 ];
 
 const EN = [
   { h: "Who we are", p: [
-    `This policy applies to ${COMPANY.legalNameEn} ("the Company", "we"), registered under the ${COMPANY.incorporation}, at ${COMPANY.streetEn}, ${COMPANY.cityEn}.`,
+    `This policy applies to ${COMPANY.legalNameEn} ("the Company", "we"), registered under the ${COMPANY.incorporation}, at ${COMPANY.streetEn}.`,
     `We are a wholesale distributor of electronics and computer accessories in Iraq. Website ${COMPANY.website}, email ${COMPANY.email}, phone ${COMPANY.phoneDisplay}.`,
     "This page explains how we use WhatsApp to communicate with customers, how we obtain your consent, what messages we send, and how you can stop them at any time.",
   ]},
@@ -93,7 +93,7 @@ const EN = [
   ]},
   { h: "Updates and contact", p: [
     `We may update this policy; the last updated date is shown at the top of this page. Questions: ${COMPANY.email} — ${COMPANY.phoneDisplay}.`,
-    `${COMPANY.legalNameEn} — ${COMPANY.streetEn}, ${COMPANY.cityEn}.`,
+    `${COMPANY.legalNameEn} — ${COMPANY.streetEn}.`,
   ]},
 ];
 
