@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useEffect } from 'react';
 import { COMPANY, toMarketingLocale } from '@/lib/marketing/company';
 import { trackEvent } from '@/lib/analytics/tiktok';
+import { whatsappSalesLink } from '@/lib/config/contact';
 
 const CONSENT_GRANTED_EVENT = 'tsh:tiktok-consent-granted';
 
@@ -31,7 +32,7 @@ export function AcAdapterCampaignView() {
 export function AcAdapterCampaignActions({ locale }: { locale: string }) {
   const isAr = toMarketingLocale(locale) === 'ar';
 
-  const trackContact = (method: 'phone' | 'email') => {
+  const trackContact = (method: 'phone' | 'whatsapp') => {
     trackEvent('Contact', {
       ...eventProperties,
       content_name: `PowerPluse Laptop AC Adapters - ${method}`,
@@ -48,13 +49,12 @@ export function AcAdapterCampaignActions({ locale }: { locale: string }) {
         {isAr ? 'اتصل للحصول على عرض الجملة' : 'Call for a wholesale quote'}
       </a>
       <a
-        href={`mailto:${COMPANY.email}?subject=${encodeURIComponent(
-          isAr ? 'طلب عرض جملة — شواحن لابتوب' : 'Wholesale quote — laptop AC adapters'
-        )}`}
-        onClick={() => trackContact('email')}
+        href={whatsappSalesLink(isAr ? 'مرحباً، أريد عرض جملة لشواحن اللابتوب PowerPluse' : 'Hello, I would like a wholesale quote for PowerPluse laptop AC adapters')}
+        target="_blank" rel="noopener noreferrer"
+        onClick={() => trackContact('whatsapp')}
         className="inline-flex min-h-12 items-center justify-center rounded-lg border border-border px-6 text-sm font-semibold text-foreground transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold"
       >
-        {isAr ? 'راسل فريق المبيعات' : 'Email sales'}
+        {isAr ? 'راسلنا على واتساب' : 'WhatsApp sales'}
       </a>
       <Link
         href={`/${locale}/catalog`}

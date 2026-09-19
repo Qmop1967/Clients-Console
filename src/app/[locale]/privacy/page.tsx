@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { LegalPage } from '@/components/marketing/legal-layout';
 import { COMPANY, toMarketingLocale } from '@/lib/marketing/company';
+import { PrivacySettingsLink } from '@/components/analytics/privacy-settings-link';
 
 interface Props {
   params: Promise<{ locale: string }>;
@@ -188,6 +189,8 @@ export default async function Page({ params }: Props) {
       title={isAr ? 'سياسة الخصوصية' : 'Privacy policy'}
       updated={UPDATED}
       sections={isAr ? AR : EN}
+      extra={<PrivacySettingsLink label={isAr ? 'تغيير إعدادات قياس الإعلانات' : 'Change ad-measurement settings'}
+        className="inline-flex min-h-11 items-center rounded-lg border border-border px-4 text-sm font-semibold text-foreground hover:bg-muted" />}
     />
   );
 }

@@ -1,6 +1,9 @@
 import Image from "next/image";
 import Link from "next/link";
-import { Mail, MapPin, Menu, Phone, X } from "lucide-react";
+import { MapPin, Menu, MessageCircle, Phone, X } from "lucide-react";
+import { whatsappSalesLink } from "@/lib/config/contact";
+import { PrivacySettingsLink } from "@/components/analytics/privacy-settings-link";
+import { AssistantLauncher } from "@/components/assistant/AssistantLauncher";
 import { COMPANY, toMarketingLocale } from "@/lib/marketing/company";
 
 /**
@@ -174,9 +177,9 @@ export function MarketingFooter({ locale }: { locale: string }) {
             </a>
           </p>
           <p className="flex items-center gap-2">
-            <Mail className="size-4 shrink-0 text-gold" aria-hidden />
-            <a href={`mailto:${COMPANY.email}`} className="inline-flex min-h-11 items-center hover:text-foreground">
-              <PlainEmail />
+            <MessageCircle className="size-4 shrink-0 text-gold" aria-hidden />
+            <a href={whatsappSalesLink()} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center hover:text-foreground">
+              {isAr ? "راسلنا على واتساب" : "WhatsApp us"}
             </a>
           </p>
           <p className="text-xs">{isAr ? COMPANY.hoursAr : COMPANY.hoursEn}</p>
@@ -196,6 +199,8 @@ export function MarketingFooter({ locale }: { locale: string }) {
               {isAr ? l.ar : l.en}
             </Link>
           ))}
+          <PrivacySettingsLink label={isAr ? "إعدادات الخصوصية" : "Privacy settings"}
+            className="flex min-h-11 items-center text-muted-foreground hover:text-foreground" />
         </nav>
       </div>
 
@@ -216,6 +221,7 @@ export function MarketingShell({ locale, children }: { locale: string; children:
       <MarketingHeader locale={locale} />
       <main className="mx-auto max-w-7xl px-4 py-10 sm:py-12">{children}</main>
       <MarketingFooter locale={locale} />
+      <AssistantLauncher locale={locale} placement="page" />
     </div>
   );
 }

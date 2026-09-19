@@ -19,6 +19,8 @@ import {
 } from "@simplewebauthn/browser";
 import { resolvePostLoginTarget } from "@/lib/auth/route-policy";
 import { COMPANY } from "@/lib/marketing/company";
+import { whatsappSalesLink } from "@/lib/config/contact";
+import { AssistantLauncher } from "@/components/assistant/AssistantLauncher";
 
 type LoginMethod = "phone" | "email";
 
@@ -828,9 +830,10 @@ export default function LoginPage() {
               {isAr ? "الشروط" : "Terms"}
             </Link>
           </nav>
-          <a href={`mailto:${COMPANY.email}`} className="mt-2 inline-block hover:text-foreground" dir="ltr">{COMPANY.email}</a>
+          <a href={whatsappSalesLink()} target="_blank" rel="noopener noreferrer" className="mt-2 inline-block hover:text-foreground">{isAr ? "راسلنا على واتساب" : "WhatsApp us"}</a>
         </footer>
       </div>
+      <AssistantLauncher locale={locale} placement="page" />
     </div>
   );
 }

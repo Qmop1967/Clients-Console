@@ -420,7 +420,23 @@ export function AssistantChat({ locale }: { locale: string }) {
           ) : null}
 
           {panel === "human" ? <HumanPanel t={t} sessionId={sessionId} whatsapp={whatsapp} onDone={(msg) => { setPanel("none"); setMessages((m) => [...m, { id: `a${Date.now()}`, role: "assistant", text: msg, at: Date.now() }]); }} onCancel={() => setPanel("none")} /> : null}
-          {panel === "wholesale" ? <WholesalePanel t={t} L={L} sessionId={sessionId} onDone={(msg) => { setPanel("none"); setMessages((m) => [...m, { id: `a${Date.now()}`, role: "assistant", text: msg, at: Date.now() }]); }} onCancel={() => setPanel("none")} /> : null}
+          {panel === "wholesale" ? (
+            // Khaleel (2026-09-19): a single registration path. The chat hands off to the
+            // /register form (email + phone pre-check, shop photos, review queue).
+            <div className="mx-auto mb-3 max-w-md rounded-2xl border bg-card p-4 text-sm">
+              <p className="font-semibold">{t.wsTitle}</p>
+              <p className="mt-1 leading-relaxed text-muted-foreground">
+                {L === "ar" ? "أسعار الجملة تظهر بعد التحقق من أنك تاجر. التسجيل استمارة قصيرة: بريدك ورقم هاتفك، ثم صور محلك."
+                  : "Wholesale prices appear once we verify you are a trader. Registration is a short form: your email and phone, then photos of your shop."}
+              </p>
+              <div className="mt-3 flex gap-2">
+                <Link href={`/${locale}/register`} className="flex-1 rounded-xl bg-primary py-2 text-center text-sm font-medium text-primary-foreground">
+                  {L === "ar" ? "افتح استمارة التسجيل" : "Open the registration form"}
+                </Link>
+                <button onClick={() => setPanel("none")} className="rounded-xl border px-3 py-2 text-sm">{L === "ar" ? "مو هسه" : "Not now"}</button>
+              </div>
+            </div>
+          ) : null}
 
           {error ? <div className="rounded-xl border border-red-300 bg-red-50 px-3 py-2 text-[12.5px] text-red-700 dark:bg-red-950/30 dark:text-red-300">{error}</div> : null}
         </div>

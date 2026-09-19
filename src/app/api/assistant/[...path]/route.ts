@@ -62,7 +62,8 @@ async function forward(req: NextRequest, path: string[]) {
       cache: "no-store",
       signal: AbortSignal.timeout(65_000),
     });
-    const text = await res.text();
+    let text = await res.text();
+    if (safePath[0] === "message" && res.ok) text = honestHoldingReply(text);
     return new NextResponse(text, {
       status: res.status,
       headers: { ...NO_STORE, "content-type": res.headers.get("content-type") || "application/json" },
@@ -72,6 +73,25 @@ async function forward(req: NextRequest, path: string[]) {
       { success: false, code: "GATEWAY_UNREACHABLE", error: "تعذر الاتصال بالمساعد" },
       { status: 502, headers: NO_STORE },
     );
+  }
+}
+
+// When the AI provider fails, the gateway answers with a canned "holding" line written
+// for WhatsApp threads ("ما ثبتنا متابعة آلية…"). On the website that reads as nonsense
+// and strands the visitor. Swap it for an honest line that points at the WhatsApp button
+// the chat already shows. (2026-09-19: Anthropic credit ran out and every web turn got
+// the canned line.)
+const HOLDING_MARKERS = ["ما ثبتنا متابعة آلية", "واجهنا مشكلة تقنية مؤقتة", "واجهنا مشكلة مؤقتة"];
+function honestHoldingReply(raw: string): string {
+  try {
+    const j = JSON.parse(raw);
+    const t: string = j?.reply?.text || "";
+    if (!t || !HOLDING_MARKERS.some((m) => t.includes(m))) return raw;
+    j.reply.text = "المساعد الذكي متوقف مؤقتاً 🙏 للرد السريع راسلنا على واتساب من زر «واتساب» في الأسفل، ولفتح حساب تاجر اضغط «حساب تاجر جملة».";
+    j.reply.degraded = true;
+    return JSON.stringify(j);
+  } catch {
+    return raw;
   }
 }
 

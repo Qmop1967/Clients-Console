@@ -105,7 +105,8 @@ async function syncServerConsent(
 
 function readStored(): ConsentStatus {
   if (typeof window === 'undefined') return 'unset';
-  const value = window.localStorage.getItem(STORAGE_KEY);
+  let value: string | null = null;
+  try { value = window.localStorage.getItem(STORAGE_KEY); } catch { /* storage blocked */ }
   return value === 'accepted' || value === 'rejected' ? value : 'unset';
 }
 
@@ -195,8 +196,11 @@ export function ConsentProvider({ children }: { children: React.ReactNode }) {
   }, [ready, status, basis]);
 
   const accept = useCallback(() => {
-    window.localStorage.removeItem(LEGACY_TIKTOK_STORAGE_KEY);
-    window.localStorage.setItem(STORAGE_KEY, 'accepted');
+    // Storage may be blocked (private mode / strict browsers): the click must still count.
+    try {
+      window.localStorage.removeItem(LEGACY_TIKTOK_STORAGE_KEY);
+      window.localStorage.setItem(STORAGE_KEY, 'accepted');
+    } catch { /* decision holds for this page view */ }
     setBasis('explicit');
     setStatus('accepted');
   }, []);
@@ -205,8 +209,10 @@ export function ConsentProvider({ children }: { children: React.ReactNode }) {
     consentGenerationRef.current += 1;
     receiptReadyRef.current = false;
     setMeasurementActive(false);
-    window.localStorage.removeItem(LEGACY_TIKTOK_STORAGE_KEY);
-    window.localStorage.setItem(STORAGE_KEY, 'rejected');
+    try {
+      window.localStorage.removeItem(LEGACY_TIKTOK_STORAGE_KEY);
+      window.localStorage.setItem(STORAGE_KEY, 'rejected');
+    } catch { /* decision holds for this page view */ }
     revokeMeasurement();
     setBasis('explicit');
     setStatus('rejected');
@@ -216,8 +222,10 @@ export function ConsentProvider({ children }: { children: React.ReactNode }) {
     consentGenerationRef.current += 1;
     receiptReadyRef.current = false;
     setMeasurementActive(false);
-    window.localStorage.removeItem(STORAGE_KEY);
-    window.localStorage.removeItem(LEGACY_TIKTOK_STORAGE_KEY);
+    try {
+      window.localStorage.removeItem(STORAGE_KEY);
+      window.localStorage.removeItem(LEGACY_TIKTOK_STORAGE_KEY);
+    } catch { /* nothing stored */ }
     revokeMeasurement();
     setBasis(null);
     setStatus('unset');

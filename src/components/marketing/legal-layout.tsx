@@ -35,8 +35,8 @@ function TocList({ sections, label }: { sections: LegalSection[]; label: string 
 }
 
 export function LegalPage({
-  locale, title, updated, sections,
-}: { locale: string; title: string; updated: string; sections: LegalSection[] }) {
+  locale, title, updated, sections, extra,
+}: { locale: string; title: string; updated: string; sections: LegalSection[]; extra?: React.ReactNode }) {
   const isAr = toMarketingLocale(locale) === "ar";
   const tocLabel = isAr ? "محتويات الصفحة" : "On this page";
 
@@ -46,6 +46,7 @@ export function LegalPage({
       <p className="mt-3 text-sm text-muted-foreground">
         {isAr ? "آخر تحديث: " : "Last updated: "}<span dir="ltr">{updated}</span>
       </p>
+      {extra ? <div className="mt-4">{extra}</div> : null}
 
       <div className="mt-10 grid gap-10 lg:grid-cols-[1fr_minmax(0,15rem)]">
         <div className="order-2 space-y-9 lg:order-1">
