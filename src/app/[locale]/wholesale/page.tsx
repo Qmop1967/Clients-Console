@@ -166,7 +166,7 @@ export default async function WholesalePage({ params }: Props) {
                 <f.icon className="size-5" aria-hidden />
               </span>
               <div>
-                <h3 className="font-semibold text-foreground">{isAr ? f.ar : f.en}</h3>
+                <h3 className="text-base font-semibold text-foreground">{isAr ? f.ar : f.en}</h3>
                 <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{isAr ? f.arD : f.enD}</p>
               </div>
             </div>

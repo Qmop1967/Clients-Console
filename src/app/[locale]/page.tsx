@@ -56,8 +56,8 @@ export default async function HomePage({ params }: Props) {
       ar: { t: "شركة مسجّلة", d: "مسجّلة رسمياً في بغداد بموجب قانون الشركات العراقي رقم 21 لسنة 1997، بمقرّ ومكتب ثابت." },
       en: { t: "A registered company", d: "Formally registered in Baghdad under Iraqi Companies Law No. 21 of 1997, with a fixed office and warehouse." } },
     { icon: PackageSearch,
-      ar: { t: "مخزون عميق", d: `أكثر من ${TOTAL_SKUS.toLocaleString("en-US")} صنف فعّال عبر ثمانية أقسام، مُدارة على نظام ERP واحد.` },
-      en: { t: "Deep inventory", d: `Over ${TOTAL_SKUS.toLocaleString("en-US")} active SKUs across eight departments, managed on a single ERP.` } },
+      ar: { t: "مخزون عميق", d: `أكثر من ${TOTAL_SKUS.toLocaleString("en-US")} صنف فعّال عبر ثمانية أقسام، متوفرة من مخزننا في بغداد.` },
+      en: { t: "Deep inventory", d: `Over ${TOTAL_SKUS.toLocaleString("en-US")} active SKUs across eight departments, stocked in our Baghdad warehouse.` } },
     { icon: Truck,
       ar: { t: "توزيع في عموم العراق", d: "شبكة مندوبين ومناديب توصيل تخدم المحافظات، مع متابعة الطلب حتى التسليم." },
       en: { t: "Nationwide distribution", d: "A field sales and delivery network serving Iraqi provinces, with order tracking through to delivery." } },
@@ -73,30 +73,35 @@ export default async function HomePage({ params }: Props) {
       <section className="border-b border-border/60 pb-12">
         <div className="grid items-center gap-10 lg:grid-cols-[1fr_minmax(0,21rem)]">
           <div>
-            <p className="text-sm font-semibold uppercase tracking-[0.18em] text-gold" dir="ltr">
-              Baghdad, Iraq &middot; Wholesale distribution
+            {/* Khaleel (2026-09-19) first-screen review: the visitor must learn in one glance
+                what we sell and what to do next. The legal name is a trust line, not the headline. */}
+            <p className="text-sm font-semibold text-gold">
+              {isAr ? "بغداد، العراق · توزيع بالجملة" : "Baghdad, Iraq · Wholesale distribution"}
             </p>
-            <h1 className="mt-4 font-display text-3xl font-bold leading-tight text-foreground sm:text-4xl lg:text-5xl">
-              {isAr ? COMPANY.legalNameAr : COMPANY.legalNameEn}
+            <h1 className="mt-3 font-display text-[1.75rem] font-bold leading-snug text-foreground sm:text-4xl lg:text-5xl">
+              {isAr ? "موزّع جملة للحاسبات والكاميرات والشبكات في عموم العراق" : "Wholesale computers, CCTV and networking across Iraq"}
             </h1>
-            <p className="mt-5 text-lg leading-relaxed text-muted-foreground">
+            <p className="mt-4 text-base leading-relaxed text-muted-foreground sm:text-lg">
               {isAr
-                ? "نحن موزّع جملة لمنتجات الحاسبات ومكوّناتها، وكاميرات المراقبة وأنظمة الأمان، ومنتجات الشبكات، ومصادر الطاقة، والطابعات ومستلزماتها. نخدم الوكلاء وتجار الجملة والمكاتب الفنية في عموم العراق من مقرّنا في بغداد."
-                : "We are a wholesale distributor of computer hardware and components, CCTV and security systems, networking products, power supplies, and printers with their consumables. We supply dealers, wholesalers and technical offices across Iraq from our base in Baghdad."}
+                ? "نجهّز محلات الصيانة والبيع والمكاتب الفنية بالحاسبات وملحقاتها، كاميرات المراقبة، الشبكات، مصادر الطاقة والطابعات، بأسعار جملة للتجار المعتمدين."
+                : "We supply repair shops, retailers and technical offices with computers and accessories, CCTV, networking, power and printers — at wholesale prices for approved traders."}
             </p>
-            <div className="mt-8 flex flex-wrap gap-3">
+            <p className="mt-3 text-xs text-muted-foreground">
+              {isAr ? COMPANY.legalNameAr : COMPANY.legalNameEn}
+            </p>
+            <div className="mt-7 grid gap-3 sm:flex sm:flex-wrap">
               <Link
-                href={`/${locale}/shop`}
-                className="inline-flex min-h-12 items-center gap-2 rounded-lg bg-gold px-5 text-sm font-semibold text-white transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold"
+                href={`/${locale}/register`}
+                className="inline-flex min-h-12 items-center justify-center gap-2 rounded-lg bg-gold px-6 text-base font-semibold text-white transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold"
               >
-                {isAr ? "تصفّح المتجر العام" : "Browse the public shop"}
+                {isAr ? "سجّل كتاجر جملة" : "Register as a trader"}
                 <Arrow className="size-4" aria-hidden />
               </Link>
               <Link
-                href={`/${locale}/contact-us`}
-                className="inline-flex min-h-12 items-center rounded-lg border border-border px-5 text-sm font-semibold text-foreground transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold"
+                href={`/${locale}/shop`}
+                className="inline-flex min-h-12 items-center justify-center rounded-lg border border-border px-6 text-base font-semibold text-foreground transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold"
               >
-                {isAr ? "تواصل معنا" : "Contact us"}
+                {isAr ? "تصفّح المنتجات" : "Browse products"}
               </Link>
             </div>
           </div>
@@ -133,7 +138,7 @@ export default async function HomePage({ params }: Props) {
           {CATEGORIES.map((c) => (
             <li key={c.key} className="bg-card p-5">
               <div className="flex items-baseline justify-between gap-3">
-                <h3 className="font-semibold text-foreground">{isAr ? c.ar : c.en}</h3>
+                <h3 className="text-base font-semibold text-foreground">{isAr ? c.ar : c.en}</h3>
                 <span className="shrink-0 text-sm font-semibold text-gold" dir="ltr">
                   {c.count.toLocaleString("en-US")}
                 </span>
@@ -158,7 +163,7 @@ export default async function HomePage({ params }: Props) {
                   <Icon className="size-5" aria-hidden />
                 </span>
                 <div>
-                  <h3 className="font-semibold text-foreground">{copy.t}</h3>
+                  <h3 className="text-lg font-semibold text-foreground">{copy.t}</h3>
                   <p className="mt-1.5 text-[15px] leading-relaxed text-muted-foreground">{copy.d}</p>
                 </div>
               </div>
@@ -179,8 +184,8 @@ export default async function HomePage({ params }: Props) {
         </p>
         <p className="mt-4 text-sm text-muted-foreground">
           {isAr ? "تريد أن تصبح شريكاً؟ " : "Want to become a partner? "}
-          <Link href={`/${locale}/contact-us`} className="inline-flex min-h-11 items-center font-semibold text-gold underline underline-offset-4">
-            {isAr ? "تواصل مع فريق المبيعات" : "Talk to our sales team"}
+          <Link href={`/${locale}/register`} className="inline-flex min-h-11 items-center font-semibold text-gold underline underline-offset-4">
+            {isAr ? "سجّل كتاجر جملة" : "Register as a trader"}
           </Link>
         </p>
       </section>

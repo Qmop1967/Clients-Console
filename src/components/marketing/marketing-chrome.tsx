@@ -186,7 +186,7 @@ export function MarketingFooter({ locale }: { locale: string }) {
         </address>
 
         <nav className="space-y-2 text-sm">
-          <h2 className="font-semibold text-foreground">{isAr ? "روابط" : "Links"}</h2>
+          <h2 className="text-base font-semibold text-foreground">{isAr ? "روابط" : "Links"}</h2>
           {[
             { href: "/about", ar: "من نحن", en: "About us" },
             { href: "/catalog", ar: "المنتجات", en: "Products" },

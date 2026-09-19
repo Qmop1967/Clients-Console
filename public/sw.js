@@ -18,7 +18,7 @@
  * static asset delivery and lets iOS treat the install as a real PWA.
  */
 
-const CACHE_VERSION = 'v-trader-20260919-2';
+const CACHE_VERSION = 'v-trader-20260919-4';
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 

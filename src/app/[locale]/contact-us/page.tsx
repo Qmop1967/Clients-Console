@@ -52,7 +52,7 @@ export default async function ContactPage({ params }: Props) {
                 <span className="flex size-10 items-center justify-center rounded-lg bg-gold/10 text-gold">
                   <Icon className="size-5" aria-hidden />
                 </span>
-                <h2 className="font-semibold text-foreground">{label}</h2>
+                <h2 className="text-base font-semibold text-foreground">{label}</h2>
               </div>
               <div className="mt-3 text-[15px] leading-relaxed text-muted-foreground" dir={ltr ? "ltr" : undefined}>
                 {href ? (

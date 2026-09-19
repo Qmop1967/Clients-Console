@@ -21,14 +21,27 @@ export function AssistantLauncher({ locale, placement = "shop" }: { locale: stri
   const [bubble, setBubble] = useState(false);
   const onAssistant = /\/assistant(?:\/|$)/.test(pathname || "");
 
+  // Khaleel (2026-09-19): the first screen showed the privacy bar, this greeting and the
+  // launcher all at once, with the greeting covering the page. Now: once per visitor
+  // (localStorage, was per tab), after 15s, and never while the privacy bar is up.
   useEffect(() => {
-    if (onAssistant) return;
-    if (typeof window === "undefined" || sessionStorage.getItem(SEEN_KEY)) return;
-    const id = window.setTimeout(() => setBubble(true), 8000);
+    if (onAssistant || typeof window === "undefined") return;
+    try { if (localStorage.getItem(SEEN_KEY)) return; } catch { return; }
+    const barUp = () => {
+      const v = getComputedStyle(document.documentElement).getPropertyValue("--consent-bar-h").trim();
+      return !!v && v !== "0px" && v !== "0";
+    };
+    let tries = 0;
+    let id = 0;
+    const attempt = () => {
+      if (!barUp()) { setBubble(true); return; }
+      if (++tries < 60) id = window.setTimeout(attempt, 2000);
+    };
+    id = window.setTimeout(attempt, 15000);
     return () => window.clearTimeout(id);
   }, [onAssistant]);
 
-  const dismiss = () => { setBubble(false); try { sessionStorage.setItem(SEEN_KEY, "1"); } catch {} };
+  const dismiss = () => { setBubble(false); try { localStorage.setItem(SEEN_KEY, "1"); } catch {} };
   if (onAssistant) return null;
   const href = `/${locale}/assistant`;
 
